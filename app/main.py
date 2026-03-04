@@ -5,8 +5,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.database import Base, get_db
-import app.database as db_module
+from app.database import get_db
 from app import models
 from app.schemas import (
     ResearchCreate,

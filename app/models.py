@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON
+from sqlalchemy import (
+    Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON
+)
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -22,7 +24,32 @@ class Research(Base):
 
     # Relationships
     sources = relationship(
-        "ResearchSource", back_populates="research", cascade="all, delete-orphan")
+        "ResearchSource",
+        back_populates="research",
+        cascade="all, delete-orphan"
+    )
+    conversations = relationship(
+        "ConversationMessage",
+        back_populates="research",
+        cascade="all, delete-orphan"
+    )
+
+
+class ConversationMessage(Base):
+    """Stores conversation messages between user and AI."""
+    __tablename__ = "conversation_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    research_id = Column(Integer, ForeignKey("research.id"), nullable=False)
+    role = Column(String(20), nullable=False)  # user|assistant|system
+    content = Column(Text, nullable=False)
+    action_taken = Column(
+        String(100), nullable=True
+    )  # search|generate|add|remove|etc
+    timestamp = Column(DateTime(timezone=True), default=utcnow)
+
+    # Relationships
+    research = relationship("Research", back_populates="conversations")
 
 
 class ResearchSource(Base):

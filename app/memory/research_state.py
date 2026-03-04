@@ -12,6 +12,43 @@ from typing import Annotated, Optional
 from pydantic import BaseModel, Field
 
 
+class ConversationMessage(BaseModel):
+    """A message in the user-AI conversation."""
+
+    role: str = Field(description="Message role: user|assistant|system")
+    content: str = Field(description="Message content")
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        description="ISO timestamp of message"
+    )
+    action_taken: Optional[str] = Field(
+        default=None,
+        description=(
+            "Action triggered by this message "
+            "(e.g., 'search', 'generate')"
+        )
+    )
+
+
+class AIReasoning(BaseModel):
+    """Log entry of AI reasoning/decision-making."""
+
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        description="ISO timestamp of reasoning"
+    )
+    step: str = Field(description="Name of the step or decision point")
+    reasoning: str = Field(description="Explanation of the AI's reasoning")
+    decision: Optional[str] = Field(
+        default=None,
+        description="Decision made (if applicable)"
+    )
+    metadata: dict = Field(
+        default_factory=dict,
+        description="Additional context or data"
+    )
+
+
 class SourceType(str, Enum):
     """Types of sources that can be cited."""
     WEB = "web"
@@ -109,7 +146,10 @@ class ResearchState(BaseModel):
     # Workflow tracking
     status: str = Field(
         default="planning",
-        description="Current phase: planning|searching|synthesizing|formatting|complete|failed"
+        description=(
+            "Current phase: planning|searching|synthesizing|"
+            "formatting|complete|failed"
+        )
     )
     current_step: str = Field(
         default="",
@@ -118,6 +158,25 @@ class ResearchState(BaseModel):
     errors: Annotated[list[str], merge_lists] = Field(
         default_factory=list,
         description="Errors encountered during research"
+    )
+
+    # Interactive conversation
+    conversation_history: Annotated[
+        list[ConversationMessage], merge_lists
+    ] = Field(
+        default_factory=list,
+        description="History of user-AI conversation messages"
+    )
+    ai_reasoning: Annotated[list[AIReasoning], merge_lists] = Field(
+        default_factory=list,
+        description="Log of AI decision-making for transparency"
+    )
+    user_notes: Annotated[dict[str, str], merge_dicts] = Field(
+        default_factory=dict,
+        description=(
+            "User annotations on sources/findings "
+            "(key: item_id, value: note)"
+        )
     )
 
     # Metadata

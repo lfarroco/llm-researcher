@@ -518,7 +518,7 @@ Implementation is organized in phases, building progressively from foundation to
   - GET `/research/{id}/state` - current AI state
   - GET `/research/{id}/plan` - research plan with progress
   - PATCH `/research/{id}/plan` - modify plan
-- [ ] Update `ResearchState` model with conversation and reasoning fields
+- [x] Update `ResearchState` model with conversation and reasoning fields
 - [ ] Implement intent router agent using LLM classification
 - [ ] Add response formatter for consistent API responses
 
