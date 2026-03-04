@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.database import get_db
 from app import models
@@ -11,6 +11,8 @@ from app.schemas import (
     ResearchCreate,
     ResearchResponse,
     ResearchSourceResponse,
+    ResearchSourceCreate,
+    ResearchSourceUpdate,
     ResearchDocumentResponse,
     ChatMessageRequest,
     ChatMessageResponse,
@@ -226,13 +228,162 @@ def get_research(research_id: int, db: Session = Depends(get_db)):
     response_model=List[ResearchSourceResponse],
     tags=["research"]
 )
-def get_research_sources(research_id: int, db: Session = Depends(get_db)):
-    """Get all sources/citations collected during research."""
+def get_research_sources(
+    research_id: int,
+    source_type: Optional[str] = None,
+    tag: Optional[str] = None,
+    search: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get sources with optional filtering.
+
+    Args:
+        research_id: ID of the research project
+        source_type: Filter by source type (web, arxiv, wikipedia, etc.)
+        tag: Filter by tag (sources that have this tag)
+        search: Search in title, author, or content snippet
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return
+    """
     research = db.query(models.Research).filter(
         models.Research.id == research_id).first()
     if not research:
         raise HTTPException(status_code=404, detail="Research not found")
-    return research.sources
+
+    # Build query with filters
+    query = db.query(models.ResearchSource).filter(
+        models.ResearchSource.research_id == research_id
+    )
+
+    if source_type:
+        query = query.filter(models.ResearchSource.source_type == source_type)
+
+    if tag:
+        # Filter sources that have this tag in their tags JSON array
+        # Using PostgreSQL's @> operator to check if JSON contains value
+        from sqlalchemy.dialects.postgresql import JSONB
+        from sqlalchemy import cast
+        query = query.filter(
+            cast(models.ResearchSource.tags, JSONB).contains([tag])
+        )
+
+    if search:
+        # Search in title, author, or content snippet
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            (models.ResearchSource.title.ilike(search_pattern)) |
+            (models.ResearchSource.author.ilike(search_pattern)) |
+            (models.ResearchSource.content_snippet.ilike(search_pattern))
+        )
+
+    return query.offset(skip).limit(limit).all()
+
+
+@app.post(
+    "/research/{research_id}/sources",
+    response_model=ResearchSourceResponse,
+    status_code=201,
+    tags=["research"]
+)
+def add_research_source(
+    research_id: int,
+    payload: ResearchSourceCreate,
+    db: Session = Depends(get_db)
+):
+    """Manually add a source to the research knowledge base."""
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Create new source
+    source = models.ResearchSource(
+        research_id=research_id,
+        url=payload.url,
+        title=payload.title,
+        author=payload.author,
+        content_snippet=payload.content_snippet,
+        source_type=payload.source_type,
+        relevance_score=payload.relevance_score,
+        user_notes=payload.user_notes,
+        tags=payload.tags,
+    )
+    db.add(source)
+    db.commit()
+    db.refresh(source)
+    return source
+
+
+@app.patch(
+    "/research/{research_id}/sources/{source_id}",
+    response_model=ResearchSourceResponse,
+    tags=["research"]
+)
+def update_research_source(
+    research_id: int,
+    source_id: int,
+    payload: ResearchSourceUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update a source's notes, tags, title, or relevance score."""
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Find source
+    source = db.query(models.ResearchSource).filter(
+        models.ResearchSource.id == source_id,
+        models.ResearchSource.research_id == research_id
+    ).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    # Update fields (only if provided in payload)
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(source, field, value)
+
+    db.commit()
+    db.refresh(source)
+    return source
+
+
+@app.delete(
+    "/research/{research_id}/sources/{source_id}",
+    status_code=204,
+    tags=["research"]
+)
+def delete_research_source(
+    research_id: int,
+    source_id: int,
+    db: Session = Depends(get_db)
+):
+    """Remove a source from the research knowledge base."""
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Find and delete source
+    source = db.query(models.ResearchSource).filter(
+        models.ResearchSource.id == source_id,
+        models.ResearchSource.research_id == research_id
+    ).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    db.delete(source)
+    db.commit()
+    return None
 
 
 @app.get(

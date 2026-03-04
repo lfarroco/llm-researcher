@@ -32,6 +32,62 @@ class ResearchSourceResponse(BaseModel):
     source_type: str
     relevance_score: float
     accessed_at: datetime
+    user_notes: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
+class ResearchSourceCreate(BaseModel):
+    """Request to manually add a source to a research project."""
+    url: str = Field(description="URL of the source")
+    title: Optional[str] = Field(
+        default=None, description="Title of the source"
+    )
+    author: Optional[str] = Field(
+        default=None, description="Author(s) of the source"
+    )
+    content_snippet: Optional[str] = Field(
+        default=None,
+        description="Brief excerpt or summary"
+    )
+    source_type: str = Field(
+        default="web",
+        description="Type of source (web, arxiv, wikipedia, etc.)"
+    )
+    relevance_score: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Relevance score (0-1)"
+    )
+    user_notes: Optional[str] = Field(
+        default=None,
+        description="User's notes about this source"
+    )
+    tags: Optional[list[str]] = Field(
+        default=None,
+        description="Tags for categorization"
+    )
+
+
+class ResearchSourceUpdate(BaseModel):
+    """Request to update a source's user-editable fields."""
+    user_notes: Optional[str] = Field(
+        default=None,
+        description="User's notes about this source"
+    )
+    tags: Optional[list[str]] = Field(
+        default=None,
+        description="Tags for categorization"
+    )
+    title: Optional[str] = Field(
+        default=None, description="Update source title"
+    )
+    relevance_score: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Update relevance score (0-1)"
+    )
 
 
 class ResearchDocumentResponse(BaseModel):

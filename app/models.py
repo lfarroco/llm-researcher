@@ -65,6 +65,8 @@ class ResearchSource(Base):
     source_type = Column(String(50), default="web")  # web|arxiv|wikipedia
     relevance_score = Column(Float, default=0.0)
     accessed_at = Column(DateTime(timezone=True), default=utcnow)
+    user_notes = Column(Text, nullable=True)  # User's notes on this source
+    tags = Column(JSON, nullable=True)  # List of tags for categorization
 
     # Relationships
     research = relationship("Research", back_populates="sources")

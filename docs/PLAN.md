@@ -506,7 +506,7 @@ Implementation is organized in phases, building progressively from foundation to
 - [x] Implement conversation history storage
   - Store messages in database
   - GET `/research/{id}/chat/history` endpoint
-- [ ] Implement Knowledge Base CRUD endpoints
+- [x] Implement Knowledge Base CRUD endpoints
   - POST `/research/{id}/sources` - add source manually
   - PATCH `/research/{id}/sources/{id}` - update notes/tags
   - DELETE `/research/{id}/sources/{id}` - remove source
