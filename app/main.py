@@ -37,31 +37,25 @@ async def background_task_worker():
     logger.info("Background task worker started")
 
     while _background_worker_running:
-        try:
-            db = next(get_db())
-            try:
-                # Find oldest pending research
-                pending_research = db.query(models.Research).filter(
-                    models.Research.status == "pending"
-                ).order_by(models.Research.created_at).first()
+        db = next(get_db())
+        # Find oldest pending research
+        pending_research = db.query(models.Research).filter(
+            models.Research.status == "pending"
+        ).order_by(models.Research.created_at).first()
 
-                if pending_research:
-                    logger.info(
-                        f"Background worker picked up task: id={pending_research.id}")
-                    # Process in a separate thread to avoid blocking
-                    await asyncio.to_thread(
-                        process_research,
-                        pending_research.id,
-                        pending_research.query
-                    )
-                else:
-                    # No pending tasks, wait before checking again
-                    await asyncio.sleep(2)
-            finally:
-                db.close()
-        except Exception as e:
-            logger.error(f"Background worker error: {str(e)}", exc_info=True)
-            await asyncio.sleep(5)  # Wait longer on error
+        if pending_research:
+            logger.info(
+                f"Background worker picked up task: id={pending_research.id}")
+            # Process in a separate thread to avoid blocking
+            await asyncio.to_thread(
+                process_research,
+                pending_research.id,
+                pending_research.query
+            )
+        else:
+            # No pending tasks, wait before checking again
+            await asyncio.sleep(2)
+        db.close()
 
     logger.info("Background task worker stopped")
 
@@ -119,56 +113,47 @@ def process_research(research_id: int, query: str):
     """
     logger.info(f"Starting research task: id={research_id}")
     db = next(get_db())
-    try:
-        # Atomically claim this task by updating status from 'pending' to 'planning'
-        # This prevents race conditions between multiple workers
-        rows_updated = db.query(models.Research).filter(
-            models.Research.id == research_id,
-            models.Research.status == "pending"
-        ).update({"status": "planning"}, synchronize_session=False)
-        db.commit()
+    # Atomically claim this task by updating status from 'pending' to 'planning'
+    # This prevents race conditions between multiple workers
+    rows_updated = db.query(models.Research).filter(
+        models.Research.id == research_id,
+        models.Research.status == "pending"
+    ).update({"status": "planning"}, synchronize_session=False)
+    db.commit()
 
-        if rows_updated == 0:
-            logger.info(
-                f"Research id={research_id} already claimed or not pending, skipping")
-            return
-
-        research = db.query(models.Research).filter(
-            models.Research.id == research_id).first()
-        if not research:
-            logger.warning(f"Research id={research_id} not found in database")
-            return
-
-        try:
-
-            # Run the async workflow in a new event loop
-            logger.debug(f"Running research workflow for id={research_id}")
-            final_state = asyncio.run(
-                run_research_workflow(research_id, query)
-            )
-
-            logger.info(f"Research completed for id={research_id}")
-
-            # Save results
-            research.result = final_state.final_document or final_state.draft
-            research.status = final_state.status
-            research.state_json = final_state.to_dict()
-
-            # Save citations as sources
-            _save_citations_to_db(db, research_id, final_state.citations)
-
-        except Exception as e:
-            logger.error(
-                f"Research failed for id={research_id}: {str(e)}", exc_info=True)
-            research.result = f"Research failed: {str(e)}"
-            research.status = "failed"
-
-        db.commit()
-        logger.debug(
-            f"Research status updated in database for id={research_id}")
-
-    finally:
+    if rows_updated == 0:
+        logger.info(
+            f"Research id={research_id} already claimed or not pending, skipping")
         db.close()
+        return
+
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id).first()
+    if not research:
+        logger.warning(f"Research id={research_id} not found in database")
+        db.close()
+        return
+
+    # Run the async workflow in a new event loop
+    logger.debug(f"Running research workflow for id={research_id}")
+    final_state = asyncio.run(
+        run_research_workflow(research_id, query)
+    )
+
+    logger.info(f"Research completed for id={research_id}")
+
+    # Save results
+    research.result = final_state.final_document or final_state.draft
+    research.status = final_state.status
+    research.state_json = final_state.to_dict()
+
+    # Save citations as sources
+    _save_citations_to_db(db, research_id, final_state.citations)
+
+    db.commit()
+    logger.debug(
+        f"Research status updated in database for id={research_id}")
+    db.close()
 
 
 @app.get("/", tags=["health"])

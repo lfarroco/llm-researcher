@@ -98,52 +98,41 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
             "errors": ["No citations collected during search phase"],
         }
 
-    try:
-        logger.debug("[SYNTHESIS] Creating synthesis chain")
-        logger.debug(
-            f"[SYNTHESIS] Using LLM provider: {settings.llm_provider}, model: {settings.llm_model}")
-        chain = get_synthesis_chain()
+    logger.debug("[SYNTHESIS] Creating synthesis chain")
+    logger.debug(
+        f"[SYNTHESIS] Using LLM provider: {settings.llm_provider}, model: {settings.llm_model}")
+    chain = get_synthesis_chain()
 
-        # Prepare inputs
-        sub_queries_text = "\n".join(f"- {sq}" for sq in state.sub_queries)
-        sources_text = format_sources_for_prompt(state.citations)
+    # Prepare inputs
+    sub_queries_text = "\n".join(f"- {sq}" for sq in state.sub_queries)
+    sources_text = format_sources_for_prompt(state.citations)
 
-        logger.debug(
-            f"[SYNTHESIS] Sub-queries text length: {len(sub_queries_text)} chars")
-        logger.debug(
-            f"[SYNTHESIS] Sources text length: {len(sources_text)} chars")
-        logger.debug("[SYNTHESIS] Invoking LLM for document synthesis...")
+    logger.debug(
+        f"[SYNTHESIS] Sub-queries text length: {len(sub_queries_text)} chars")
+    logger.debug(
+        f"[SYNTHESIS] Sources text length: {len(sources_text)} chars")
+    logger.debug("[SYNTHESIS] Invoking LLM for document synthesis...")
 
-        # Generate the document
-        response = await chain.ainvoke({
-            "query": state.query,
-            "sub_queries": sub_queries_text,
-            "sources": sources_text,
-        })
+    # Generate the document
+    response = await chain.ainvoke({
+        "query": state.query,
+        "sub_queries": sub_queries_text,
+        "sources": sources_text,
+    })
 
-        draft = response.content if hasattr(
-            response, 'content') else str(response)
+    draft = response.content if hasattr(
+        response, 'content') else str(response)
 
-        logger.info("[SYNTHESIS] Draft document generated successfully")
-        logger.info(f"[SYNTHESIS] Draft length: {len(draft)} characters")
-        logger.debug(f"[SYNTHESIS] Draft preview: {draft[:200]}...")
+    logger.info("[SYNTHESIS] Draft document generated successfully")
+    logger.info(f"[SYNTHESIS] Draft length: {len(draft)} characters")
+    logger.debug(f"[SYNTHESIS] Draft preview: {draft[:200]}...")
 
-        return {
-            "draft": draft,
-            "status": "formatting",
-            "current_step": "Draft complete. Formatting citations.",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-    except Exception as e:
-        logger.error(
-            f"[SYNTHESIS] Synthesis failed with error: {e}", exc_info=True)
-        return {
-            "draft": "",
-            "status": "failed",
-            "current_step": "Synthesis failed",
-            "errors": [f"Synthesis error: {str(e)}"],
-        }
+    return {
+        "draft": draft,
+        "status": "formatting",
+        "current_step": "Draft complete. Formatting citations.",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 async def format_final_document(state: ResearchState) -> dict[str, Any]:

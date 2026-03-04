@@ -51,32 +51,22 @@ async def web_search(
     logger.debug(
         f"[WEB_SEARCH] Tavily API key configured: {bool(settings.tavily_api_key)}")
 
-    # Try Tavily first if API key is configured
+    # Use Tavily first if API key is configured
     if settings.tavily_api_key:
-        try:
-            logger.info("[WEB_SEARCH] Using Tavily API for search")
-            results = await _tavily_search(
-                query, max_results, include_domains, exclude_domains
-            )
-            logger.info(
-                f"[WEB_SEARCH] Tavily search successful, got {len(results)} results")
-            return results
-        except Exception as e:
-            logger.warning(
-                f"[WEB_SEARCH] Tavily search failed, falling back to DuckDuckGo: {e}",
-                exc_info=True)
+        logger.info("[WEB_SEARCH] Using Tavily API for search")
+        results = await _tavily_search(
+            query, max_results, include_domains, exclude_domains
+        )
+        logger.info(
+            f"[WEB_SEARCH] Tavily search successful, got {len(results)} results")
+        return results
 
     # Fallback to DuckDuckGo (free, no API key needed)
     logger.info("[WEB_SEARCH] Using DuckDuckGo for search")
-    try:
-        results = await _duckduckgo_search(query, max_results)
-        logger.info(
-            f"[WEB_SEARCH] DuckDuckGo search successful, got {len(results)} results")
-        return results
-    except Exception as e:
-        logger.error(
-            f"[WEB_SEARCH] DuckDuckGo search also failed: {e}", exc_info=True)
-        raise
+    results = await _duckduckgo_search(query, max_results)
+    logger.info(
+        f"[WEB_SEARCH] DuckDuckGo search successful, got {len(results)} results")
+    return results
 
 
 async def _tavily_search(
@@ -137,23 +127,18 @@ async def _duckduckgo_search(
     logger.debug(f"[DUCKDUCKGO] Requested max_results: {max_results}")
 
     results = []
-    try:
-        with DDGS() as ddgs:
-            logger.debug(
-                "[DUCKDUCKGO] DDGS client initialized, executing text search")
-            for i, item in enumerate(ddgs.text(query, max_results=max_results)):
-                logger.debug(f"[DUCKDUCKGO] Result {i+1}: title='{item.get('title', '')[:50]}', "
-                             f"url='{item.get('href', '')[:60]}'")
-                results.append(WebSearchResult(
-                    title=item.get("title", ""),
-                    url=item.get("href", ""),
-                    snippet=item.get("body", "")[:1000],
-                    score=0.5,  # DuckDuckGo doesn't provide scores
-                ))
-    except Exception as e:
-        logger.error(
-            f"[DUCKDUCKGO] Search failed with error: {e}", exc_info=True)
-        raise
+    with DDGS() as ddgs:
+        logger.debug(
+            "[DUCKDUCKGO] DDGS client initialized, executing text search")
+        for i, item in enumerate(ddgs.text(query, max_results=max_results)):
+            logger.debug(f"[DUCKDUCKGO] Result {i+1}: title='{item.get('title', '')[:50]}', "
+                         f"url='{item.get('href', '')[:60]}'")
+            results.append(WebSearchResult(
+                title=item.get("title", ""),
+                url=item.get("href", ""),
+                snippet=item.get("body", "")[:1000],
+                score=0.5,  # DuckDuckGo doesn't provide scores
+            ))
 
     logger.info(
         f"[DUCKDUCKGO] Search complete, returning {len(results)} results")

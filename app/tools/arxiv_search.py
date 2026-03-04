@@ -52,37 +52,32 @@ async def arxiv_search(
         "submittedDate": arxiv.SortCriterion.SubmittedDate,
     }.get(sort_by, arxiv.SortCriterion.Relevance)
 
-    try:
-        logger.debug("[ARXIV] Initializing arxiv client and search")
-        client = arxiv.Client()
-        search = arxiv.Search(
-            query=query,
-            max_results=max_results,
-            sort_by=sort_criterion,
-        )
+    logger.debug("[ARXIV] Initializing arxiv client and search")
+    client = arxiv.Client()
+    search = arxiv.Search(
+        query=query,
+        max_results=max_results,
+        sort_by=sort_criterion,
+    )
 
-        results = []
-        logger.debug("[ARXIV] Fetching results from ArXiv API")
-        for i, paper in enumerate(client.results(search)):
-            logger.debug(f"[ARXIV] Result {i+1}: title='{paper.title[:50]}', "
-                         f"authors={len(paper.authors)}, categories={paper.categories}")
-            results.append(ArxivResult(
-                title=paper.title,
-                authors=[author.name for author in paper.authors],
-                summary=paper.summary[:1500],  # Limit summary length
-                url=paper.entry_id,
-                pdf_url=paper.pdf_url or "",
-                published=paper.published.isoformat() if paper.published else "",
-                categories=paper.categories,
-            ))
+    results = []
+    logger.debug("[ARXIV] Fetching results from ArXiv API")
+    for i, paper in enumerate(client.results(search)):
+        logger.debug(f"[ARXIV] Result {i+1}: title='{paper.title[:50]}', "
+                     f"authors={len(paper.authors)}, categories={paper.categories}")
+        results.append(ArxivResult(
+            title=paper.title,
+            authors=[author.name for author in paper.authors],
+            summary=paper.summary[:1500],  # Limit summary length
+            url=paper.entry_id,
+            pdf_url=paper.pdf_url or "",
+            published=paper.published.isoformat() if paper.published else "",
+            categories=paper.categories,
+        ))
 
-        logger.info(
-            f"[ARXIV] Search complete, returning {len(results)} results")
-        return results
-
-    except Exception as e:
-        logger.error(f"[ARXIV] Search failed with error: {e}", exc_info=True)
-        raise
+    logger.info(
+        f"[ARXIV] Search complete, returning {len(results)} results")
+    return results
 
 
 def is_academic_query(query: str) -> bool:

@@ -54,78 +54,50 @@ async def scrape_url(url: str) -> ScrapedContent:
 
     logger.debug(f"Scraping URL: {url}")
 
-    try:
-        # Fetch the page
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            response = await client.get(
-                url,
-                headers={"User-Agent": USER_AGENT},
-                follow_redirects=True,
-            )
-            response.raise_for_status()
-            html = response.text
-
-        # Extract content using trafilatura
-        extracted = trafilatura.extract(
-            html,
-            include_comments=False,
-            include_tables=True,
-            no_fallback=False,
-            favor_precision=True,
-            output_format="txt",
+    # Fetch the page
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+        response = await client.get(
+            url,
+            headers={"User-Agent": USER_AGENT},
+            follow_redirects=True,
         )
+        response.raise_for_status()
+        html = response.text
 
-        if not extracted:
-            return ScrapedContent(
-                url=url,
-                content="",
-                success=False,
-                error="Failed to extract content from page",
-            )
+    # Extract content using trafilatura
+    extracted = trafilatura.extract(
+        html,
+        include_comments=False,
+        include_tables=True,
+        no_fallback=False,
+        favor_precision=True,
+        output_format="txt",
+    )
 
-        # Extract metadata
-        metadata = trafilatura.extract_metadata(html)
-
-        # Truncate content if too long
-        content = extracted[:MAX_CONTENT_LENGTH]
-        if len(extracted) > MAX_CONTENT_LENGTH:
-            content += "\n\n[Content truncated...]"
-
-        return ScrapedContent(
-            url=url,
-            title=metadata.title if metadata else "",
-            content=content,
-            author=metadata.author if metadata else None,
-            date=metadata.date if metadata else None,
-            success=True,
-        )
-
-    except httpx.HTTPStatusError as e:
-        logger.warning(f"HTTP error scraping {url}: {e}")
+    if not extracted:
         return ScrapedContent(
             url=url,
             content="",
             success=False,
-            error=f"HTTP {e.response.status_code}",
+            error="Failed to extract content from page",
         )
 
-    except httpx.TimeoutException:
-        logger.warning(f"Timeout scraping {url}")
-        return ScrapedContent(
-            url=url,
-            content="",
-            success=False,
-            error="Request timed out",
-        )
+    # Extract metadata
+    metadata = trafilatura.extract_metadata(html)
 
-    except Exception as e:
-        logger.error(f"Error scraping {url}: {e}")
-        return ScrapedContent(
-            url=url,
-            content="",
-            success=False,
-            error=str(e),
-        )
+    # Truncate content if too long
+    content = extracted[:MAX_CONTENT_LENGTH]
+    if len(extracted) > MAX_CONTENT_LENGTH:
+        content += "\n\n[Content truncated...]"
+
+    return ScrapedContent(
+        url=url,
+        title=metadata.title if metadata else "",
+        content=content,
+        author=metadata.author if metadata else None,
+        date=metadata.date if metadata else None,
+        success=True,
+    )
 
 
 async def scrape_multiple(urls: list[str]) -> list[ScrapedContent]:

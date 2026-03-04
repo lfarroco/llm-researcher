@@ -169,17 +169,12 @@ async def run_research_workflow(
     logger.debug("[ORCHESTRATOR] Graph compiled, starting execution")
 
     # Run the workflow
-    try:
-        logger.info("[ORCHESTRATOR] Invoking graph workflow...")
-        final_state = await graph.ainvoke(
-            initial_state,
-            config=config or {},
-        )
-        logger.debug("[ORCHESTRATOR] Graph execution completed")
-    except Exception as e:
-        logger.error(
-            f"[ORCHESTRATOR] Graph execution failed with error: {e}", exc_info=True)
-        raise
+    logger.info("[ORCHESTRATOR] Invoking graph workflow...")
+    final_state = await graph.ainvoke(
+        initial_state,
+        config=config or {},
+    )
+    logger.debug("[ORCHESTRATOR] Graph execution completed")
 
     final_status = final_state.get('status', 'unknown') if isinstance(
         final_state, dict) else final_state.status
