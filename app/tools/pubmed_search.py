@@ -51,7 +51,8 @@ async def pubmed_search(
         query: Search query (supports PubMed query syntax)
         max_results: Maximum number of results
         sort: Sort order - "relevance" or "pub_date"
-        ncbi_api_key: NCBI API key for higher rate limits (falls back to settings)
+        ncbi_api_key: NCBI API key for higher rate limits
+            (falls back to settings)
         ncbi_email: Email for NCBI API access (falls back to settings)
 
     Returns:
@@ -65,7 +66,9 @@ async def pubmed_search(
         from Bio import Entrez
     except ImportError as e:
         logger.error(
-            "[PUBMED] Biopython not installed. Install with: pip install biopython")
+            "[PUBMED] Biopython not installed. "
+            "Install with: pip install biopython"
+        )
         raise ImportError(
             "Biopython is required for PubMed search. "
             "Install with: pip install biopython"

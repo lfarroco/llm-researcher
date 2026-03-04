@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     # Model: "gpt-4o", "qwen3:4b", "llama2", etc.
     llm_model: str = "qwen3:4b"
     llm_temperature: float = 0.2
-    ollama_base_url: str = "http://host.docker.internal:11434"  # Ollama server URL
+    # Ollama server URL
+    ollama_base_url: str = "http://host.docker.internal:11434"
 
     # Research settings
     research_max_sources: int = 20  # Max citations per research

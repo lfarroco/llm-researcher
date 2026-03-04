@@ -30,7 +30,7 @@ _background_worker_task = None
 
 async def background_task_worker():
     """
-    Continuously polls the database for pending research tasks and processes them.
+    Poll the database for pending research tasks and processes them.
     """
     global _background_worker_running
     logger.info("Background task worker started")
@@ -84,13 +84,20 @@ async def lifespan(application: FastAPI):
 
 app = FastAPI(
     title="LLM Researcher",
-    description="An autonomous researcher agent powered by LangChain and LangGraph",
+    description=(
+        "An autonomous researcher agent powered by "
+        "LangChain and LangGraph"
+    ),
     version="2.0.0",
     lifespan=lifespan,
 )
 
 
-def _save_citations_to_db(db: Session, research_id: int, citations: list[Citation]):
+def _save_citations_to_db(
+    db: Session,
+    research_id: int,
+    citations: list[Citation]
+):
     """Save citations to the database as ResearchSource records."""
     for citation in citations:
         source = models.ResearchSource(
@@ -98,8 +105,9 @@ def _save_citations_to_db(db: Session, research_id: int, citations: list[Citatio
             url=citation.url,
             title=citation.title,
             author=citation.author,
-            content_snippet=citation.snippet[:
-                                             2000] if citation.snippet else None,
+            content_snippet=(
+                citation.snippet[:2000] if citation.snippet else None
+            ),
             source_type=citation.source_type.value,
             relevance_score=citation.relevance_score,
         )
@@ -114,8 +122,8 @@ def process_research(research_id: int, query: str):
     """
     logger.info(f"Starting research task: id={research_id}")
     db = next(get_db())
-    # Atomically claim this task by updating status from 'pending' to 'planning'
-    # This prevents race conditions between multiple workers
+    # Atomically claim this task by updating status from
+    # 'pending' to 'planning' to prevent race conditions
     rows_updated = db.query(models.Research).filter(
         models.Research.id == research_id,
         models.Research.status == "pending"
@@ -124,7 +132,9 @@ def process_research(research_id: int, query: str):
 
     if rows_updated == 0:
         logger.info(
-            f"Research id={research_id} already claimed or not pending, skipping")
+            f"Research id={research_id} already claimed or "
+            f"not pending, skipping"
+        )
         db.close()
         return
 
@@ -162,7 +172,12 @@ def health_check():
     return {"status": "ok", "service": "llm-researcher"}
 
 
-@app.post("/research", response_model=ResearchResponse, status_code=201, tags=["research"])
+@app.post(
+    "/research",
+    response_model=ResearchResponse,
+    status_code=201,
+    tags=["research"]
+)
 def create_research(
     payload: ResearchCreate,
     background_tasks: BackgroundTasks,
@@ -176,12 +191,24 @@ def create_research(
     return research
 
 
-@app.get("/research", response_model=List[ResearchResponse], tags=["research"])
-def list_research(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
+@app.get(
+    "/research",
+    response_model=List[ResearchResponse],
+    tags=["research"]
+)
+def list_research(
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
     return db.query(models.Research).offset(skip).limit(limit).all()
 
 
-@app.get("/research/{research_id}", response_model=ResearchResponse, tags=["research"])
+@app.get(
+    "/research/{research_id}",
+    response_model=ResearchResponse,
+    tags=["research"]
+)
 def get_research(research_id: int, db: Session = Depends(get_db)):
     research = db.query(models.Research).filter(
         models.Research.id == research_id).first()
@@ -190,7 +217,11 @@ def get_research(research_id: int, db: Session = Depends(get_db)):
     return research
 
 
-@app.get("/research/{research_id}/sources", response_model=List[ResearchSourceResponse], tags=["research"])
+@app.get(
+    "/research/{research_id}/sources",
+    response_model=List[ResearchSourceResponse],
+    tags=["research"]
+)
 def get_research_sources(research_id: int, db: Session = Depends(get_db)):
     """Get all sources/citations collected during research."""
     research = db.query(models.Research).filter(
@@ -200,7 +231,11 @@ def get_research_sources(research_id: int, db: Session = Depends(get_db)):
     return research.sources
 
 
-@app.get("/research/{research_id}/document", response_model=ResearchDocumentResponse, tags=["research"])
+@app.get(
+    "/research/{research_id}/document",
+    response_model=ResearchDocumentResponse,
+    tags=["research"]
+)
 def get_research_document(research_id: int, db: Session = Depends(get_db)):
     """Get the full research document with all sources."""
     research = db.query(models.Research).filter(

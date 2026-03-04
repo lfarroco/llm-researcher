@@ -39,7 +39,8 @@ class CitationFormatter:
         try:
             # Handle ISO format with timezone
             if "T" in date_string:
-                return datetime.fromisoformat(date_string.replace("Z", "+00:00"))
+                cleaned = date_string.replace("Z", "+00:00")
+                return datetime.fromisoformat(cleaned)
             return datetime.strptime(date_string, "%Y-%m-%d")
         except (ValueError, TypeError):
             return None
@@ -121,7 +122,8 @@ class CitationFormatter:
         # Date
         date_obj = cls._parse_date(citation.date_accessed)
         if date_obj:
-            date_str = f"({date_obj.year}, {date_obj.strftime('%B')} {date_obj.day})"
+            month = date_obj.strftime('%B')
+            date_str = f"({date_obj.year}, {month} {date_obj.day})"
         else:
             date_str = "(n.d.)"
 
@@ -183,7 +185,8 @@ class CitationFormatter:
         # Date
         date_obj = cls._parse_date(citation.date_accessed)
         if date_obj:
-            date_str = f"{date_obj.day} {date_obj.strftime('%b')}. {date_obj.year},"
+            month = date_obj.strftime('%b')
+            date_str = f"{date_obj.day} {month}. {date_obj.year},"
             parts.append(date_str)
 
         # URL
@@ -224,7 +227,8 @@ class CitationFormatter:
         # Accessed date
         date_obj = cls._parse_date(citation.date_accessed)
         if date_obj:
-            date_str = f"Accessed {date_obj.strftime('%B')} {date_obj.day}, {date_obj.year}."
+            month = date_obj.strftime('%B')
+            date_str = f"Accessed {month} {date_obj.day}, {date_obj.year}."
             parts.append(date_str)
 
         # URL
@@ -233,7 +237,11 @@ class CitationFormatter:
         return " ".join(parts)
 
     @classmethod
-    def format(cls, citation: Citation, style: CitationStyle = CitationStyle.APA) -> str:
+    def format(
+        cls,
+        citation: Citation,
+        style: CitationStyle = CitationStyle.APA
+    ) -> str:
         """
         Format a citation in the specified style.
 
@@ -252,7 +260,10 @@ class CitationFormatter:
         return formatters[style](citation)
 
 
-def format_citation(citation: Citation, style: CitationStyle = CitationStyle.APA) -> str:
+def format_citation(
+    citation: Citation,
+    style: CitationStyle = CitationStyle.APA
+) -> str:
     """
     Convenience function to format a single citation.
 
@@ -302,7 +313,10 @@ def format_references_section(
     return "\n".join(lines)
 
 
-async def validate_citation_url(citation: Citation, timeout: float = 5.0) -> bool:
+async def validate_citation_url(
+    citation: Citation,
+    timeout: float = 5.0
+) -> bool:
     """
     Validate that a citation URL is accessible.
 
