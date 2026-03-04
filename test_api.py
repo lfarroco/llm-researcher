@@ -32,12 +32,14 @@ def create_research(query: str):
 def list_research(skip: int = 0, limit: int = 20):
     """List all research records"""
     print(f"Listing research (skip={skip}, limit={limit})...")
-    response = requests.get(f"{BASE_URL}/research", params={"skip": skip, "limit": limit})
+    response = requests.get(f"{BASE_URL}/research",
+                            params={"skip": skip, "limit": limit})
     print(f"Status: {response.status_code}")
     records = response.json()
     print(f"Found {len(records)} records")
     for record in records:
-        print(f"  - ID: {record['id']}, Query: {record['query']}, Status: {record['status']}")
+        print(
+            f"  - ID: {record['id']}, Query: {record['query']}, Status: {record['status']}")
     print()
     return records
 
@@ -51,7 +53,8 @@ def get_research(research_id: int):
         data = response.json()
         print(f"Query: {data['query']}")
         print(f"Status: {data['status']}")
-        print(f"Result: {data['result'][:200] if data['result'] else 'None'}...")
+        print(
+            f"Result: {data['result'][:200] if data['result'] else 'None'}...")
     else:
         print(f"Error: {response.text}")
     print()
@@ -68,7 +71,8 @@ def main():
     health_check()
 
     # 2. Create a research request
-    research = create_research("What are the latest developments in quantum computing?")
+    research = create_research(
+        "What are the latest developments in quantum computing?")
     research_id = research.get("id")
 
     # 3. Check its status immediately
