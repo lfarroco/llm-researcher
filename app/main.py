@@ -12,8 +12,12 @@ from app.schemas import (
     ResearchResponse,
     ResearchSourceResponse,
     ResearchDocumentResponse,
+    ChatMessageRequest,
+    ChatMessageResponse,
+    ConversationMessageResponse,
 )
 from app.agents.orchestrator import run_research_workflow
+from app.agents.intent_router import route_user_intent
 from app.memory.research_state import Citation
 
 logger = logging.getLogger(__name__)
@@ -253,3 +257,253 @@ def get_research_document(research_id: int, db: Session = Depends(get_db)):
         created_at=research.created_at,
         updated_at=research.updated_at,
     )
+
+
+@app.post(
+    "/research/{research_id}/chat",
+    response_model=ChatMessageResponse,
+    tags=["conversation"]
+)
+def chat_with_research(
+    research_id: int,
+    payload: ChatMessageRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Chat with the research assistant. Main interaction endpoint.
+
+    This endpoint handles all user interactions with the research assistant,
+    including research requests, questions, knowledge base management, etc.
+    The AI will classify the intent and route to the appropriate handler.
+    """
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Save user message
+    user_message = models.ConversationMessage(
+        research_id=research_id,
+        role="user",
+        content=payload.message
+    )
+    db.add(user_message)
+    db.commit()
+
+    # Route intent
+    logger.info(f"Processing chat message for research {research_id}")
+    intent_result = route_user_intent(payload.message)
+
+    # Execute action based on intent
+    response_text = ""
+    action_taken = None
+    state_changes = {}
+    suggestions = []
+
+    if intent_result.intent == "research":
+        # Extract topic from entities
+        topic = intent_result.entities.get("topic", payload.message)
+
+        # Trigger research workflow in background
+        background_tasks.add_task(process_research, research_id, topic)
+
+        response_text = (
+            f"I'll start researching '{topic}' for you. "
+            f"This will involve searching multiple sources and "
+            f"collecting relevant information. "
+            f"I'll update your knowledge base as I find new sources."
+        )
+        action_taken = "research_initiated"
+        state_changes = {"status": "researching", "new_query": topic}
+        suggestions = [
+            "Check research status",
+            "View collected sources",
+            "Ask me questions about the findings"
+        ]
+
+        # Update research status
+        research.status = "researching"
+        db.commit()
+
+    elif intent_result.intent == "question":
+        # Query existing knowledge base
+        question = intent_result.entities.get(
+            "question_text", payload.message
+        )
+
+        # For now, provide a basic response
+        # TODO: Implement RAG-based answering from knowledge base
+        source_count = len(research.sources)
+        if source_count > 0:
+            response_text = (
+                f"I found {source_count} source(s) in your knowledge base. "
+                "Based on the collected research, I'll analyze the "
+                "information and provide an answer. "
+                "(Note: Full RAG implementation coming soon)"
+            )
+            action_taken = "question_answered"
+        else:
+            response_text = (
+                "I don't have any sources in the knowledge base yet "
+                "for this research. Would you like me to research "
+                "this topic first?"
+            )
+            action_taken = "question_no_sources"
+            suggestions = [f"Research {question}"]
+
+    elif intent_result.intent == "browse":
+        # Show knowledge base items
+        sources = db.query(models.ResearchSource).filter(
+            models.ResearchSource.research_id == research_id
+        ).all()
+
+        if sources:
+            response_text = (
+                f"I found {len(sources)} source(s) in your knowledge base:\n\n"
+            )
+            for i, source in enumerate(sources[:5], 1):
+                response_text += (
+                    f"{i}. [{source.source_type}] {source.title}\n"
+                    f"   URL: {source.url}\n\n"
+                )
+            if len(sources) > 5:
+                response_text += f"... and {len(sources) - 5} more sources."
+        else:
+            response_text = (
+                "Your knowledge base is currently empty. "
+                "Start by asking me to research a topic or "
+                "manually add sources."
+            )
+        action_taken = "browse_sources"
+
+    elif intent_result.intent == "status":
+        # Show research state
+        response_text = (
+            f"**Research Status**\n\n"
+            f"Query: {research.query}\n"
+            f"Status: {research.status}\n"
+            f"Sources collected: {len(research.sources)}\n"
+            f"Conversations: {len(research.conversations)}\n"
+            f"Created: {research.created_at.strftime('%Y-%m-%d %H:%M')}\n"
+        )
+        action_taken = "status_check"
+        suggestions = [
+            "View all sources",
+            "Continue research",
+            "Generate a summary"
+        ]
+
+    elif intent_result.intent == "generate":
+        # Generate document from knowledge base
+        format_type = intent_result.entities.get("format", "summary")
+
+        if len(research.sources) == 0:
+            response_text = (
+                "I can't generate a document yet because your "
+                "knowledge base is empty. "
+                "Please add sources or research a topic first."
+            )
+            action_taken = "generate_failed_no_sources"
+        else:
+            response_text = (
+                f"I'll generate a {format_type} from your knowledge base. "
+                f"This will synthesize information from "
+                f"{len(research.sources)} source(s). "
+                f"(Note: Full generation implementation coming soon)"
+            )
+            action_taken = "generate_initiated"
+            state_changes = {"generating": format_type}
+
+    elif intent_result.intent == "add":
+        # User wants to manually add a source
+        response_text = (
+            "I can help you add sources to your knowledge base. "
+            "Please provide the URL or reference. "
+            "(Note: Manual source addition coming soon)"
+        )
+        action_taken = "add_source_requested"
+
+    elif intent_result.intent == "remove":
+        # User wants to remove a source
+        response_text = (
+            "I can help you remove sources from your knowledge base. "
+            "(Note: Source removal coming soon)"
+        )
+        action_taken = "remove_source_requested"
+
+    elif intent_result.intent == "edit":
+        # User wants to edit knowledge base items
+        response_text = (
+            "I can help you edit items in your knowledge base. "
+            "(Note: Editing functionality coming soon)"
+        )
+        action_taken = "edit_requested"
+
+    else:  # general or unknown intent
+        response_text = (
+            "I'm your research assistant. I can help you:\n\n"
+            "• Research topics and collect sources\n"
+            "• Answer questions about your research\n"
+            "• Browse and manage your knowledge base\n"
+            "• Generate documents from your research\n\n"
+            "What would you like to do?"
+        )
+        action_taken = "general_help"
+        suggestions = [
+            "Research a topic",
+            "Show my sources",
+            "Check status"
+        ]
+
+    # Save assistant response
+    assistant_message = models.ConversationMessage(
+        research_id=research_id,
+        role="assistant",
+        content=response_text,
+        action_taken=action_taken
+    )
+    db.add(assistant_message)
+    db.commit()
+
+    return ChatMessageResponse(
+        response=response_text,
+        action_taken=action_taken,
+        state_changes=state_changes if state_changes else None,
+        suggestions=suggestions if suggestions else None
+    )
+
+
+@app.get(
+    "/research/{research_id}/chat/history",
+    response_model=List[ConversationMessageResponse],
+    tags=["conversation"]
+)
+def get_chat_history(
+    research_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    Get conversation history for a research session.
+
+    Returns all messages exchanged between user and assistant.
+    """
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Get messages
+    messages = db.query(models.ConversationMessage).filter(
+        models.ConversationMessage.research_id == research_id
+    ).order_by(
+        models.ConversationMessage.timestamp
+    ).offset(skip).limit(limit).all()
+
+    return messages

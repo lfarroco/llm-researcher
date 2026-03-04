@@ -499,11 +499,11 @@ Implementation is organized in phases, building progressively from foundation to
 ### Phase 7: Interactive Knowledge Base API | Priority: HIGH ⭐ NEW
 *Enable user interaction with the knowledge base through conversational API*
 
-- [ ] Implement `/research/{id}/chat` endpoint (main interaction)
+- [x] Implement `/research/{id}/chat` endpoint (main interaction)
   - Intent classification (research, add, remove, question, generate)
   - Route to appropriate handler based on intent
   - Return structured response with action taken
-- [ ] Implement conversation history storage
+- [x] Implement conversation history storage
   - Store messages in database
   - GET `/research/{id}/chat/history` endpoint
 - [ ] Implement Knowledge Base CRUD endpoints
@@ -519,8 +519,8 @@ Implementation is organized in phases, building progressively from foundation to
   - GET `/research/{id}/plan` - research plan with progress
   - PATCH `/research/{id}/plan` - modify plan
 - [x] Update `ResearchState` model with conversation and reasoning fields
-- [ ] Implement intent router agent using LLM classification
-- [ ] Add response formatter for consistent API responses
+- [x] Implement intent router agent using LLM classification
+- [x] Add response formatter for consistent API responses
 
 ### Phase 8: Extended Search Tools | Priority: HIGH
 *Expand search capabilities to more academic sources*
