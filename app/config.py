@@ -9,5 +9,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     app_env: str = "development"
 
+    # LLM Provider Configuration
+    llm_provider: str = "ollama"  # Options: "openai", "ollama"
+    # Model: "gpt-4o", "qwen3:4b", "llama2", etc.
+    llm_model: str = "qwen3:4b"
+    llm_temperature: float = 0.2
+    ollama_base_url: str = "http://host.docker.internal:11434"  # Ollama server URL
+
 
 settings = Settings()

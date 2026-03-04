@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -8,6 +9,12 @@ import app.database as db_module
 from app import models
 from app.schemas import ResearchCreate, ResearchResponse
 from app.researcher import run_research
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 
 @asynccontextmanager
@@ -25,19 +32,29 @@ app = FastAPI(
 
 
 def process_research(research_id: int, query: str):
+    logger.debug(f"Processing research task: id={research_id}")
     db = next(get_db())
     try:
-        research = db.query(models.Research).filter(models.Research.id == research_id).first()
+        research = db.query(models.Research).filter(
+            models.Research.id == research_id).first()
         if not research:
+            logger.warning(f"Research id={research_id} not found in database")
             return
         try:
+            logger.debug(f"Running research for id={research_id}")
             result = run_research(query)
+            logger.debug(
+                f"Research completed successfully for id={research_id}")
             research.result = result
             research.status = "completed"
         except Exception as e:
+            logger.error(
+                f"Research failed for id={research_id}: {str(e)}", exc_info=True)
             research.result = str(e)
             research.status = "failed"
         db.commit()
+        logger.debug(
+            f"Research status updated in database for id={research_id}")
     finally:
         db.close()
 
@@ -68,7 +85,8 @@ def list_research(skip: int = 0, limit: int = 20, db: Session = Depends(get_db))
 
 @app.get("/research/{research_id}", response_model=ResearchResponse, tags=["research"])
 def get_research(research_id: int, db: Session = Depends(get_db)):
-    research = db.query(models.Research).filter(models.Research.id == research_id).first()
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id).first()
     if not research:
         raise HTTPException(status_code=404, detail="Research not found")
     return research

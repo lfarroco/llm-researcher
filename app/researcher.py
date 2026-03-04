@@ -1,14 +1,26 @@
+import logging
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from app.config import settings
+from app.llm_provider import LLMProviderFactory
+
+logger = logging.getLogger(__name__)
 
 
 def get_researcher_chain():
-    llm = ChatOpenAI(
-        model="gpt-4o",
-        api_key=settings.openai_api_key,
-        temperature=0.2,
+    # Create provider based on configuration
+    logger.debug(
+        f"Setting up researcher chain with provider={settings.llm_provider}, model={settings.llm_model}"
     )
+    provider = LLMProviderFactory.create_provider(
+        provider_type=settings.llm_provider,
+        model=settings.llm_model,
+        temperature=settings.llm_temperature,
+        api_key=settings.openai_api_key,
+        base_url=settings.ollama_base_url,
+    )
+
+    llm = provider.get_llm()
+    logger.debug("LLM instance retrieved from provider")
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -25,11 +37,19 @@ def get_researcher_chain():
     )
 
     chain = prompt | llm
+    logger.debug("Researcher chain created successfully")
 
     return chain
 
 
 def run_research(query: str) -> str:
+    # Truncate long queries
+    logger.debug(f"Starting research for query: {query[:100]}...")
     chain = get_researcher_chain()
+
+    logger.debug("Invoking LLM chain...")
     response = chain.invoke({"query": query})
+    logger.debug(
+        f"LLM response received, length: {len(response.content)} characters")
+
     return response.content
