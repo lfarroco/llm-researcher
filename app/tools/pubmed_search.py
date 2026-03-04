@@ -3,6 +3,8 @@ PubMed/MEDLINE search tool for biomedical literature.
 
 Uses NCBI's Entrez API via Biopython to search PubMed,
 which contains over 35 million citations for biomedical literature.
+
+This module can be tested in isolation by passing api_key/email explicitly.
 """
 
 import logging
@@ -11,11 +13,11 @@ from xml.etree import ElementTree
 
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app.tools.base import get_setting
 
 logger = logging.getLogger(__name__)
 
-# NCBI requires an email for API access
+# Default NCBI email for API access
 ENTREZ_EMAIL = "llm-researcher@example.com"
 
 
@@ -38,6 +40,9 @@ async def pubmed_search(
     query: str,
     max_results: int = 5,
     sort: str = "relevance",
+    *,
+    ncbi_api_key: Optional[str] = None,
+    ncbi_email: Optional[str] = None,
 ) -> list[PubMedResult]:
     """
     Search PubMed for biomedical literature.
@@ -46,6 +51,8 @@ async def pubmed_search(
         query: Search query (supports PubMed query syntax)
         max_results: Maximum number of results
         sort: Sort order - "relevance" or "pub_date"
+        ncbi_api_key: NCBI API key for higher rate limits (falls back to settings)
+        ncbi_email: Email for NCBI API access (falls back to settings)
 
     Returns:
         List of PubMedResult objects
@@ -64,11 +71,11 @@ async def pubmed_search(
             "Install with: pip install biopython"
         ) from e
 
-    # Configure Entrez
-    Entrez.email = getattr(settings, 'ncbi_email', ENTREZ_EMAIL)
-    api_key = getattr(settings, 'ncbi_api_key', None)
-    if api_key:
-        Entrez.api_key = api_key
+    # Configure Entrez with dependency injection / settings fallback
+    Entrez.email = get_setting(ncbi_email, "ncbi_email") or ENTREZ_EMAIL
+    resolved_api_key = get_setting(ncbi_api_key, "ncbi_api_key")
+    if resolved_api_key:
+        Entrez.api_key = resolved_api_key
         logger.debug("[PUBMED] Using NCBI API key for higher rate limits")
 
     # Map sort options

@@ -3,6 +3,8 @@ Web search tool using Tavily API with DuckDuckGo fallback.
 
 Tavily is preferred as it returns structured results with snippets
 that work well for citation extraction.
+
+This module can be tested in isolation by passing api_key explicitly.
 """
 
 import logging
@@ -10,7 +12,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app.tools.base import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,8 @@ async def web_search(
     max_results: int = 5,
     include_domains: Optional[list[str]] = None,
     exclude_domains: Optional[list[str]] = None,
+    *,
+    tavily_api_key: Optional[str] = None,
 ) -> list[WebSearchResult]:
     """
     Search the web for information.
@@ -40,6 +44,7 @@ async def web_search(
         max_results: Maximum number of results to return
         include_domains: Only search these domains (optional)
         exclude_domains: Exclude these domains (optional)
+        tavily_api_key: Tavily API key (falls back to settings if not provided)
 
     Returns:
         List of WebSearchResult objects
@@ -48,14 +53,16 @@ async def web_search(
         f"[WEB_SEARCH] Starting web search for query: '{query[:80]}...'")
     logger.debug(f"[WEB_SEARCH] Parameters: max_results={max_results}, "
                  f"include_domains={include_domains}, exclude_domains={exclude_domains}")
-    logger.debug(
-        f"[WEB_SEARCH] Tavily API key configured: {bool(settings.tavily_api_key)}")
+
+    # Get API key with fallback to settings
+    api_key = get_setting(tavily_api_key, "tavily_api_key")
+    logger.debug(f"[WEB_SEARCH] Tavily API key configured: {bool(api_key)}")
 
     # Use Tavily first if API key is configured
-    if settings.tavily_api_key:
+    if api_key:
         logger.info("[WEB_SEARCH] Using Tavily API for search")
         results = await _tavily_search(
-            query, max_results, include_domains, exclude_domains
+            query, max_results, include_domains, exclude_domains, api_key
         )
         logger.info(
             f"[WEB_SEARCH] Tavily search successful, got {len(results)} results")
@@ -74,12 +81,13 @@ async def _tavily_search(
     max_results: int,
     include_domains: Optional[list[str]],
     exclude_domains: Optional[list[str]],
+    api_key: str,
 ) -> list[WebSearchResult]:
     """Search using Tavily API."""
     from tavily import TavilyClient
 
     logger.debug("[TAVILY] Initializing Tavily client")
-    client = TavilyClient(api_key=settings.tavily_api_key)
+    client = TavilyClient(api_key=api_key)
 
     search_params = {
         "query": query,

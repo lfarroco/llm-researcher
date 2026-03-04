@@ -4,6 +4,8 @@ Semantic Scholar search tool for academic papers.
 Uses the Semantic Scholar API to search papers and retrieve
 citation data. Free tier allows 100 requests/5 minutes, or use
 an API key for higher limits.
+
+This module can be tested in isolation by passing api_key explicitly.
 """
 
 import logging
@@ -12,7 +14,7 @@ from typing import Optional
 import httpx
 from pydantic import BaseModel, Field
 
-from app.config import settings
+from app.tools.base import get_setting
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,8 @@ async def semantic_scholar_search(
     year_filter: Optional[str] = None,
     fields_of_study: Optional[list[str]] = None,
     open_access_only: bool = False,
+    *,
+    api_key: Optional[str] = None,
 ) -> list[SemanticScholarResult]:
     """
     Search Semantic Scholar for academic papers.
@@ -64,6 +68,7 @@ async def semantic_scholar_search(
         year_filter: Filter by year range, e.g., "2020-2024" or "2020-"
         fields_of_study: Filter by fields, e.g., ["Computer Science", "Medicine"]
         open_access_only: Only return papers with open access PDFs
+        api_key: Semantic Scholar API key (falls back to settings if not provided)
 
     Returns:
         List of SemanticScholarResult objects
@@ -94,10 +99,11 @@ async def semantic_scholar_search(
     if open_access_only:
         params["openAccessPdf"] = ""  # Filter for open access
 
+    # Get API key with fallback to settings
+    resolved_api_key = get_setting(api_key, "semantic_scholar_api_key")
     headers = {}
-    api_key = getattr(settings, 'semantic_scholar_api_key', None)
-    if api_key:
-        headers["x-api-key"] = api_key
+    if resolved_api_key:
+        headers["x-api-key"] = resolved_api_key
         logger.debug("[S2] Using Semantic Scholar API key")
 
     try:
@@ -142,12 +148,17 @@ async def semantic_scholar_search(
     return results
 
 
-async def get_paper_details(paper_id: str) -> Optional[SemanticScholarResult]:
+async def get_paper_details(
+    paper_id: str,
+    *,
+    api_key: Optional[str] = None,
+) -> Optional[SemanticScholarResult]:
     """
     Get detailed information about a specific paper.
 
     Args:
         paper_id: Semantic Scholar paper ID, DOI, or ArXiv ID
+        api_key: Semantic Scholar API key (falls back to settings if not provided)
 
     Returns:
         SemanticScholarResult or None if not found
@@ -160,10 +171,10 @@ async def get_paper_details(paper_id: str) -> Optional[SemanticScholarResult]:
         "fieldsOfStudy,tldr"
     )
 
+    resolved_api_key = get_setting(api_key, "semantic_scholar_api_key")
     headers = {}
-    api_key = getattr(settings, 'semantic_scholar_api_key', None)
-    if api_key:
-        headers["x-api-key"] = api_key
+    if resolved_api_key:
+        headers["x-api-key"] = resolved_api_key
 
     try:
         async with httpx.AsyncClient() as client:
@@ -187,6 +198,8 @@ async def get_paper_details(paper_id: str) -> Optional[SemanticScholarResult]:
 async def get_paper_citations(
     paper_id: str,
     max_results: int = 10,
+    *,
+    api_key: Optional[str] = None,
 ) -> list[SemanticScholarResult]:
     """
     Get papers that cite the specified paper.
@@ -194,6 +207,7 @@ async def get_paper_citations(
     Args:
         paper_id: Semantic Scholar paper ID
         max_results: Maximum number of citing papers to return
+        api_key: Semantic Scholar API key (falls back to settings if not provided)
 
     Returns:
         List of citing papers
@@ -202,10 +216,10 @@ async def get_paper_citations(
 
     fields = "paperId,title,authors,abstract,year,citationCount"
 
+    resolved_api_key = get_setting(api_key, "semantic_scholar_api_key")
     headers = {}
-    api_key = getattr(settings, 'semantic_scholar_api_key', None)
-    if api_key:
-        headers["x-api-key"] = api_key
+    if resolved_api_key:
+        headers["x-api-key"] = resolved_api_key
 
     try:
         async with httpx.AsyncClient() as client:
@@ -238,6 +252,8 @@ async def get_paper_citations(
 async def get_paper_references(
     paper_id: str,
     max_results: int = 10,
+    *,
+    api_key: Optional[str] = None,
 ) -> list[SemanticScholarResult]:
     """
     Get papers referenced by the specified paper.
@@ -245,6 +261,7 @@ async def get_paper_references(
     Args:
         paper_id: Semantic Scholar paper ID
         max_results: Maximum number of referenced papers to return
+        api_key: Semantic Scholar API key (falls back to settings if not provided)
 
     Returns:
         List of referenced papers
@@ -253,10 +270,10 @@ async def get_paper_references(
 
     fields = "paperId,title,authors,abstract,year,citationCount"
 
+    resolved_api_key = get_setting(api_key, "semantic_scholar_api_key")
     headers = {}
-    api_key = getattr(settings, 'semantic_scholar_api_key', None)
-    if api_key:
-        headers["x-api-key"] = api_key
+    if resolved_api_key:
+        headers["x-api-key"] = resolved_api_key
 
     try:
         async with httpx.AsyncClient() as client:
