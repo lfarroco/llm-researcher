@@ -40,3 +40,23 @@ lint:
 ## Start services and stream logs
 dev:
 	docker compose up --build
+## Database Migrations
+## Run pending migrations
+migrate:
+	docker compose exec app alembic upgrade head
+
+## Create a new migration (use msg="description" to set message)
+migration:
+	docker compose exec app alembic revision --autogenerate -m "$(msg)"
+
+## Rollback last migration
+migrate-down:
+	docker compose exec app alembic downgrade -1
+
+## Show current migration revision
+migrate-status:
+	docker compose exec app alembic current
+
+## Show migration history
+migrate-history:
+	docker compose exec app alembic history

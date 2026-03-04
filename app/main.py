@@ -64,7 +64,9 @@ async def background_task_worker():
 async def lifespan(application: FastAPI):
     global _background_worker_running, _background_worker_task
 
-    Base.metadata.create_all(bind=db_module.engine)
+    # Database tables are now managed by Alembic migrations
+    # Run: docker compose exec app alembic upgrade head
+    # Base.metadata.create_all(bind=db_module.engine)
 
     # Start background worker
     _background_worker_running = True

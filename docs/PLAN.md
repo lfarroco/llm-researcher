@@ -464,7 +464,7 @@ Implementation is organized in phases, building progressively from foundation to
 - [x] Add new dependencies to `requirements.txt`
 - [x] Create `app/memory/research_state.py` with Pydantic models
 - [x] Create `app/models.py` additions for sources and checkpoints
-- [ ] Set up database migrations
+- [x] Set up database migrations
 
 ### Phase 2: Core Tools ✅ Priority: HIGH
 - [x] Implement `app/tools/web_search.py` (Tavily + DuckDuckGo fallback)
