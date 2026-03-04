@@ -22,6 +22,8 @@ tavily-python>=0.3.0
 duckduckgo-search>=5.0
 arxiv>=2.1.0
 wikipedia>=1.4.0
+biopython>=1.83
+semanticscholar>=0.7.0
 
 # Web scraping
 beautifulsoup4>=4.12.0

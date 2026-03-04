@@ -428,8 +428,8 @@ Implementation is organized in phases, building progressively from foundation to
 ### Phase 7: Extended Search Tools | Priority: HIGH
 *Expand search capabilities to more academic sources*
 
-- [ ] Implement `app/tools/pubmed_search.py` - PubMed/MEDLINE API
-- [ ] Implement `app/tools/semantic_scholar.py` - Semantic Scholar API
+- [x] Implement `app/tools/pubmed_search.py` - PubMed/MEDLINE API
+- [x] Implement `app/tools/semantic_scholar.py` - Semantic Scholar API
 - [ ] Implement `app/tools/crossref_search.py` - Crossref DOI/metadata
 - [ ] Implement `app/tools/openalex_search.py` - OpenAlex open scholarly data
 - [ ] Add PDF download and caching for full-text retrieval

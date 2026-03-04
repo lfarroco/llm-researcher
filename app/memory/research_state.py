@@ -17,6 +17,8 @@ class SourceType(str, Enum):
     WEB = "web"
     ARXIV = "arxiv"
     WIKIPEDIA = "wikipedia"
+    PUBMED = "pubmed"
+    SEMANTIC_SCHOLAR = "semantic_scholar"
 
 
 class Citation(BaseModel):
