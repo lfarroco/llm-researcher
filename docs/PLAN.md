@@ -2,79 +2,147 @@
 
 ## Overview
 
-An autonomous AI research agent that emulates the scientific method to assist researchers in collecting information and discovering new knowledge. The agent searches multiple sources, builds knowledge graphs, generates hypotheses, performs analyses, and produces well-structured research documents with proper citations.
+An interactive AI research assistant that helps users build and explore a persistent knowledge base. Unlike traditional one-shot paper generators, this system focuses on iterative research cycles where users can add items, ask questions, and browse collected knowledge. The AI maintains state across sessions, allowing for refinement and expansion of research over time. Document generation (blog posts, academic papers, etc.) is an optional final step that leverages the accumulated knowledge base.
 
-## Goals
+## Core Philosophy
 
-1. **Scientific Method Workflow**: Follow a structured process (question → literature review → hypothesis → experiment → analysis → report)
-2. **Web Research**: Search multiple sources (web, academic papers, Wikipedia, PubMed) for relevant information
-3. **Knowledge Extraction**: Use NLP to extract entities, relationships, and insights from literature
-4. **Knowledge Representation**: Build knowledge graphs linking papers, concepts, and findings
-5. **Hypothesis Generation**: Identify gaps and propose testable hypotheses from literature analysis
-6. **Data Analysis**: Perform statistical tests and ML-based pattern discovery
-7. **Citation Management**: Track all sources and generate proper citations in the final document
-8. **Parallel Execution**: Multiple subagents work concurrently on different aspects of the research
-9. **Persistent Memory**: Save research state to allow resumption and track progress
-10. **Structured Output**: Generate documents with inline citations and a references section
+- **Knowledge Base First**: The system prioritizes building a rich, queryable knowledge base over immediate document generation
+- **User-Driven Exploration**: Users guide research direction through questions, suggestions, and feedback
+- **Persistent State**: All research progress, AI reasoning, and knowledge are saved locally for future sessions
+- **API-First Design**: All functionality is exposed via APIs to support future UI development
 
----
-
-## Scientific Method Workflow
-
-The agent follows the scientific method in a structured, iterative workflow:
+## General Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     SCIENTIFIC METHOD WORKFLOW                       │
+│                    INTERACTIVE RESEARCH WORKFLOW                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-Step 1: DEFINE RESEARCH QUESTION
-├── Input: Broad topic or specific query
-├── Action: NLP to clarify and refine (identify key concepts, scope)
-└── Output: Well-defined research question (PICO format, sub-questions)
+1. USER INPUT & REFINEMENT
+   ├── User provides initial research topic or question
+   ├── AI suggests clarifications and scope refinements
+   └── User confirms or adjusts direction
 
-Step 2: LITERATURE REVIEW
+2. AI PLANNING & RESEARCH
+   ├── AI decomposes query into sub-questions
+   ├── AI searches multiple sources (web, academic, etc.)
+   ├── AI extracts entities, relationships, key findings
+   └── Everything is added to the knowledge base
+
+3. KNOWLEDGE BASE MANAGEMENT
+   ├── All sources, citations, and findings are persisted
+   ├── Users can browse, search, filter the knowledge base
+   ├── Users can add/remove/edit items manually
+   └── AI state (reasoning, hypotheses) is saved
+
+4. INTERACTIVE EXPLORATION
+   ├── User asks questions about the collected knowledge
+   ├── User requests deeper research on specific topics
+   ├── User makes suggestions or corrections
+   └── AI updates state and knowledge base accordingly
+
+5. DOCUMENT GENERATION (Optional)
+   ├── User chooses output format (blog post, paper, summary)
+   ├── AI synthesizes knowledge base into document
+   ├── User can iterate on draft with feedback
+   └── Final output with proper citations
+```
+
+## Goals
+
+1. **Interactive Knowledge Building**: Enable iterative research through user-AI collaboration
+2. **Persistent Knowledge Base**: Store all research artifacts locally with full search capabilities
+3. **Conversational Interface**: Allow users to query, update, and explore knowledge via natural language
+4. **Web Research**: Search multiple sources (web, academic papers, Wikipedia, PubMed) for relevant information
+5. **Knowledge Extraction**: Use NLP to extract entities, relationships, and insights from literature
+6. **Knowledge Representation**: Build knowledge graphs linking papers, concepts, and findings
+7. **State Persistence**: Save AI reasoning state for session continuity and transparency
+8. **Parallel Execution**: Multiple subagents work concurrently on different aspects of the research
+9. **Flexible Output**: Generate various document formats (blog, paper, summary) from knowledge base
+10. **API-First**: All functionality available via REST APIs for future UI integration
+
+---
+
+## User Interaction Model
+
+The system operates through a conversational API where users can perform various operations:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    USER INTERACTION CAPABILITIES                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+KNOWLEDGE BASE OPERATIONS
+├── Add: "Add this paper/URL/concept to my research"
+├── Remove: "Remove this source, it's not relevant"
+├── Edit: "Update the notes for this finding"
+├── Browse: "Show me all sources about topic X"
+├── Search: "Find items related to machine learning"
+└── Export: "Export this subset as BibTeX"
+
+RESEARCH OPERATIONS
+├── Expand: "Research more about sub-topic Y"
+├── Question: "What does my research say about Z?"
+├── Summarize: "Summarize the key findings so far"
+├── Gaps: "What topics need more research?"
+└── Contradict: "Are there conflicting views on X?"
+
+AI STATE OPERATIONS
+├── Plan: "Show me the current research plan"
+├── Status: "What has been completed? What's pending?"
+├── Reasoning: "Why did you conclude X?"
+└── Reset: "Start fresh with a new direction"
+
+DOCUMENT GENERATION (Optional)
+├── Blog: "Generate a blog post from this research"
+├── Paper: "Create an academic paper outline"
+├── Summary: "Write an executive summary"
+└── Custom: "Generate a document with these sections..."
+```
+
+---
+
+## Research Methodology
+
+When conducting research, the AI follows a structured approach (but always pausable/resumable):
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     RESEARCH METHODOLOGY                            │
+└─────────────────────────────────────────────────────────────────────┘
+
+Step 1: TOPIC UNDERSTANDING
+├── Input: User's research topic or question
+├── Action: Clarify scope, identify key concepts
+├── User Interaction: Confirm or refine direction
+└── Output: Well-defined research question, sub-questions
+
+Step 2: LITERATURE COLLECTION
 ├── Search: Query academic APIs (arXiv, PubMed, Semantic Scholar)
 ├── Retrieve: Download papers, parse PDFs with GROBID
 ├── Extract: NLP to extract abstracts, methods, results, citations
-├── Synthesize: Build knowledge graph, identify gaps
-└── Output: Literature review section, state of the art summary
+├── Store: Add all sources to knowledge base
+└── User Interaction: User can pause, add sources, remove irrelevant items
 
-Step 3: FORMULATE HYPOTHESES
+Step 3: KNOWLEDGE SYNTHESIS
 ├── Analyze: Topic modeling, relation extraction for patterns
+├── Build: Create knowledge graph of concepts and relationships
+├── Identify: Find gaps, contradictions, key themes
+├── Store: Persist synthesis in AI state
+└── User Interaction: User can query, challenge, or redirect
+
+Step 4: OPTIONAL - HYPOTHESIS GENERATION
 ├── Generate: LLM/rule-based reasoning to propose hypotheses
 ├── Prioritize: Rank by novelty, plausibility, feasibility
-└── Output: List of testable hypotheses with supporting evidence
+├── Store: Add hypotheses to knowledge base
+└── User Interaction: User can accept, reject, or modify hypotheses
 
-Step 4: DESIGN EXPERIMENTS
-├── Data Needs: Determine required datasets
-├── Method Selection: Choose statistical tests, ML models
-├── Protocol: Define setup, variables, controls, metrics
-└── Output: Detailed methods section
-
-Step 5: EXECUTE EXPERIMENTS
-├── Data Collection: APIs, web scraping, simulations
-├── Analysis: Statistical tests, train models, run simulations
-├── Visualization: Generate plots and tables
-└── Output: Raw results, figures, intermediate data
-
-Step 6: INTERPRET RESULTS
-├── Compare: Check if results support/refute hypotheses
-├── Contextualize: Relate findings to literature
-├── Refine: If inconclusive, iterate steps 4-6
-└── Output: Discussion section with interpretation
-
-Step 7: GENERATE REPORT
-├── Structure: Title, Abstract, Introduction, Methods, Results, etc.
-├── Write: LLM-assisted drafting grounded in data
-├── Cite: Insert citations from knowledge graph
-├── Format: Convert to PDF/HTML/Markdown
-└── Output: Complete research report
-
-Step 8: ITERATE & IMPROVE
-├── Feedback: User refinements
-├── Update: Re-run as new papers/data become available
-└── Version: Git tracking for reproducibility
+Step 5: OPTIONAL - DOCUMENT GENERATION
+├── Select: User chooses output format and scope
+├── Draft: AI synthesizes knowledge into document
+├── Cite: Insert citations from knowledge base
+├── Iterate: User provides feedback, AI revises
+└── Output: Final document in chosen format
 ```
 
 ---
@@ -177,9 +245,9 @@ class ExperimentResult(BaseModel):
 class ResearchState(BaseModel):
     research_id: int
     query: str
-    refined_question: Optional[str] = None  # PICO-formatted question
+    refined_question: Optional[str] = None  # Clarified research question
     sub_queries: List[str] = []             # Decomposed questions
-    citations: List[Citation] = []          # Collected sources
+    citations: List[Citation] = []          # Collected sources (knowledge base)
     entities: List[Entity] = []             # Extracted entities
     relationships: List[Relationship] = []  # Knowledge graph edges
     findings: dict[str, str] = {}           # sub_query -> finding
@@ -187,85 +255,88 @@ class ResearchState(BaseModel):
     experiment_results: List[ExperimentResult] = []
     outline: Optional[str] = None           # Document structure
     draft: Optional[str] = None             # Current document
-    status: str = "planning"                # planning|reviewing|hypothesizing|experimenting|synthesizing|complete
+    conversation_history: List[dict] = []   # User-AI interaction history
+    ai_reasoning: List[dict] = []           # AI decision log for transparency
+    user_notes: dict[str, str] = {}         # User annotations on items
+    status: str = "idle"                    # idle|researching|awaiting_input|generating
     errors: List[str] = []
+
+class ConversationMessage(BaseModel):
+    role: str                  # user|assistant|system
+    content: str
+    timestamp: str
+    action_taken: Optional[str] = None  # What action resulted from this message
 ```
 
-#### 2. LangGraph Orchestrator
+#### 2. LangGraph Orchestrator (Interactive State Machine)
+
+The orchestrator is designed as an interactive state machine that responds to user commands
+rather than running as a linear pipeline. The AI can pause at any point and wait for user input.
 
 ```
-┌──────────────────┐
-│  QUESTION REFINE │  Clarify and scope the research question
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│     PLANNER      │  Decompose query into sub-questions
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│     SEARCH       │  Parallel search for each sub-query
-│    (parallel)    │  - Web search (Tavily)
-│                  │  - ArXiv (academic papers)
-│                  │  - PubMed (medical literature)
-│                  │  - Semantic Scholar (citations)
-│                  │  - Wikipedia (context)
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│  NLP EXTRACTION  │  Extract entities, relationships, key findings
-│    (parallel)    │  - Named Entity Recognition
-│                  │  - Relation Extraction
-│                  │  - Summarization
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│ KNOWLEDGE GRAPH  │  Build graph of concepts and relationships
-│                  │  - Store in Neo4j/vector DB
-│                  │  - Identify patterns and gaps
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│   HYPOTHESIS     │  Generate and rank hypotheses
-│   GENERATION     │  - Identify literature gaps
-│                  │  - Propose testable claims
-│                  │  - Score by novelty/feasibility
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│   EXPERIMENT     │  Design and execute analyses
-│    DESIGN        │  - Select statistical methods
-│                  │  - Define protocols
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│    ANALYSIS      │  Run experiments and interpret
-│                  │  - Statistical tests
-│                  │  - ML pattern discovery
-│                  │  - Generate visualizations
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│   SYNTHESIZE     │  Combine findings into coherent narrative
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│   CITATIONS      │  Format references, validate URLs
-└────────┬─────────┘
-         │
-         ▼
-┌──────────────────┐
-│     OUTPUT       │  Generate final document (MD/PDF/HTML)
-└──────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                    INTERACTIVE STATE MACHINE                        │
+└─────────────────────────────────────────────────────────────────────┘
+
+                              ┌───────────┐
+                              │   IDLE    │◄───────────────────────┐
+                              │ (waiting) │                        │
+                              └─────┬─────┘                        │
+                                    │ User input                   │
+                                    ▼                              │
+                        ┌───────────────────────┐                  │
+                        │   ROUTE USER INTENT   │                  │
+                        │   (classify action)   │                  │
+                        └───────────┬───────────┘                  │
+                                    │                              │
+       ┌────────────────────────────┼────────────────────────────┐ │
+       │                            │                            │ │
+       ▼                            ▼                            ▼ │
+┌──────────────┐          ┌─────────────────┐          ┌────────────────┐
+│   RESEARCH   │          │  KNOWLEDGE BASE │          │   GENERATE     │
+│   COMMANDS   │          │    COMMANDS     │          │   DOCUMENT     │
+└──────┬───────┘          └────────┬────────┘          └───────┬────────┘
+       │                           │                           │
+       ▼                           ▼                           ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                         EXECUTION LAYER                              │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  RESEARCH:              KB MANAGEMENT:           DOC GENERATION:     │
+│  ├─ plan_research       ├─ add_item              ├─ generate_blog    │
+│  ├─ search_sources      ├─ remove_item           ├─ generate_paper   │
+│  ├─ expand_topic        ├─ edit_item             ├─ generate_summary │
+│  ├─ answer_question     ├─ browse_items          └─ iterate_draft    │
+│  └─ find_gaps           ├─ search_kb                                 │
+│                         └─ export_citations                          │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                         ┌────────────────────┐
+                         │   UPDATE STATE     │
+                         │   & PERSIST        │
+                         └─────────┬──────────┘
+                                   │
+                                   ▼
+                         ┌────────────────────┐
+                         │  RESPOND TO USER   │───────────────────────┘
+                         └────────────────────┘
+
 ```
+
+**User Intent Categories:**
+
+| Intent Type | Example Commands                     | Agent Action                    |
+|-------------|--------------------------------------|---------------------------------|
+| Research    | "Research X", "Find more about Y"    | Plan → Search → Extract → Store |
+| Question    | "What does my research say about X?" | Query KB → Synthesize answer    |
+| Add         | "Add this URL/paper"                 | Fetch → Parse → Store           |
+| Remove      | "Remove source #3"                   | Delete from KB                  |
+| Edit        | "Update notes for finding X"         | Modify KB item                  |
+| Browse      | "Show sources about topic X"         | Filter & return KB items        |
+| Generate    | "Write a blog post"                  | Synthesize KB → Draft → Iterate |
+| Status      | "What's the current state?"          | Return AI state summary         |
 
 #### 3. Tools
 
@@ -425,7 +496,33 @@ Implementation is organized in phases, building progressively from foundation to
 
 ---
 
-### Phase 7: Extended Search Tools | Priority: HIGH
+### Phase 7: Interactive Knowledge Base API | Priority: HIGH ⭐ NEW
+*Enable user interaction with the knowledge base through conversational API*
+
+- [ ] Implement `/research/{id}/chat` endpoint (main interaction)
+  - Intent classification (research, add, remove, question, generate)
+  - Route to appropriate handler based on intent
+  - Return structured response with action taken
+- [ ] Implement conversation history storage
+  - Store messages in database
+  - GET `/research/{id}/chat/history` endpoint
+- [ ] Implement Knowledge Base CRUD endpoints
+  - POST `/research/{id}/sources` - add source manually
+  - PATCH `/research/{id}/sources/{id}` - update notes/tags
+  - DELETE `/research/{id}/sources/{id}` - remove source
+  - GET `/research/{id}/sources` with filtering/search
+- [ ] Implement findings management endpoints
+  - CRUD for user-created findings
+  - Link findings to sources
+- [ ] Implement AI state transparency endpoints
+  - GET `/research/{id}/state` - current AI state
+  - GET `/research/{id}/plan` - research plan with progress
+  - PATCH `/research/{id}/plan` - modify plan
+- [ ] Update `ResearchState` model with conversation and reasoning fields
+- [ ] Implement intent router agent using LLM classification
+- [ ] Add response formatter for consistent API responses
+
+### Phase 8: Extended Search Tools | Priority: HIGH
 *Expand search capabilities to more academic sources*
 
 - [x] Implement `app/tools/pubmed_search.py` - PubMed/MEDLINE API
@@ -434,7 +531,7 @@ Implementation is organized in phases, building progressively from foundation to
 - [ ] Implement `app/tools/openalex_search.py` - OpenAlex open scholarly data
 - [ ] Add PDF download and caching for full-text retrieval
 
-### Phase 8: PDF & Document Parsing | Priority: HIGH
+### Phase 9: PDF & Document Parsing | Priority: HIGH
 *Extract structured content from academic PDFs*
 
 - [ ] Set up GROBID service (Docker container)
@@ -444,7 +541,7 @@ Implementation is organized in phases, building progressively from foundation to
 - [ ] Implement BibTeX parsing with `bibtexparser`
 - [ ] Create document chunking for large papers
 
-### Phase 9: NLP & Knowledge Extraction | Priority: HIGH
+### Phase 10: NLP & Knowledge Extraction | Priority: HIGH
 *Extract structured knowledge from text*
 
 - [ ] Create `app/nlp/` module structure
@@ -461,7 +558,7 @@ Implementation is organized in phases, building progressively from foundation to
   - Gensim LDA for topic discovery
   - BERTopic for neural topic modeling
 
-### Phase 10: Knowledge Graph & Storage | Priority: HIGH
+### Phase 11: Knowledge Graph & Storage | Priority: HIGH
 *Store and query extracted knowledge*
 
 - [ ] Create `app/knowledge/` module structure
@@ -479,8 +576,8 @@ Implementation is organized in phases, building progressively from foundation to
 - [ ] Add Elasticsearch for full-text search (optional)
 - [ ] Create database tables for entities, relationships, embeddings
 
-### Phase 11: Hypothesis Generation | Priority: MEDIUM
-*Identify gaps and propose hypotheses*
+### Phase 12: Hypothesis Generation | Priority: MEDIUM (Optional)
+*Identify gaps and propose hypotheses - can be skipped if not needed*
 
 - [ ] Implement `app/agents/hypothesis_agent.py`
   - Analyze knowledge graph for gaps (missing relationships)
@@ -494,8 +591,8 @@ Implementation is organized in phases, building progressively from foundation to
 - [ ] Add user feedback loop for hypothesis refinement
 - [ ] Update orchestrator with hypothesis generation step
 
-### Phase 12: Experiment Design | Priority: MEDIUM
-*Design analyses to test hypotheses*
+### Phase 13: Experiment Design | Priority: LOW (Optional)
+*Design analyses to test hypotheses - only if doing scientific research*
 
 - [ ] Create `app/analysis/` module structure
 - [ ] Implement experiment design agent
@@ -514,8 +611,8 @@ Implementation is organized in phases, building progressively from foundation to
   - DoWhy for causal effect estimation
   - CausalNex for Bayesian networks (optional)
 
-### Phase 13: Data Analysis & Visualization | Priority: MEDIUM
-*Execute experiments and visualize results*
+### Phase 14: Data Analysis & Visualization | Priority: LOW (Optional)
+*Execute experiments and visualize results - only if doing scientific research*
 
 - [ ] Implement data collection pipelines
   - API connectors for public datasets
@@ -530,24 +627,30 @@ Implementation is organized in phases, building progressively from foundation to
   - Identify limitations and biases
 - [ ] Implement iteration logic (refine hypothesis if inconclusive)
 
-### Phase 14: Advanced Report Generation | Priority: MEDIUM
-*Generate publication-ready documents*
+### Phase 15: Document Generation (Optional Output) | Priority: MEDIUM
+*Generate documents from knowledge base - this is optional, not the main goal*
 
+- [ ] Implement generation API endpoints
+  - POST `/research/{id}/generate` - trigger generation
+  - GET `/research/{id}/drafts` - list drafts
+  - POST `/research/{id}/drafts/{id}/iterate` - iterate with feedback
+  - GET `/research/{id}/drafts/{id}/export` - export to various formats
+- [ ] Implement `app/agents/generation_agent.py`
+  - Support multiple output formats: blog, paper, summary, custom
+  - Use knowledge base as grounding context
+  - Iterate on drafts based on user feedback
 - [ ] Implement `app/output/document_builder.py` (full version)
-  - Standard academic structure (Abstract, Introduction, Methods, etc.)
-  - Section-aware content generation
-  - Inline figure and table placement
+  - Blog post template (casual, engaging)
+  - Academic paper template (structured, formal)
+  - Executive summary template (concise, non-technical)
+  - Custom template support
 - [ ] Implement `app/output/pdf_exporter.py`
   - Pandoc integration for format conversion
-  - LaTeX templates for academic styling
-  - HTML export with interactive elements
-- [ ] Add automatic abstract generation
-- [ ] Generate executive summary for non-technical audiences
+  - Multiple export formats: PDF, HTML, DOCX, Markdown
 - [ ] Support multiple citation styles (already have APA, MLA, Chicago)
-- [ ] Version control for report drafts with Git integration
 
-### Phase 15: API & Real-time Updates | Priority: LOW
-*Enable real-time progress tracking and advanced API features*
+### Phase 16: Real-time Updates | Priority: LOW (Future UI)
+*Enable real-time progress tracking for future UI*
 
 - [ ] Add WebSocket endpoint for progress updates
 - [ ] Stream partial results as research progresses
@@ -556,7 +659,7 @@ Implementation is organized in phases, building progressively from foundation to
 - [ ] Add batch research submission
 - [ ] Rate limiting and usage quotas
 
-### Phase 16: Workflow Orchestration | Priority: LOW
+### Phase 17: Workflow Orchestration | Priority: LOW (Future)
 *Advanced workflow management for complex research*
 
 - [ ] Consider Apache Airflow/Prefect for complex pipelines
@@ -565,7 +668,7 @@ Implementation is organized in phases, building progressively from foundation to
 - [ ] Multi-research project management
 - [ ] Collaboration features (multiple users per research)
 
-### Phase 17: Quality & Reproducibility | Priority: LOW
+### Phase 18: Quality & Reproducibility | Priority: LOW (Future)
 *Ensure research quality and reproducibility*
 
 - [ ] Implement confidence scoring for findings
@@ -653,29 +756,94 @@ apache-airflow>=2.8.0        # Alternative orchestration
 
 ---
 
-## API Changes
+## API Design
 
-### Current Endpoints
+### Core API Philosophy
+
+The API is designed around the interactive research assistant model:
+- **Conversational**: Main interaction through a chat-like endpoint
+- **Knowledge Base CRUD**: Full control over research items
+- **State Transparency**: Users can inspect AI reasoning and state
+- **Document Generation**: Optional output generation from accumulated knowledge
+
+### Research Session Endpoints
 
 ```
+# Session Management
 POST /research
-  - Accepts: { query: string, depth: "quick"|"standard"|"deep" }
-  - Returns: { id, status: "planning" }
+  - Accepts: { topic: string, description?: string }
+  - Returns: { id, status: "idle", created_at }
+  - Creates a new research session (knowledge base)
+
+GET /research
+  - Returns: list of all research sessions
+  - Supports pagination and filtering
 
 GET /research/{id}
-  - Returns: { id, query, status, draft, citations }
+  - Returns: full research state including KB stats, AI state
 
+DELETE /research/{id}
+  - Deletes research session and all associated data
+```
+
+### Conversation / Chat Endpoint (Primary Interface)
+
+```
+POST /research/{id}/chat
+  - Accepts: { message: string }
+  - Returns: { 
+      response: string,           # AI's response
+      action_taken: string,       # add|remove|search|generate|etc
+      state_changes: object,      # What changed in the KB/state
+      suggestions?: string[]      # Optional follow-up suggestions
+    }
+  - This is the main interaction point - handles all user intents
+  - AI routes to appropriate action based on intent classification
+
+GET /research/{id}/chat/history
+  - Returns: list of conversation messages with timestamps
+  - Supports pagination
+```
+
+### Knowledge Base Endpoints
+
+```
+# Sources / Citations
 GET /research/{id}/sources
-  - Returns: list of all citations collected
+  - Returns: list of all sources in KB
+  - Supports filtering: ?type=arxiv&search=keyword
 
-GET /research/{id}/document
-  - Returns: { markdown, pdf_url?, citations }
-```
+POST /research/{id}/sources
+  - Accepts: { url?: string, doi?: string, manual?: object }
+  - Returns: { source_id, parsed_data }
+  - Manually add a source to the KB
 
-### New Endpoints (Phases 7+)
+GET /research/{id}/sources/{source_id}
+  - Returns: full source details including extracted content
 
-```
-# Knowledge Graph
+PATCH /research/{id}/sources/{source_id}
+  - Accepts: { notes?: string, tags?: string[], relevant?: boolean }
+  - Updates user annotations on a source
+
+DELETE /research/{id}/sources/{source_id}
+  - Removes source from KB
+
+# Findings
+GET /research/{id}/findings
+  - Returns: list of synthesized findings
+  - Each finding links to supporting sources
+
+POST /research/{id}/findings
+  - Accepts: { content: string, source_ids?: string[] }
+  - Manually add a finding
+
+PATCH /research/{id}/findings/{finding_id}
+  - Update finding content or linked sources
+
+DELETE /research/{id}/findings/{finding_id}
+  - Remove finding
+
+# Entities & Relationships (Knowledge Graph)
 GET /research/{id}/entities
   - Returns: list of extracted entities with metadata
 
@@ -684,39 +852,87 @@ GET /research/{id}/relationships
 
 GET /research/{id}/graph
   - Returns: { nodes: [], edges: [] } for visualization
+```
 
-# Hypotheses
-GET /research/{id}/hypotheses
-  - Returns: list of generated hypotheses with scores
+### AI State Endpoints
 
-POST /research/{id}/hypotheses/{hypothesis_id}/test
-  - Triggers experimental analysis for a hypothesis
-  - Returns: { experiment_id, status: "running" }
+```
+GET /research/{id}/state
+  - Returns: {
+      status: "idle"|"researching"|"awaiting_input"|"generating",
+      current_plan: object,       # Research plan breakdown
+      pending_queries: string[],  # Queries not yet researched
+      reasoning_log: object[],    # AI decision history
+      last_activity: timestamp
+    }
 
-# Analysis
-GET /research/{id}/experiments
-  - Returns: list of experiment results
+GET /research/{id}/plan
+  - Returns: current research plan with sub-queries and progress
 
-GET /research/{id}/experiments/{experiment_id}
-  - Returns: detailed results with figures
+PATCH /research/{id}/plan
+  - Accepts: { add_queries?: string[], remove_queries?: string[] }
+  - Modify the research plan
 
-GET /research/{id}/figures
-  - Returns: list of generated visualizations
+POST /research/{id}/reset
+  - Resets AI state while preserving KB (start fresh direction)
+```
 
-# Real-time (WebSocket)
+### Document Generation Endpoints
+
+```
+POST /research/{id}/generate
+  - Accepts: { 
+      format: "blog"|"paper"|"summary"|"custom",
+      options?: {
+        sections?: string[],       # For custom format
+        citation_style?: "apa"|"mla"|"chicago",
+        include_sources?: string[] # Subset of KB to use
+      }
+    }
+  - Returns: { draft_id, status: "generating" }
+  - Triggers async document generation
+
+GET /research/{id}/drafts
+  - Returns: list of generated drafts
+
+GET /research/{id}/drafts/{draft_id}
+  - Returns: { content, format, citations, created_at }
+
+POST /research/{id}/drafts/{draft_id}/iterate
+  - Accepts: { feedback: string }
+  - Returns: { updated_content }
+  - Iterate on draft with user feedback
+
+GET /research/{id}/drafts/{draft_id}/export
+  - Query: ?format=md|pdf|html|docx
+  - Returns: file download
+```
+
+### Export Endpoints
+
+```
+GET /research/{id}/export/bibtex
+  - Returns: BibTeX file of all sources
+
+GET /research/{id}/export/json
+  - Returns: full KB as JSON (for backup/migration)
+
+POST /research/{id}/import
+  - Accepts: JSON or BibTeX file
+  - Imports sources into KB
+```
+
+### (Future) Real-time Endpoints
+
+```
 WS /research/{id}/stream
-  - Streams: { phase, progress, current_task, findings_count }
-  - Events: entity_extracted, hypothesis_generated, experiment_complete
-
-# Management
-POST /research/{id}/cancel
-  - Cancels running research
-
-POST /research/{id}/resume
-  - Resumes from last checkpoint
-
-PATCH /research/{id}/hypotheses/{hypothesis_id}
-  - Update hypothesis (user feedback/refinement)
+  - Streams: { event_type, data, timestamp }
+  - Events: 
+    - source_added, source_removed
+    - finding_created
+    - research_progress
+    - generation_progress
+  - Low priority - for future UI integration
 ```
 
 ---
@@ -766,6 +982,19 @@ GROBID_URL=                  # GROBID service URL
 - All searches run in parallel using `asyncio.gather`
 - Citations follow a consistent format with URL, title, date accessed
 
+### Key Architecture Decisions
+
+- **Interactive over Pipeline**: The system is designed as an interactive research assistant,
+  not a one-shot document generator. Users build knowledge over time.
+- **Knowledge Base First**: All research artifacts are stored in a persistent knowledge base
+  that users can query, browse, and modify.
+- **Conversation-Driven**: The main interaction pattern is through a chat-like API where
+  users express intent in natural language.
+- **Document Generation is Optional**: Generating papers/blogs is a secondary feature that
+  leverages the accumulated knowledge base.
+- **API-First**: All functionality is exposed via REST APIs to enable future UI development.
+- **State Transparency**: Users can inspect AI reasoning and decision-making process.
+
 ### Future Architecture Considerations
 - **Knowledge Graph**: Neo4j will store entities and relationships, enabling:
   - Literature gap detection (missing edges)
@@ -773,27 +1002,23 @@ GROBID_URL=                  # GROBID service URL
   - Citation network analysis
 - **RAG Pipeline**: Chroma/FAISS vector store for semantic retrieval:
   - Chunk papers into embeddings
-  - Retrieve relevant context for hypothesis generation
+  - Retrieve relevant context for answering questions
   - Ground LLM outputs in source material
 - **GROBID**: Self-hosted service for PDF parsing:
   - Extracts structured sections from academic PDFs
   - Handles complex layouts with figures/tables
   - Returns TEI XML for consistent parsing
-- **Reproducibility**: All research runs are versioned:
-  - Git-tracked output documents
-  - Docker environments for analysis code
-  - Data snapshots for replication
 
 ### Recommended Implementation Order
 
-1. **Phase 7 (Extended Search)** - More sources = better literature coverage
-2. **Phase 8 (PDF Parsing)** - Access full paper content, not just abstracts
-3. **Phase 9 (NLP Extraction)** - Foundation for knowledge graph
-4. **Phase 10 (Knowledge Graph)** - Enable hypothesis generation
-5. **Phase 11 (Hypothesis)** - Core scientific method capability
-6. **Phases 12-13 (Analysis)** - Test hypotheses with data
-7. **Phase 14 (Reports)** - Publication-quality output
-8. **Phases 15-17** - Polish and scale
+1. **Phase 7 (Interactive KB API)** - Core user interaction functionality ⭐ PRIORITY
+2. **Phase 8 (Extended Search)** - More sources = better knowledge coverage
+3. **Phase 9 (PDF Parsing)** - Access full paper content, not just abstracts
+4. **Phase 10 (NLP Extraction)** - Foundation for knowledge graph
+5. **Phase 11 (Knowledge Graph)** - Enable semantic querying and gap detection
+6. **Phase 15 (Document Generation)** - Optional output from knowledge base
+7. **Phases 12-14 (Hypothesis/Analysis)** - Only if doing scientific research
+8. **Phases 16-18** - Future enhancements, UI support
 
 ### External Services (Docker Compose)
 ```yaml
