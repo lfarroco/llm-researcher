@@ -24,10 +24,67 @@ logging.basicConfig(
 )
 
 
+# Global flag to control background worker
+_background_worker_running = False
+_background_worker_task = None
+
+
+async def background_task_worker():
+    """
+    Continuously polls the database for pending research tasks and processes them.
+    """
+    global _background_worker_running
+    logger.info("Background task worker started")
+
+    while _background_worker_running:
+        try:
+            db = next(get_db())
+            try:
+                # Find oldest pending research
+                pending_research = db.query(models.Research).filter(
+                    models.Research.status == "pending"
+                ).order_by(models.Research.created_at).first()
+
+                if pending_research:
+                    logger.info(
+                        f"Background worker picked up task: id={pending_research.id}")
+                    # Process in a separate thread to avoid blocking
+                    await asyncio.to_thread(
+                        process_research,
+                        pending_research.id,
+                        pending_research.query
+                    )
+                else:
+                    # No pending tasks, wait before checking again
+                    await asyncio.sleep(2)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Background worker error: {str(e)}", exc_info=True)
+            await asyncio.sleep(5)  # Wait longer on error
+
+    logger.info("Background task worker stopped")
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    global _background_worker_running, _background_worker_task
+
     Base.metadata.create_all(bind=db_module.engine)
+
+    # Start background worker
+    _background_worker_running = True
+    _background_worker_task = asyncio.create_task(background_task_worker())
+    logger.info("Application startup complete with background worker")
+
     yield
+
+    # Stop background worker
+    logger.info("Shutting down background worker...")
+    _background_worker_running = False
+    if _background_worker_task:
+        await _background_worker_task
+    logger.info("Background worker stopped")
 
 
 app = FastAPI(
@@ -63,6 +120,19 @@ def process_research(research_id: int, query: str):
     logger.info(f"Starting research task: id={research_id}")
     db = next(get_db())
     try:
+        # Atomically claim this task by updating status from 'pending' to 'planning'
+        # This prevents race conditions between multiple workers
+        rows_updated = db.query(models.Research).filter(
+            models.Research.id == research_id,
+            models.Research.status == "pending"
+        ).update({"status": "planning"}, synchronize_session=False)
+        db.commit()
+
+        if rows_updated == 0:
+            logger.info(
+                f"Research id={research_id} already claimed or not pending, skipping")
+            return
+
         research = db.query(models.Research).filter(
             models.Research.id == research_id).first()
         if not research:
@@ -70,9 +140,6 @@ def process_research(research_id: int, query: str):
             return
 
         try:
-            # Update status to show we're starting
-            research.status = "planning"
-            db.commit()
 
             # Run the async workflow in a new event loop
             logger.debug(f"Running research workflow for id={research_id}")
