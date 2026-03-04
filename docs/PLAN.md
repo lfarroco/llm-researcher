@@ -166,8 +166,8 @@ CREATE TABLE research_checkpoints (
 
 ### Phase 5: Citations ✅ Priority: MEDIUM
 - [x] Implement citation extraction from search results
-- [ ] Implement `app/output/citation_formatter.py` (APA, MLA, Chicago)
-- [ ] Add citation validation (check URLs are accessible)
+- [x] Implement `app/output/citation_formatter.py` (APA, MLA, Chicago)
+- [x] Add citation validation (check URLs are accessible)
 
 ### Phase 6: Output Generation ✅ Priority: MEDIUM
 - [x] Implement `app/output/document_builder.py` (in synthesis_agent.py)

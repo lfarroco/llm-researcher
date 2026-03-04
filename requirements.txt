@@ -26,3 +26,6 @@ wikipedia>=1.4.0
 # Web scraping
 beautifulsoup4>=4.12.0
 trafilatura>=1.6.0
+
+# HTTP client for validation
+aiohttp>=3.9.0
