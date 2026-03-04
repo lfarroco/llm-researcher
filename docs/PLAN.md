@@ -142,37 +142,37 @@ CREATE TABLE research_checkpoints (
 ## Implementation Phases
 
 ### Phase 1: Foundation ✅ Priority: HIGH
-- [ ] Add new dependencies to `requirements.txt`
-- [ ] Create `app/memory/research_state.py` with Pydantic models
-- [ ] Create `app/models.py` additions for sources and checkpoints
+- [x] Add new dependencies to `requirements.txt`
+- [x] Create `app/memory/research_state.py` with Pydantic models
+- [x] Create `app/models.py` additions for sources and checkpoints
 - [ ] Set up database migrations
 
 ### Phase 2: Tools ✅ Priority: HIGH
-- [ ] Implement `app/tools/web_search.py` (Tavily + DuckDuckGo fallback)
-- [ ] Implement `app/tools/arxiv_search.py`
-- [ ] Implement `app/tools/wikipedia.py`
-- [ ] Implement `app/tools/web_scraper.py`
+- [x] Implement `app/tools/web_search.py` (Tavily + DuckDuckGo fallback)
+- [x] Implement `app/tools/arxiv_search.py`
+- [x] Implement `app/tools/wikipedia.py`
+- [x] Implement `app/tools/web_scraper.py`
 
 ### Phase 3: Agents ✅ Priority: HIGH
-- [ ] Implement `app/agents/planner.py` - query decomposition
-- [ ] Implement `app/agents/search_agent.py` - tool-calling agent
-- [ ] Implement `app/agents/synthesis_agent.py` - document drafting
-- [ ] Implement `app/agents/orchestrator.py` - LangGraph workflow
+- [x] Implement `app/agents/planner.py` - query decomposition
+- [x] Implement `app/agents/search_agent.py` - tool-calling agent
+- [x] Implement `app/agents/synthesis_agent.py` - document drafting
+- [x] Implement `app/agents/orchestrator.py` - LangGraph workflow
 
 ### Phase 4: Parallel Execution ✅ Priority: MEDIUM
-- [ ] Add async support to search agent
-- [ ] Implement `asyncio.gather` for concurrent sub-query searches
-- [ ] Add rate limiting and error handling
+- [x] Add async support to search agent
+- [x] Implement `asyncio.gather` for concurrent sub-query searches
+- [x] Add rate limiting and error handling
 
 ### Phase 5: Citations ✅ Priority: MEDIUM
-- [ ] Implement citation extraction from search results
+- [x] Implement citation extraction from search results
 - [ ] Implement `app/output/citation_formatter.py` (APA, MLA, Chicago)
 - [ ] Add citation validation (check URLs are accessible)
 
 ### Phase 6: Output Generation ✅ Priority: MEDIUM
-- [ ] Implement `app/output/document_builder.py`
-- [ ] Add inline citation markers `[1]`, `[2]` in text
-- [ ] Generate references section
+- [x] Implement `app/output/document_builder.py` (in synthesis_agent.py)
+- [x] Add inline citation markers `[1]`, `[2]` in text
+- [x] Generate references section
 - [ ] Optional: PDF export
 
 ### Phase 7: API & Streaming ✅ Priority: LOW

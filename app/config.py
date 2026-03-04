@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://postgres:postgres@db:5432/researcher"
     openai_api_key: str = ""
+    tavily_api_key: str = ""  # For web search
     app_env: str = "development"
 
     # LLM Provider Configuration
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     llm_model: str = "qwen3:4b"
     llm_temperature: float = 0.2
     ollama_base_url: str = "http://host.docker.internal:11434"  # Ollama server URL
+
+    # Research settings
+    research_max_sources: int = 20  # Max citations per research
+    research_timeout: int = 300  # Max seconds per research
 
 
 settings = Settings()
