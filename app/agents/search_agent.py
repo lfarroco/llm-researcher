@@ -40,7 +40,11 @@ async def search_for_subquery(
     Returns:
         SubQueryResult with citations
     """
-    logger.debug(f"Searching for: {sub_query}")
+    logger.info(
+        f"[SEARCH] Starting search for sub-query: '{sub_query[:60]}...'")
+    logger.debug(f"[SEARCH] Full sub-query: {sub_query}")
+    logger.debug(
+        f"[SEARCH] include_academic={include_academic}, include_wikipedia={include_wikipedia}")
 
     citations = []
     errors = []
@@ -50,28 +54,40 @@ async def search_for_subquery(
     task_types = []
 
     # Always search web
+    logger.debug("[SEARCH] Adding web search task")
     tasks.append(web_search(sub_query, max_results=5))
     task_types.append("web")
 
     # Conditionally add ArXiv
     if include_academic or is_academic_query(sub_query):
+        logger.debug(
+            "[SEARCH] Adding ArXiv search task (academic query detected)")
         tasks.append(arxiv_search(sub_query, max_results=3))
         task_types.append("arxiv")
 
     # Conditionally add Wikipedia
     if include_wikipedia:
+        logger.debug("[SEARCH] Adding Wikipedia search task")
         tasks.append(wikipedia_search(sub_query, sentences=5))
         task_types.append("wikipedia")
 
+    logger.info(
+        f"[SEARCH] Executing {len(tasks)} search tasks in parallel: {task_types}")
+
     # Execute all searches concurrently
     results = await asyncio.gather(*tasks, return_exceptions=True)
+    logger.debug("[SEARCH] All search tasks completed")
 
     citation_id = 1
     for result, source_type in zip(results, task_types):
         if isinstance(result, Exception):
-            errors.append(f"{source_type} search failed: {str(result)}")
+            error_msg = f"{source_type} search failed: {str(result)}"
+            logger.error(f"[SEARCH] {error_msg}", exc_info=result)
+            errors.append(error_msg)
             continue
 
+        logger.debug(
+            f"[SEARCH] Processing {len(result)} results from {source_type}")
         for item in result:
             # Convert to Citation based on source type
             if source_type == "web":
@@ -105,6 +121,11 @@ async def search_for_subquery(
 
             citation_id += 1
 
+    logger.info(
+        f"[SEARCH] Sub-query search complete: {len(citations)} citations, {len(errors)} errors")
+    if errors:
+        logger.warning(f"[SEARCH] Errors encountered: {errors}")
+
     return SubQueryResult(
         sub_query=sub_query,
         citations=citations,
@@ -125,18 +146,25 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
     Returns:
         State updates with citations and sub_query_results
     """
-    logger.info(f"Executing searches for {len(state.sub_queries)} sub-queries")
+    logger.info("[SEARCH] ========== STARTING SEARCH PHASE ==========")
+    logger.info(f"[SEARCH] Research ID: {state.research_id}")
+    logger.info(f"[SEARCH] Number of sub-queries: {len(state.sub_queries)}")
+    for i, sq in enumerate(state.sub_queries):
+        logger.debug(f"[SEARCH] Sub-query {i+1}: {sq}")
 
     # Check if we should include academic sources
     include_academic = is_academic_query(state.query)
+    logger.debug(f"[SEARCH] Include academic sources: {include_academic}")
 
     # Search all sub-queries in parallel
+    logger.info(f"[SEARCH] Starting parallel search for all {len(state.sub_queries)} sub-queries")
     tasks = [
         search_for_subquery(sq, include_academic=include_academic)
         for sq in state.sub_queries
     ]
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
+    logger.debug("[SEARCH] All parallel searches completed")
 
     # Collect all citations and results
     all_citations = []
@@ -145,7 +173,7 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
 
     for i, result in enumerate(results):
         if isinstance(result, Exception):
-            logger.error(f"Search failed for sub-query {i}: {result}")
+            logger.error(f"[SEARCH] Sub-query {i+1} failed: {result}", exc_info=result)
             errors.append(f"Search failed: {str(result)}")
             sub_query_results.append(SubQueryResult(
                 sub_query=state.sub_queries[i],
@@ -153,10 +181,14 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
                 error=str(result),
             ))
         else:
+            logger.debug(f"[SEARCH] Sub-query {i+1} returned {len(result.citations)} citations")
             sub_query_results.append(result)
             all_citations.extend(result.citations)
 
+    logger.info(f"[SEARCH] Total citations collected: {len(all_citations)}")
+
     # Deduplicate citations by URL and reassign IDs
+    logger.debug("[SEARCH] Deduplicating citations by URL")
     seen_urls = set()
     unique_citations = []
     for citation in all_citations:
@@ -164,11 +196,20 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
             seen_urls.add(citation.url)
             citation.id = f"[{len(unique_citations) + 1}]"
             unique_citations.append(citation)
+    
+    logger.debug(f"[SEARCH] After deduplication: {len(unique_citations)} unique citations")
 
     # Limit to max sources
+    if len(unique_citations) > settings.research_max_sources:
+        logger.debug(f"[SEARCH] Limiting to {settings.research_max_sources} citations (was {len(unique_citations)})")
     unique_citations = unique_citations[:settings.research_max_sources]
 
-    logger.info(f"Collected {len(unique_citations)} unique citations")
+    logger.info("[SEARCH] ========== SEARCH PHASE COMPLETE ==========")
+    logger.info(f"[SEARCH] Final citation count: {len(unique_citations)}")
+    logger.info(f"[SEARCH] Errors: {len(errors)}")
+    if errors:
+        for err in errors:
+            logger.warning(f"[SEARCH] Error: {err}")
 
     return {
         "citations": unique_citations,

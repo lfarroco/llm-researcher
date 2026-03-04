@@ -83,10 +83,14 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
     Returns:
         State updates with draft document
     """
-    logger.info(f"Synthesizing {len(state.citations)} citations into document")
+    logger.info("[SYNTHESIS] ========== STARTING SYNTHESIS PHASE ==========")
+    logger.info(f"[SYNTHESIS] Research ID: {state.research_id}")
+    logger.info(f"[SYNTHESIS] Number of citations: {len(state.citations)}")
+    logger.info(f"[SYNTHESIS] Number of sub-queries: {len(state.sub_queries)}")
+    logger.debug(f"[SYNTHESIS] Query: {state.query}")
 
     if not state.citations:
-        logger.warning("No citations to synthesize")
+        logger.warning("[SYNTHESIS] No citations to synthesize - aborting")
         return {
             "draft": "No sources were found for this research query.",
             "status": "formatting",
@@ -95,11 +99,20 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         }
 
     try:
+        logger.debug("[SYNTHESIS] Creating synthesis chain")
+        logger.debug(
+            f"[SYNTHESIS] Using LLM provider: {settings.llm_provider}, model: {settings.llm_model}")
         chain = get_synthesis_chain()
 
         # Prepare inputs
         sub_queries_text = "\n".join(f"- {sq}" for sq in state.sub_queries)
         sources_text = format_sources_for_prompt(state.citations)
+
+        logger.debug(
+            f"[SYNTHESIS] Sub-queries text length: {len(sub_queries_text)} chars")
+        logger.debug(
+            f"[SYNTHESIS] Sources text length: {len(sources_text)} chars")
+        logger.debug("[SYNTHESIS] Invoking LLM for document synthesis...")
 
         # Generate the document
         response = await chain.ainvoke({
@@ -111,7 +124,9 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         draft = response.content if hasattr(
             response, 'content') else str(response)
 
-        logger.info(f"Generated draft document ({len(draft)} characters)")
+        logger.info("[SYNTHESIS] Draft document generated successfully")
+        logger.info(f"[SYNTHESIS] Draft length: {len(draft)} characters")
+        logger.debug(f"[SYNTHESIS] Draft preview: {draft[:200]}...")
 
         return {
             "draft": draft,
@@ -121,7 +136,8 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Synthesis failed: {e}", exc_info=True)
+        logger.error(
+            f"[SYNTHESIS] Synthesis failed with error: {e}", exc_info=True)
         return {
             "draft": "",
             "status": "failed",
@@ -140,13 +156,21 @@ async def format_final_document(state: ResearchState) -> dict[str, Any]:
     Returns:
         State updates with final_document
     """
-    logger.info("Formatting final document with references")
+    logger.info("[FORMAT] ========== STARTING FORMAT PHASE ==========")
+    logger.info(f"[FORMAT] Research ID: {state.research_id}")
+    logger.info(
+        f"[FORMAT] Draft length: {len(state.draft) if state.draft else 0} chars")
+    logger.info(f"[FORMAT] Number of citations: {len(state.citations)}")
 
     if not state.draft:
+        logger.error("[FORMAT] No draft to format - marking as failed")
         return {
             "final_document": "Research failed to produce results.",
             "status": "failed",
         }
+
+    logger.debug(
+        "[FORMAT] Building final document with header and references")
 
     # Build the final document
     document_parts = [
@@ -159,7 +183,8 @@ async def format_final_document(state: ResearchState) -> dict[str, Any]:
     ]
 
     # Add references section
-    for citation in state.citations:
+    logger.debug(f"[FORMAT] Adding {len(state.citations)} references")
+    for i, citation in enumerate(state.citations):
         ref_line = f"{citation.id} "
         if citation.author:
             ref_line += f"{citation.author}. "
@@ -167,10 +192,15 @@ async def format_final_document(state: ResearchState) -> dict[str, Any]:
         ref_line += f"Retrieved from {citation.url} "
         ref_line += f"on {citation.date_accessed[:10]}.\n\n"
         document_parts.append(ref_line)
+        logger.debug(
+            f"[FORMAT] Added reference {i+1}: {citation.title[:40]}...")
 
     final_document = "".join(document_parts)
 
-    logger.info(f"Final document ready ({len(final_document)} characters)")
+    logger.info("[FORMAT] ========== FORMAT PHASE COMPLETE ==========")
+    logger.info(
+        f"[FORMAT] Final document length: {len(final_document)} characters")
+    logger.debug(f"[FORMAT] Final document preview: {final_document[:300]}...")
 
     return {
         "final_document": final_document,

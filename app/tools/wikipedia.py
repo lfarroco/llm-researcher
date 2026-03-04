@@ -38,17 +38,25 @@ async def wikipedia_search(
     Returns:
         List of WikipediaResult objects (usually 1-3 most relevant)
     """
-    logger.debug(f"Wikipedia search: {query}")
+    logger.info(f"[WIKIPEDIA] Starting search for: '{query[:80]}...'")
+    logger.debug(
+        f"[WIKIPEDIA] Parameters: sentences={sentences}, include_content={include_content}")
 
     results = []
 
     try:
         # Search for matching pages
+        logger.debug("[WIKIPEDIA] Calling wikipedia.search()")
         search_results = wikipedia.search(query, results=3)
+        logger.debug(
+            f"[WIKIPEDIA] Found {len(search_results)} matching pages: {search_results}")
 
         for page_title in search_results:
+            logger.debug(f"[WIKIPEDIA] Fetching page: '{page_title}'")
             try:
                 page = wikipedia.page(page_title, auto_suggest=False)
+                logger.debug(
+                    f"[WIKIPEDIA] Successfully fetched page: '{page.title}'")
 
                 result = WikipediaResult(
                     title=page.title,
@@ -57,8 +65,11 @@ async def wikipedia_search(
                     content=page.content[:3000] if include_content else "",
                 )
                 results.append(result)
+                logger.debug(f"[WIKIPEDIA] Added result for '{page.title}'")
 
             except wikipedia.DisambiguationError as e:
+                logger.debug(
+                    f"[WIKIPEDIA] Disambiguation page for '{page_title}', options: {e.options[:3]}")
                 # If disambiguation page, try the first option
                 if e.options:
                     try:
@@ -71,17 +82,22 @@ async def wikipedia_search(
                             content=page.content[:3000] if include_content else "",
                         )
                         results.append(result)
-                    except Exception:
-                        pass
+                        logger.debug(
+                            f"[WIKIPEDIA] Added result from disambiguation: '{page.title}'")
+                    except Exception as inner_e:
+                        logger.debug(
+                            f"[WIKIPEDIA] Failed to fetch disambiguation option: {inner_e}")
 
-            except wikipedia.PageError:
-                # Page doesn't exist, skip
+            except wikipedia.PageError as e:
+                logger.debug(
+                    f"[WIKIPEDIA] Page not found for '{page_title}': {e}")
                 continue
 
     except Exception as e:
-        logger.warning(f"Wikipedia search error: {e}")
+        logger.warning(f"[WIKIPEDIA] Search error: {e}", exc_info=True)
 
-    logger.debug(f"Wikipedia returned {len(results)} results")
+    logger.info(
+        f"[WIKIPEDIA] Search complete, returning {len(results)} results")
     return results
 
 

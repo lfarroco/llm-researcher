@@ -82,20 +82,39 @@ async def plan_research(state: ResearchState) -> dict[str, Any]:
     Returns:
         State updates with sub_queries and status
     """
-    logger.info(f"Planning research for: {state.query[:100]}...")
+    logger.info("[PLANNER] ========== STARTING PLANNING PHASE ==========")
+    logger.info(f"[PLANNER] Research ID: {state.research_id}")
+    logger.info(f"[PLANNER] Query: '{state.query[:100]}...'")
+    logger.debug(f"[PLANNER] Full query: {state.query}")
+    logger.debug(
+        f"[PLANNER] Using LLM provider: {settings.llm_provider}, model: {settings.llm_model}")
 
     try:
+        logger.debug("[PLANNER] Creating planner chain")
         chain = get_planner_chain()
+
+        logger.debug("[PLANNER] Invoking LLM for query decomposition")
         result = await chain.ainvoke({"query": state.query})
+        logger.debug(f"[PLANNER] LLM response received: {result}")
 
         sub_queries = result.get("sub_queries", [])
+        search_strategy = result.get("search_strategy", "Not specified")
+        include_academic = result.get("include_academic", False)
+
+        logger.debug(f"[PLANNER] Parsed sub_queries: {sub_queries}")
+        logger.debug(f"[PLANNER] Search strategy: {search_strategy}")
+        logger.debug(f"[PLANNER] Include academic sources: {include_academic}")
 
         # Ensure we have at least some sub-queries
         if not sub_queries:
+            logger.warning(
+                "[PLANNER] No sub-queries generated, falling back to original query")
             sub_queries = [state.query]  # Fallback to original query
 
-        logger.info(f"Generated {len(sub_queries)} sub-queries")
-        logger.debug(f"Sub-queries: {sub_queries}")
+        logger.info(
+            f"[PLANNER] Successfully generated {len(sub_queries)} sub-queries")
+        for i, sq in enumerate(sub_queries):
+            logger.info(f"[PLANNER]   {i+1}. {sq}")
 
         return {
             "sub_queries": sub_queries,
@@ -104,7 +123,10 @@ async def plan_research(state: ResearchState) -> dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Planning failed: {e}", exc_info=True)
+        logger.error(
+            f"[PLANNER] Planning failed with error: {e}", exc_info=True)
+        logger.warning(
+            "[PLANNER] Falling back to original query as single sub-query")
         return {
             "sub_queries": [state.query],  # Fallback to original query
             "status": "searching",

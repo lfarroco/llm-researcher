@@ -22,11 +22,23 @@ def should_continue_after_search(state: ResearchState) -> str:
     """
     Conditional edge: decide whether to synthesize or fail.
     """
+    logger.debug("[ORCHESTRATOR] Evaluating post-search condition")
+    logger.debug(
+        f"[ORCHESTRATOR] Citations count: {len(state.citations) if state.citations else 0}")
+    logger.debug(
+        f"[ORCHESTRATOR] Errors count: {len(state.errors) if state.errors else 0}")
+
     if state.citations:
+        logger.info(
+            f"[ORCHESTRATOR] Post-search decision: SYNTHESIZE (has {len(state.citations)} citations)")
         return "synthesize"
     elif state.errors:
+        logger.warning(
+            "[ORCHESTRATOR] Post-search decision: FAIL (has errors, no citations)")
         return "fail"
     else:
+        logger.info(
+            "[ORCHESTRATOR] Post-search decision: SYNTHESIZE (no citations but will try)")
         return "synthesize"  # Try to synthesize even with no citations
 
 
@@ -34,9 +46,16 @@ def should_continue_after_synthesis(state: ResearchState) -> str:
     """
     Conditional edge: decide whether to format or fail.
     """
+    logger.debug("[ORCHESTRATOR] Evaluating post-synthesis condition")
+    logger.debug(
+        f"[ORCHESTRATOR] Draft length: {len(state.draft) if state.draft else 0}")
+
     if state.draft:
+        logger.info("[ORCHESTRATOR] Post-synthesis decision: FORMAT")
         return "format"
     else:
+        logger.warning(
+            "[ORCHESTRATOR] Post-synthesis decision: FAIL (no draft)")
         return "fail"
 
 
@@ -44,7 +63,12 @@ async def handle_failure(state: ResearchState) -> dict:
     """
     Failure handler node.
     """
-    logger.error(f"Research workflow failed: {state.errors}")
+    logger.error("[ORCHESTRATOR] ========== WORKFLOW FAILED ==========")
+    logger.error(f"[ORCHESTRATOR] Research ID: {state.research_id}")
+    logger.error(f"[ORCHESTRATOR] Query: {state.query[:100]}")
+    logger.error(f"[ORCHESTRATOR] Status at failure: {state.status}")
+    logger.error(f"[ORCHESTRATOR] Errors: {state.errors}")
+
     error_list = "\n".join(f"- {e}" for e in state.errors)
     return {
         "status": "failed",
@@ -122,28 +146,60 @@ async def run_research_workflow(
     Returns:
         Final ResearchState with results
     """
-    logger.info(f"Starting research workflow for: {query[:100]}...")
+    logger.info("[ORCHESTRATOR] ========================================")
+    logger.info("[ORCHESTRATOR] STARTING RESEARCH WORKFLOW")
+    logger.info("[ORCHESTRATOR] ========================================")
+    logger.info(f"[ORCHESTRATOR] Research ID: {research_id}")
+    logger.info(f"[ORCHESTRATOR] Query: '{query[:100]}...'")
+    logger.debug(f"[ORCHESTRATOR] Full query: {query}")
+    logger.debug(f"[ORCHESTRATOR] Config: {config}")
 
     # Create initial state
+    logger.debug("[ORCHESTRATOR] Creating initial state")
     initial_state = ResearchState(
         research_id=research_id,
         query=query,
     )
+    logger.debug(
+        f"[ORCHESTRATOR] Initial state created with status='{initial_state.status}'")
 
     # Create and run the graph
+    logger.debug("[ORCHESTRATOR] Creating research graph")
     graph = create_research_graph()
+    logger.debug("[ORCHESTRATOR] Graph compiled, starting execution")
 
     # Run the workflow
-    final_state = await graph.ainvoke(
-        initial_state,
-        config=config or {},
-    )
+    try:
+        logger.info("[ORCHESTRATOR] Invoking graph workflow...")
+        final_state = await graph.ainvoke(
+            initial_state,
+            config=config or {},
+        )
+        logger.debug("[ORCHESTRATOR] Graph execution completed")
+    except Exception as e:
+        logger.error(
+            f"[ORCHESTRATOR] Graph execution failed with error: {e}", exc_info=True)
+        raise
 
-    logger.info(
-        f"Research workflow complete. Status: {final_state.get('status', 'unknown')}")
+    final_status = final_state.get('status', 'unknown') if isinstance(
+        final_state, dict) else final_state.status
+
+    logger.info("[ORCHESTRATOR] ========================================")
+    logger.info("[ORCHESTRATOR] RESEARCH WORKFLOW COMPLETE")
+    logger.info("[ORCHESTRATOR] ========================================")
+    logger.info(f"[ORCHESTRATOR] Final status: {final_status}")
+
+    if isinstance(final_state, dict):
+        logger.debug(
+            f"[ORCHESTRATOR] Final state keys: {list(final_state.keys())}")
+        logger.debug(
+            f"[ORCHESTRATOR] Citations count: {len(final_state.get('citations', []))}")
+        logger.debug(
+            f"[ORCHESTRATOR] Final doc length: {len(final_state.get('final_document', '') or '')}")
 
     # Convert back to ResearchState if needed
     if isinstance(final_state, dict):
+        logger.debug("[ORCHESTRATOR] Converting dict to ResearchState")
         return ResearchState.model_validate(final_state)
 
     return final_state
