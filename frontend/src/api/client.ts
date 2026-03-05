@@ -86,7 +86,7 @@ export const api = {
 	},
 
 	async getChatHistory(researchId: number): Promise<ChatMessage[]> {
-		const response = await fetch(`${API_BASE}/research/${researchId}/chat`);
+		const response = await fetch(`${API_BASE}/research/${researchId}/chat/history`);
 		return handleResponse(response);
 	},
 };

@@ -9,7 +9,6 @@ interface Props {
 
 export default function EditableResearchHeader({
 	research,
-	onUpdate,
 	onUpdateQuery,
 }: Props) {
 	const [isEditingQuery, setIsEditingQuery] = useState(false);
@@ -129,12 +128,12 @@ export default function EditableResearchHeader({
 					<div className="flex items-center gap-2 mt-2">
 						<span
 							className={`px-2 py-1 text-xs rounded-full ${research.status === 'completed'
-									? 'bg-green-100 text-green-700'
-									: research.status === 'researching'
-										? 'bg-blue-100 text-blue-700'
-										: research.status === 'failed'
-											? 'bg-red-100 text-red-700'
-											: 'bg-gray-100 text-gray-700'
+								? 'bg-green-100 text-green-700'
+								: research.status === 'researching'
+									? 'bg-blue-100 text-blue-700'
+									: research.status === 'failed'
+										? 'bg-red-100 text-red-700'
+										: 'bg-gray-100 text-gray-700'
 								}`}
 						>
 							{research.status}
