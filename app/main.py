@@ -19,6 +19,7 @@ from app import models
 from app.schemas import (
     ResearchCreate,
     ResearchResponse,
+    ResearchUpdate,
     ResearchSourceResponse,
     ResearchSourceCreate,
     ResearchSourceUpdate,
@@ -395,6 +396,43 @@ def get_research(research_id: int, db: Session = Depends(get_db)):
         models.Research.id == research_id).first()
     if not research:
         raise HTTPException(status_code=404, detail="Research not found")
+    return research
+
+
+@app.patch(
+    "/research/{research_id}",
+    response_model=ResearchResponse,
+    tags=["research"]
+)
+def update_research(
+    research_id: int,
+    payload: ResearchUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Update research query, user notes, or tags.
+
+    Allows partial updates - only provided fields will be updated.
+    Note: user_notes and tags fields require database migration.
+    """
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Only update query for now (user_notes and tags need migration)
+    if payload.query is not None:
+        research.query = payload.query
+
+    # These will work once the database migration is applied:
+    # if payload.user_notes is not None:
+    #     research.user_notes = payload.user_notes
+    # if payload.tags is not None:
+    #     research.tags = payload.tags
+
+    db.commit()
+    db.refresh(research)
     return research
 
 

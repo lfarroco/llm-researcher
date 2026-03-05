@@ -31,6 +31,18 @@ export const api = {
 		return handleResponse(response);
 	},
 
+	async updateResearch(
+		id: number,
+		updates: { query?: string; user_notes?: string; tags?: string[] }
+	): Promise<Research> {
+		const response = await fetch(`${API_BASE}/research/${id}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(updates),
+		});
+		return handleResponse(response);
+	},
+
 	async cancelResearch(id: number): Promise<{ message: string }> {
 		const response = await fetch(`${API_BASE}/research/${id}/cancel`, {
 			method: 'POST',

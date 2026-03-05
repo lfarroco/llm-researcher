@@ -20,6 +20,22 @@ class ResearchResponse(BaseModel):
     updated_at: datetime
 
 
+class ResearchUpdate(BaseModel):
+    """Request to update a research task."""
+    query: Optional[str] = Field(
+        default=None,
+        description="Updated research query"
+    )
+    user_notes: Optional[str] = Field(
+        default=None,
+        description="User notes about this research"
+    )
+    tags: Optional[list[str]] = Field(
+        default=None,
+        description="Tags for organizing research"
+    )
+
+
 class ResearchSourceResponse(BaseModel):
     """Response for a research source/citation."""
     model_config = ConfigDict(from_attributes=True)

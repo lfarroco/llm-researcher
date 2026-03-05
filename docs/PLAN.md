@@ -773,10 +773,10 @@ See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
 
 **Frontend Implementation**:
 
-- [ ] **Research Editing**
+- [x] **Research Editing**
   - Edit research query inline (with confirmation)
-  - Edit user notes (textarea with save/cancel)
-  - Add/edit/remove tags (tag input component)
+  - Edit user notes (textarea with save/cancel) - pending database migration
+  - Add/edit/remove tags (tag input component) - pending database migration
   - Display last updated timestamp
 
 - [ ] **Source CRUD Operations**

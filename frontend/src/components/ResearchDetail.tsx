@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import type { Research, Source, Finding } from '../types';
 import ProgressMonitor from './ProgressMonitor';
 import ChatInterface from './ChatInterface';
+import EditableResearchHeader from './EditableResearchHeader';
 
 interface Props {
 	researchId: number;
@@ -64,6 +65,16 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		}
 	};
 
+	const handleUpdateQuery = async (query: string) => {
+		try {
+			const updatedResearch = await api.updateResearch(researchId, { query });
+			setResearch(updatedResearch);
+			onUpdate();
+		} catch (err) {
+			throw err;
+		}
+	};
+
 	if (loading) {
 		return (
 			<div className="bg-white rounded-lg shadow p-12 text-center">
@@ -93,28 +104,11 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			{/* Header */}
 			<div className="p-6 border-b">
 				<div className="flex items-start justify-between">
-					<div className="flex-1">
-						<h2 className="text-xl font-semibold text-gray-900">
-							{research.query}
-						</h2>
-						<div className="flex items-center gap-2 mt-2">
-							<span
-								className={`px-2 py-1 text-xs rounded-full ${research.status === 'completed'
-										? 'bg-green-100 text-green-700'
-										: research.status === 'researching'
-											? 'bg-blue-100 text-blue-700'
-											: research.status === 'failed'
-												? 'bg-red-100 text-red-700'
-												: 'bg-gray-100 text-gray-700'
-									}`}
-							>
-								{research.status}
-							</span>
-							<span className="text-sm text-gray-500">
-								Created {new Date(research.created_at).toLocaleString()}
-							</span>
-						</div>
-					</div>
+					<EditableResearchHeader
+						research={research}
+						onUpdate={setResearch}
+						onUpdateQuery={handleUpdateQuery}
+					/>
 
 					<div className="flex gap-2">
 						{research.status === 'researching' && (
@@ -149,8 +143,8 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 							key={tab.id}
 							onClick={() => setActiveTab(tab.id)}
 							className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab.id
-									? 'border-blue-600 text-blue-600'
-									: 'border-transparent text-gray-600 hover:text-gray-900'
+								? 'border-blue-600 text-blue-600'
+								: 'border-transparent text-gray-600 hover:text-gray-900'
 								}`}
 						>
 							{tab.label}
