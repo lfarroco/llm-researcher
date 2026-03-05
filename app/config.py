@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Research settings
     research_max_sources: int = 20  # Max citations per research
     research_timeout: int = 300  # Max seconds per research
+    # Min relevance score (0-1) for including sources
+    research_relevance_threshold: float = 0.5
+    # Enable/disable relevance filtering
+    research_enable_relevance_filter: bool = True
 
 
 settings = Settings()

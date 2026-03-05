@@ -10,7 +10,12 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from pydantic import BaseModel, Field
+
 from app.config import settings
+from app.llm_provider import LLMProviderFactory
 from app.memory.research_state import (
     Citation,
     ResearchState,
@@ -22,6 +27,150 @@ from app.tools.arxiv_search import arxiv_search, is_academic_query
 from app.tools.wikipedia import wikipedia_search
 
 logger = logging.getLogger(__name__)
+
+
+class RelevanceScore(BaseModel):
+    """Relevance assessment for a single citation."""
+    is_relevant: bool = Field(
+        description="Whether the source is relevant to the query")
+    confidence: float = Field(description="Confidence score (0-1)")
+    reason: str = Field(
+        description="Brief explanation of relevance assessment")
+
+
+RELEVANCE_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", """You are a research quality control expert. Your job is to
+assess whether a search result is relevant to a research sub-query.
+
+Guidelines:
+1. A source is RELEVANT if it directly addresses the sub-query topic
+2. A source is IRRELEVANT if it's about a completely different topic,
+   even if it shares some keywords
+3. Consider the title and snippet content
+4. Be strict - when in doubt, mark as irrelevant
+
+Respond with JSON in this exact format:
+{{
+    "is_relevant": true/false,
+    "confidence": 0.0-1.0,
+    "reason": "brief explanation"
+}}"""),
+    ("human", """Sub-query: {sub_query}
+
+Source to evaluate:
+Title: {title}
+Snippet: {snippet}
+
+Is this source relevant to the sub-query?""")
+])
+
+
+async def assess_relevance(
+    sub_query: str, citation: Citation
+) -> RelevanceScore:
+    """
+    Use LLM to assess if a citation is relevant to the sub-query.
+
+    Args:
+        sub_query: The research question
+        citation: Citation to evaluate
+
+    Returns:
+        RelevanceScore indicating if citation is relevant
+    """
+    try:
+        provider = LLMProviderFactory.create_provider(
+            provider_type=settings.llm_provider,
+            model=settings.llm_model,
+            temperature=0.1,  # Low temperature for consistent judgments
+            api_key=settings.openai_api_key,
+            base_url=settings.ollama_base_url,
+        )
+
+        llm = provider.get_llm()
+        parser = JsonOutputParser(pydantic_object=RelevanceScore)
+        chain = RELEVANCE_PROMPT | llm | parser
+
+        result = await chain.ainvoke({
+            "sub_query": sub_query,
+            "title": citation.title,
+            "snippet": citation.snippet[:500]  # Limit snippet size
+        })
+
+        return RelevanceScore(**result)
+    except Exception as e:
+        logger.warning(f"[RELEVANCE] Failed to assess relevance: {e}")
+        # On error, assume relevant to avoid false negatives
+        return RelevanceScore(
+            is_relevant=True, confidence=0.5, reason="Assessment failed"
+        )
+
+
+async def filter_relevant_citations(
+    sub_query: str,
+    citations: list[Citation],
+    threshold: float = 0.5
+) -> list[Citation]:
+    """
+    Filter citations by relevance to the sub-query using LLM assessment.
+
+    Args:
+        sub_query: The research question
+        citations: List of citations to filter
+        threshold: Minimum confidence score to keep (0-1)
+
+    Returns:
+        Filtered list of relevant citations
+    """
+    if not settings.research_enable_relevance_filter:
+        logger.info("[RELEVANCE] Filtering disabled, keeping all citations")
+        return citations
+
+    if not citations:
+        return []
+
+    logger.info(
+        f"[RELEVANCE] Assessing relevance of {len(citations)} citations"
+    )
+    logger.debug(f"[RELEVANCE] Threshold: {threshold}")
+
+    # Assess all citations in parallel
+    assessment_tasks = [
+        assess_relevance(sub_query, citation) for citation in citations
+    ]
+    assessments = await asyncio.gather(
+        *assessment_tasks, return_exceptions=True
+    )
+
+    # Filter based on relevance
+    filtered = []
+    for citation, assessment in zip(citations, assessments):
+        if isinstance(assessment, Exception):
+            logger.warning(
+                f"[RELEVANCE] Assessment failed for "
+                f"'{citation.title}': {assessment}"
+            )
+            # Keep citation if assessment fails
+            filtered.append(citation)
+            continue
+
+        if assessment.is_relevant and assessment.confidence >= threshold:
+            logger.debug(
+                f"[RELEVANCE] ✓ RELEVANT: '{citation.title[:50]}...' "
+                f"(conf={assessment.confidence:.2f})"
+            )
+            filtered.append(citation)
+        else:
+            logger.info(
+                f"[RELEVANCE] ✗ FILTERED: '{citation.title[:50]}...' "
+                f"(conf={assessment.confidence:.2f}) - {assessment.reason}"
+            )
+
+    logger.info(
+        f"[RELEVANCE] Kept {len(filtered)}/{len(citations)} citations "
+        f"after filtering"
+    )
+    return filtered
 
 
 async def search_for_subquery(
@@ -41,10 +190,13 @@ async def search_for_subquery(
         SubQueryResult with citations
     """
     logger.info(
-        f"[SEARCH] Starting search for sub-query: '{sub_query[:60]}...'")
+        f"[SEARCH] Starting search for sub-query: '{sub_query[:60]}...'"
+    )
     logger.debug(f"[SEARCH] Full sub-query: {sub_query}")
     logger.debug(
-        f"[SEARCH] include_academic={include_academic}, include_wikipedia={include_wikipedia}")
+        f"[SEARCH] include_academic={include_academic}, "
+        f"include_wikipedia={include_wikipedia}"
+    )
 
     citations = []
     errors = []
@@ -72,7 +224,9 @@ async def search_for_subquery(
         task_types.append("wikipedia")
 
     logger.info(
-        f"[SEARCH] Executing {len(tasks)} search tasks in parallel: {task_types}")
+        f"[SEARCH] Executing {len(tasks)} search tasks in parallel: "
+        f"{task_types}"
+    )
 
     # Execute all searches concurrently
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -104,10 +258,10 @@ async def search_for_subquery(
                     id=f"[{citation_id}]",
                     url=item.url,
                     title=item.title,
-                    author=", ".join(item.authors[:3]),  # First 3 authors
+                    author=", ".join(item.authors[:3]),  # First 3
                     snippet=item.summary[:500],
                     source_type=SourceType.ARXIV,
-                    relevance_score=0.8,  # ArXiv results are generally relevant
+                    relevance_score=0.8,  # Generally relevant
                 ))
             elif source_type == "wikipedia":
                 citations.append(Citation(
@@ -122,9 +276,27 @@ async def search_for_subquery(
             citation_id += 1
 
     logger.info(
-        f"[SEARCH] Sub-query search complete: {len(citations)} citations, {len(errors)} errors")
+        f"[SEARCH] Sub-query search complete: "
+        f"{len(citations)} citations, {len(errors)} errors"
+    )
     if errors:
         logger.warning(f"[SEARCH] Errors encountered: {errors}")
+
+    # Filter citations by relevance
+    if citations:
+        logger.debug(
+            f"[SEARCH] Filtering citations for relevance to: "
+            f"'{sub_query[:60]}...'"
+        )
+        citations = await filter_relevant_citations(
+            sub_query,
+            citations,
+            threshold=settings.research_relevance_threshold
+        )
+        logger.info(
+            f"[SEARCH] After relevance filtering: "
+            f"{len(citations)} citations remain"
+        )
 
     return SubQueryResult(
         sub_query=sub_query,
@@ -157,7 +329,10 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
     logger.debug(f"[SEARCH] Include academic sources: {include_academic}")
 
     # Search all sub-queries in parallel
-    logger.info(f"[SEARCH] Starting parallel search for all {len(state.sub_queries)} sub-queries")
+    logger.info(
+        f"[SEARCH] Starting parallel search for all "
+        f"{len(state.sub_queries)} sub-queries"
+    )
     tasks = [
         search_for_subquery(sq, include_academic=include_academic)
         for sq in state.sub_queries
@@ -173,7 +348,8 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
 
     for i, result in enumerate(results):
         if isinstance(result, Exception):
-            logger.error(f"[SEARCH] Sub-query {i+1} failed: {result}", exc_info=result)
+            logger.error(
+                f"[SEARCH] Sub-query {i+1} failed: {result}", exc_info=result)
             errors.append(f"Search failed: {str(result)}")
             sub_query_results.append(SubQueryResult(
                 sub_query=state.sub_queries[i],
@@ -181,7 +357,10 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
                 error=str(result),
             ))
         else:
-            logger.debug(f"[SEARCH] Sub-query {i+1} returned {len(result.citations)} citations")
+            logger.debug(
+                f"[SEARCH] Sub-query {i+1} returned "
+                f"{len(result.citations)} citations"
+            )
             sub_query_results.append(result)
             all_citations.extend(result.citations)
 
@@ -196,12 +375,18 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
             seen_urls.add(citation.url)
             citation.id = f"[{len(unique_citations) + 1}]"
             unique_citations.append(citation)
-    
-    logger.debug(f"[SEARCH] After deduplication: {len(unique_citations)} unique citations")
+
+    logger.debug(
+        f"[SEARCH] After deduplication: "
+        f"{len(unique_citations)} unique citations"
+    )
 
     # Limit to max sources
     if len(unique_citations) > settings.research_max_sources:
-        logger.debug(f"[SEARCH] Limiting to {settings.research_max_sources} citations (was {len(unique_citations)})")
+        logger.debug(
+            f"[SEARCH] Limiting to {settings.research_max_sources} "
+            f"citations (was {len(unique_citations)})"
+        )
     unique_citations = unique_citations[:settings.research_max_sources]
 
     logger.info("[SEARCH] ========== SEARCH PHASE COMPLETE ==========")
@@ -215,7 +400,10 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
         "citations": unique_citations,
         "sub_query_results": sub_query_results,
         "status": "synthesizing",
-        "current_step": f"Found {len(unique_citations)} sources. Synthesizing findings.",
+        "current_step": (
+            f"Found {len(unique_citations)} sources. "
+            f"Synthesizing findings."
+        ),
         "errors": errors,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
