@@ -72,6 +72,23 @@ migrate-down:
 migrate-status:
 	docker compose exec app alembic current
 
+## Frontend Commands
+## Install frontend dependencies
+frontend-install:
+	cd frontend && npm install
+
+## Start frontend dev server (with hot reload)
+frontend-dev:
+	cd frontend && npm run dev
+
+## Build frontend for production
+frontend-build:
+	cd frontend && npm run build
+
+## Open frontend shell
+frontend-shell:
+	docker compose exec frontend sh
+
 ## Show migration history
 migrate-history:
 	docker compose exec app alembic history

@@ -9,10 +9,10 @@ An autonomous researcher agent powered by FastAPI, LangChain, and PostgreSQL.
 
 ## Stack
 
-- **FastAPI** – REST API framework
-- **LangChain + LangGraph** – Multi-agent orchestration  
-- **PostgreSQL** – Persistent storage for research results
-- **Docker / Docker Compose** – Containerized deployment
+- **Backend**: FastAPI + LangChain + LangGraph
+- **Frontend**: React + TypeScript + Tailwind CSS
+- **Database**: PostgreSQL
+- **Deployment**: Docker + Docker Compose
 
 ## LLM Providers
 
@@ -62,22 +62,73 @@ LLM_MODEL=gpt-4o
 OPENAI_API_KEY=your_api_key_here
 ```
 
+### Start the Application
+
+```bash
+# Start all services (backend, frontend, database)
+make up
+
+# View logs
+make logs
+
+# Or filter by service
+make logs svc=frontend
+```
+
+Once started, access:
+- **Web UI**: http://localhost:3000 (React frontend)
+- **API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+### Frontend Development
+
+For frontend development with hot-reload:
+
+```bash
+# Install dependencies (first time only)
+cd frontend && npm install
+
+# Start dev server
+npm run dev
+```
+
+The dev server runs on port 3000 with automatic proxy to the backend API.
+
+See [frontend/README.md](frontend/README.md) for more details.
+
 ### Makefile Commands
 
-| Command         | Description                               |
-|-----------------|-------------------------------------------|
-| `make up`       | Start all services in the background      |
-| `make down`     | Stop all services                         |
-| `make build`    | Build Docker images                       |
-| `make restart`  | Rebuild and restart all services          |
-| `make logs`     | Follow logs (use `svc=app` to filter)     |
-| `make shell`    | Open a shell in the app container         |
-| `make db-shell` | Open a psql shell in the db container     |
-| `make test`     | Run the test suite inside the container   |
-| `make e2e`      | Run end-to-end integration test           |
-| `make ws`       | Run WebSocket and real-time features test |
-| `make lint`     | Run the linter inside the container       |
-| `make help`     | Show all available commands               |
+#### Core Commands
+| Command        | Description                           |
+|----------------|---------------------------------------|
+| `make up`      | Start all services in the background  |
+| `make down`    | Stop all services                     |
+| `make build`   | Build Docker images                   |
+| `make restart` | Rebuild and restart all services      |
+| `make logs`    | Follow logs (use `svc=app` to filter) |
+| `make help`    | Show all available commands           |
+
+#### Backend Commands  
+| Command      | Description                               |
+|--------------|-------------------------------------------|
+| `make shell` | Open a shell in the app container         |
+| `make test`  | Run the test suite inside the container   |
+| `make e2e`   | Run end-to-end integration test           |
+| `make ws`    | Run WebSocket and real-time features test |
+| `make lint`  | Run the linter inside the container       |
+
+#### Frontend Commands
+| Command                 | Description                            |
+|-------------------------|----------------------------------------|
+| `make frontend-dev`     | Start frontend dev server (hot reload) |
+| `make frontend-build`   | Build frontend for production          |
+| `make frontend-install` | Install frontend dependencies          |
+
+#### Database Commands
+| Command         | Description                           |
+|-----------------|---------------------------------------|
+| `make db-shell` | Open a psql shell in the db container |
+| `make migrate`  | Run pending migrations                |
 
 ### API Endpoints
 
