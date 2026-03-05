@@ -6,6 +6,8 @@ An autonomous researcher agent powered by FastAPI, LangChain, and PostgreSQL.
 - **[STATUS_REPORT.md](docs/STATUS_REPORT.md)** - Implementation status and feature summary
 - **[PLAN.md](docs/PLAN.md)** - Complete architecture plan and roadmap
 - **[PHASE16_SUMMARY.md](docs/PHASE16_SUMMARY.md)** - Real-time WebSocket features guide
+- **[FRONTEND_GUIDE.md](docs/FRONTEND_GUIDE.md)** - Frontend architecture and development
+- **[FRONTEND_IMPLEMENTATION.md](docs/FRONTEND_IMPLEMENTATION.md)** - UI implementation summary
 
 ## Stack
 
