@@ -25,6 +25,7 @@ from app.memory.research_state import (
 from app.tools.web_search import web_search
 from app.tools.arxiv_search import arxiv_search, is_academic_query
 from app.tools.wikipedia import wikipedia_search
+from app.agents.query_expander import expand_query
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,8 @@ async def search_for_subquery(
     """
     Search all relevant sources for a single sub-query.
 
+    Generates query variations and searches with each to improve coverage.
+
     Args:
         sub_query: The question to research
         include_academic: Whether to search ArXiv
@@ -198,104 +201,160 @@ async def search_for_subquery(
         f"include_wikipedia={include_wikipedia}"
     )
 
+    # Generate query variations for improved search coverage
+    logger.debug("[SEARCH] Generating query variations")
+    query_variations = await expand_query(
+        sub_query,
+        num_variations=settings.research_query_variations
+    )
+    logger.info(
+        f"[SEARCH] Using {len(query_variations)} query variations "
+        f"(1 original + {len(query_variations) - 1} expanded)"
+    )
+    for i, q in enumerate(query_variations):
+        logger.debug(f"[SEARCH] Query {i+1}: '{q}'")
+
     citations = []
     errors = []
 
-    # Prepare search tasks
-    tasks = []
-    task_types = []
-
-    # Always search web
-    logger.debug("[SEARCH] Adding web search task")
-    tasks.append(web_search(sub_query, max_results=5))
-    task_types.append("web")
-
-    # Conditionally add ArXiv
-    if include_academic or is_academic_query(sub_query):
+    # Search each query variation
+    for query_idx, current_query in enumerate(query_variations, 1):
         logger.debug(
-            "[SEARCH] Adding ArXiv search task (academic query detected)")
-        tasks.append(arxiv_search(sub_query, max_results=3))
-        task_types.append("arxiv")
+            f"[SEARCH] Searching with variation {query_idx}/"
+            f"{len(query_variations)}: '{current_query[:50]}...'"
+        )
 
-    # Conditionally add Wikipedia
-    if include_wikipedia:
-        logger.debug("[SEARCH] Adding Wikipedia search task")
-        tasks.append(wikipedia_search(sub_query, sentences=5))
-        task_types.append("wikipedia")
+        # Prepare search tasks for this query variation
+        tasks = []
+        task_types = []
+
+        # Always search web
+        logger.debug(
+            f"[SEARCH] Adding web search task for variation {query_idx}"
+        )
+        tasks.append(web_search(current_query, max_results=5))
+        task_types.append("web")
+
+        # Conditionally add ArXiv
+        if include_academic or is_academic_query(current_query):
+            logger.debug(
+                f"[SEARCH] Adding ArXiv search task for variation {query_idx} "
+                "(academic query detected)"
+            )
+            tasks.append(arxiv_search(current_query, max_results=3))
+            task_types.append("arxiv")
+
+        # Conditionally add Wikipedia
+        # (only for first variation to avoid duplicates)
+        if include_wikipedia and query_idx == 1:
+            logger.debug(
+                f"[SEARCH] Adding Wikipedia search task "
+                f"for variation {query_idx}"
+            )
+            tasks.append(wikipedia_search(current_query, sentences=5))
+            task_types.append("wikipedia")
+
+        logger.debug(
+            f"[SEARCH] Executing {len(tasks)} search tasks for variation "
+            f"{query_idx}: {task_types}"
+        )
+
+        # Execute all searches for this variation concurrently
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        logger.debug(
+            f"[SEARCH] All search tasks completed for variation {query_idx}"
+        )
+
+        citation_id_base = len(citations) + 1
+        for result, source_type in zip(results, task_types):
+            if isinstance(result, Exception):
+                error_msg = (
+                    f"{source_type} search failed for variation {query_idx}: "
+                    f"{str(result)}"
+                )
+                logger.error(f"[SEARCH] {error_msg}", exc_info=result)
+                errors.append(error_msg)
+                continue
+
+            logger.debug(
+                f"[SEARCH] Processing {len(result)} results from "
+                f"{source_type} (variation {query_idx})"
+            )
+            for item in result:
+                # Convert to Citation based on source type
+                if source_type == "web":
+                    citations.append(Citation(
+                        id=f"[{citation_id_base}]",
+                        url=item.url,
+                        title=item.title,
+                        snippet=item.snippet,
+                        source_type=SourceType.WEB,
+                        relevance_score=item.score,
+                    ))
+                elif source_type == "arxiv":
+                    citations.append(Citation(
+                        id=f"[{citation_id_base}]",
+                        url=item.url,
+                        title=item.title,
+                        author=", ".join(item.authors[:3]),  # First 3
+                        snippet=item.summary[:500],
+                        source_type=SourceType.ARXIV,
+                        relevance_score=0.8,  # Generally relevant
+                    ))
+                elif source_type == "wikipedia":
+                    citations.append(Citation(
+                        id=f"[{citation_id_base}]",
+                        url=item.url,
+                        title=item.title,
+                        snippet=item.summary,
+                        source_type=SourceType.WIKIPEDIA,
+                        relevance_score=0.7,
+                    ))
+
+                citation_id_base += 1
+
+    # Deduplicate citations by URL before filtering
+    logger.debug(
+        f"[SEARCH] Deduplicating {len(citations)} citations "
+        f"from all variations"
+    )
+    seen_urls = {}
+    unique_citations = []
+    for citation in citations:
+        if citation.url not in seen_urls:
+            seen_urls[citation.url] = citation
+            unique_citations.append(citation)
+        else:
+            logger.debug(
+                f"[SEARCH] Skipping duplicate URL: {citation.url[:60]}"
+            )
 
     logger.info(
-        f"[SEARCH] Executing {len(tasks)} search tasks in parallel: "
-        f"{task_types}"
+        f"[SEARCH] After deduplication: {len(unique_citations)} unique "
+        f"citations (was {len(citations)})"
     )
-
-    # Execute all searches concurrently
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    logger.debug("[SEARCH] All search tasks completed")
-
-    citation_id = 1
-    for result, source_type in zip(results, task_types):
-        if isinstance(result, Exception):
-            error_msg = f"{source_type} search failed: {str(result)}"
-            logger.error(f"[SEARCH] {error_msg}", exc_info=result)
-            errors.append(error_msg)
-            continue
-
-        logger.debug(
-            f"[SEARCH] Processing {len(result)} results from {source_type}")
-        for item in result:
-            # Convert to Citation based on source type
-            if source_type == "web":
-                citations.append(Citation(
-                    id=f"[{citation_id}]",
-                    url=item.url,
-                    title=item.title,
-                    snippet=item.snippet,
-                    source_type=SourceType.WEB,
-                    relevance_score=item.score,
-                ))
-            elif source_type == "arxiv":
-                citations.append(Citation(
-                    id=f"[{citation_id}]",
-                    url=item.url,
-                    title=item.title,
-                    author=", ".join(item.authors[:3]),  # First 3
-                    snippet=item.summary[:500],
-                    source_type=SourceType.ARXIV,
-                    relevance_score=0.8,  # Generally relevant
-                ))
-            elif source_type == "wikipedia":
-                citations.append(Citation(
-                    id=f"[{citation_id}]",
-                    url=item.url,
-                    title=item.title,
-                    snippet=item.summary,
-                    source_type=SourceType.WIKIPEDIA,
-                    relevance_score=0.7,
-                ))
-
-            citation_id += 1
 
     logger.info(
         f"[SEARCH] Sub-query search complete: "
-        f"{len(citations)} citations, {len(errors)} errors"
+        f"{len(unique_citations)} unique citations, {len(errors)} errors"
     )
     if errors:
         logger.warning(f"[SEARCH] Errors encountered: {errors}")
 
-    # Filter citations by relevance
-    if citations:
+    # Filter citations by relevance to the ORIGINAL sub-query
+    if unique_citations:
         logger.debug(
-            f"[SEARCH] Filtering citations for relevance to: "
+            f"[SEARCH] Filtering citations for relevance to original query: "
             f"'{sub_query[:60]}...'"
         )
-        citations = await filter_relevant_citations(
+        unique_citations = await filter_relevant_citations(
             sub_query,
-            citations,
+            unique_citations,
             threshold=settings.research_relevance_threshold
         )
         logger.info(
             f"[SEARCH] After relevance filtering: "
-            f"{len(citations)} citations remain"
+            f"{len(unique_citations)} citations remain"
         )
 
     return SubQueryResult(

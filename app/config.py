@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     research_relevance_threshold: float = 0.5
     # Enable/disable relevance filtering
     research_enable_relevance_filter: bool = True
+    # Enable/disable query expansion (generating query variations)
+    research_enable_query_expansion: bool = True
+    # Number of query variations to generate per sub-query
+    research_query_variations: int = 2
 
 
 settings = Settings()

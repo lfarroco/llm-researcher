@@ -23,6 +23,10 @@ from app.agents.intent_router import (
     IntentRouterOutput,
     route_user_intent,
 )
+from app.agents.query_expander import (
+    QueryVariations,
+    expand_query,
+)
 from app.memory.research_state import (
     ResearchState,
     Citation,
@@ -549,3 +553,86 @@ def test_intent_router_with_real_llm():
         assert result.intent == expected_intent or result.confidence > 0.7
         assert isinstance(result.reasoning, str)
         assert len(result.reasoning) > 10
+
+
+class TestQueryExpander:
+    """Tests for query expansion functionality."""
+
+    def test_query_variations_model(self):
+        """Test QueryVariations model creation."""
+        variations = QueryVariations(
+            variations=[
+                "alternative query 1",
+                "alternative query 2",
+            ],
+            reasoning="Used synonyms and related terms"
+        )
+
+        assert len(variations.variations) == 2
+        assert isinstance(variations.reasoning, str)
+
+    @pytest.mark.asyncio
+    async def test_expand_query_disabled(self):
+        """Test that query expansion can be disabled via config."""
+        with patch("app.agents.query_expander.settings") as mock_settings:
+            mock_settings.research_enable_query_expansion = False
+
+            result = await expand_query("test query")
+
+            # Should return only the original query
+            assert result == ["test query"]
+
+    @pytest.mark.asyncio
+    async def test_expand_query_with_variations(self):
+        """Test query expansion with mocked LLM response."""
+        mock_variations = {
+            "variations": [
+                "test search alternative",
+                "sample query variation",
+            ],
+            "reasoning": "Used synonyms"
+        }
+
+        with patch("app.agents.query_expander.settings") as mock_settings:
+            mock_settings.research_enable_query_expansion = True
+
+            with patch("app.agents.query_expander.LLMProviderFactory") as mock_factory:
+                # Mock the LLM chain
+                mock_provider = MagicMock()
+                mock_llm = MagicMock()
+                mock_provider.get_llm.return_value = mock_llm
+                mock_factory.create_provider.return_value = mock_provider
+
+                # Mock the chain invoke to return variations
+                with patch("app.agents.query_expander.QUERY_EXPANSION_PROMPT") as mock_prompt:
+                    mock_chain = AsyncMock()
+                    mock_chain.ainvoke = AsyncMock(
+                        return_value=mock_variations)
+                    mock_prompt.__or__ = MagicMock(
+                        return_value=MagicMock(
+                            __or__=MagicMock(return_value=mock_chain))
+                    )
+
+                    result = await expand_query("original query", num_variations=2)
+
+                    # Should return original + variations
+                    assert len(result) == 3
+                    assert result[0] == "original query"
+                    assert "alternative" in result[1].lower(
+                    ) or "variation" in result[2].lower()
+
+    @pytest.mark.asyncio
+    async def test_expand_query_handles_errors(self):
+        """Test that query expansion gracefully handles LLM errors."""
+        with patch("app.agents.query_expander.settings") as mock_settings:
+            mock_settings.research_enable_query_expansion = True
+
+            with patch("app.agents.query_expander.LLMProviderFactory") as mock_factory:
+                # Make the LLM call raise an exception
+                mock_factory.create_provider.side_effect = Exception(
+                    "LLM error")
+
+                result = await expand_query("test query")
+
+                # Should fallback to original query only
+                assert result == ["test query"]

@@ -149,7 +149,7 @@ class ConversationMessageResponse(BaseModel):
     role: str
     content: str
     action_taken: Optional[str] = None
-    timestamp: datetime
+    timestamp: datetime = Field(serialization_alias='created_at')
 
 
 class ResearchFindingCreate(BaseModel):
