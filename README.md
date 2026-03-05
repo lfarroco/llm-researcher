@@ -1,10 +1,16 @@
 # llm-researcher
 An autonomous researcher agent powered by FastAPI, LangChain, and PostgreSQL.
 
+## 📚 Documentation
+
+- **[STATUS_REPORT.md](docs/STATUS_REPORT.md)** - Implementation status and feature summary
+- **[PLAN.md](docs/PLAN.md)** - Complete architecture plan and roadmap
+- **[PHASE16_SUMMARY.md](docs/PHASE16_SUMMARY.md)** - Real-time WebSocket features guide
+
 ## Stack
 
 - **FastAPI** – REST API framework
-- **LangChain** – LLM orchestration with multiple provider support
+- **LangChain + LangGraph** – Multi-agent orchestration  
 - **PostgreSQL** – Persistent storage for research results
 - **Docker / Docker Compose** – Containerized deployment
 
@@ -58,36 +64,74 @@ OPENAI_API_KEY=your_api_key_here
 
 ### Makefile Commands
 
-| Command         | Description                             |
-|-----------------|-----------------------------------------|
-| `make up`       | Start all services in the background    |
-| `make down`     | Stop all services                       |
-| `make build`    | Build Docker images                     |
-| `make restart`  | Rebuild and restart all services        |
-| `make dev`      | Start services with live logs           |
-| `make logs`     | Follow logs (use `svc=app` to filter)   |
-| `make shell`    | Open a shell in the app container       |
-| `make db-shell` | Open a psql shell in the db container   |
-| `make test`     | Run the test suite inside the container |
-| `make lint`     | Run the linter inside the container     |
+| Command         | Description                               |
+|-----------------|-------------------------------------------|
+| `make up`       | Start all services in the background      |
+| `make down`     | Stop all services                         |
+| `make build`    | Build Docker images                       |
+| `make restart`  | Rebuild and restart all services          |
+| `make logs`     | Follow logs (use `svc=app` to filter)     |
+| `make shell`    | Open a shell in the app container         |
+| `make db-shell` | Open a psql shell in the db container     |
+| `make test`     | Run the test suite inside the container   |
+| `make e2e`      | Run end-to-end integration test           |
+| `make ws`       | Run WebSocket and real-time features test |
+| `make lint`     | Run the linter inside the container       |
+| `make help`     | Show all available commands               |
 
 ### API Endpoints
 
 Once running, the API is available at `http://localhost:8000`.
 
-Interactive docs: `http://localhost:8000/docs`
+**Interactive API Documentation**: 
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
-| Method | Path             | Description                 |
-|--------|------------------|-----------------------------|
-| GET    | `/`              | Health check                |
-| POST   | `/research`      | Submit a new research query |
-| GET    | `/research`      | List all research results   |
-| GET    | `/research/{id}` | Get a specific result       |
+#### Core Research Endpoints
+| Method | Path                    | Description                      |
+|--------|-------------------------|----------------------------------|
+| GET    | `/`                     | Health check                     |
+| POST   | `/research`             | Create a new research query      |
+| POST   | `/research/batch`       | Create multiple research queries |
+| GET    | `/research`             | List all research results        |
+| GET    | `/research/{id}`        | Get a specific research result   |
+| POST   | `/research/{id}/cancel` | Cancel a running research task   |
+| POST   | `/research/{id}/resume` | Resume a paused research task    |
+| DELETE | `/research/{id}`        | Delete a research result         |
+
+#### Sources & Findings
+| Method | Path                            | Description                  |
+|--------|---------------------------------|------------------------------|
+| GET    | `/research/{id}/sources`        | Get all sources for research |
+| POST   | `/research/{id}/sources`        | Add a source manually        |
+| GET    | `/research/{id}/findings`       | Get all findings             |
+| POST   | `/research/{id}/findings`       | Create a finding manually    |
+| PUT    | `/research/{id}/findings/{fid}` | Update a finding             |
+| DELETE | `/research/{id}/findings/{fid}` | Delete a finding             |
+
+#### AI State & Chat
+| Method | Path                   | Description                    |
+|--------|------------------------|--------------------------------|
+| GET    | `/research/{id}/state` | View LangGraph agent state     |
+| GET    | `/research/{id}/plan`  | View research plan/sub-queries |
+| POST   | `/research/{id}/chat`  | Chat with the research results |
+
+#### Real-time Updates
+| Protocol  | Path                | Description                       |
+|-----------|---------------------|-----------------------------------|
+| WebSocket | `/ws/research/{id}` | Stream real-time progress updates |
+
+See [PHASE16_SUMMARY.md](docs/PHASE16_SUMMARY.md) for WebSocket event details.
 
 ### Example
 
 ```bash
+# Create a research query
 curl -X POST http://localhost:8000/research \
   -H "Content-Type: application/json" \
   -d '{"query": "What are the latest advances in quantum computing?"}'
+
+# Monitor progress via WebSocket (JavaScript)
+const ws = new WebSocket('ws://localhost:8000/ws/research/1');
+ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```

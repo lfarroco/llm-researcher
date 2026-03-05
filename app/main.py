@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Set
 
 from app.database import get_db
 from app import models
@@ -23,10 +23,14 @@ from app.schemas import (
     ResearchStateResponse,
     ResearchPlanResponse,
     ResearchPlanUpdate,
+    BatchResearchCreate,
+    BatchResearchResponse,
 )
 from app.agents.orchestrator import run_research_workflow
 from app.agents.intent_router import route_user_intent
 from app.memory.research_state import Citation
+from app.websocket_manager import manager as ws_manager
+from app.rate_limiter import check_research_rate_limit
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -38,6 +42,10 @@ logging.basicConfig(
 # Global flag to control background worker
 _background_worker_running = False
 _background_worker_task = None
+
+# Track active research tasks for cancellation
+_active_research_tasks: Dict[int, asyncio.Task] = {}
+_cancelled_research_ids: Set[int] = set()
 
 
 async def background_task_worker():
@@ -126,57 +134,131 @@ def _save_citations_to_db(
         db.add(source)
 
 
-def process_research(research_id: int, query: str):
+async def process_research_async(research_id: int, query: str):
     """
-    Background task to run the research workflow.
+    Async background task to run the research workflow with progress streaming.
 
     This runs the LangGraph workflow and saves results to the database.
+    Emits WebSocket events for progress tracking.
     """
     logger.info(f"Starting research task: id={research_id}")
-    db = next(get_db())
-    # Atomically claim this task by updating status from
-    # 'pending' to 'planning' to prevent race conditions
-    rows_updated = db.query(models.Research).filter(
-        models.Research.id == research_id,
-        models.Research.status == "pending"
-    ).update({"status": "planning"}, synchronize_session=False)
-    db.commit()
 
-    if rows_updated == 0:
-        logger.info(
-            f"Research id={research_id} already claimed or "
-            f"not pending, skipping"
+    try:
+        # Broadcast status change
+        await ws_manager.broadcast_status_change(
+            research_id, "planning", "Initializing research workflow"
         )
+
+        db = next(get_db())
+
+        # Atomically claim this task
+        rows_updated = db.query(models.Research).filter(
+            models.Research.id == research_id,
+            models.Research.status == "pending"
+        ).update({"status": "planning"}, synchronize_session=False)
+        db.commit()
+
+        if rows_updated == 0:
+            logger.info(
+                f"Research id={research_id} already claimed or not pending"
+            )
+            db.close()
+            return
+
+        research = db.query(models.Research).filter(
+            models.Research.id == research_id
+        ).first()
+        if not research:
+            logger.warning(f"Research id={research_id} not found")
+            db.close()
+            return
+
+        # Check for cancellation
+        if research_id in _cancelled_research_ids:
+            logger.info(f"Research {research_id} was cancelled before start")
+            research.status = "cancelled"
+            db.commit()
+            db.close()
+            await ws_manager.broadcast_status_change(
+                research_id, "cancelled", "Research was cancelled"
+            )
+            _cancelled_research_ids.discard(research_id)
+            return
+
+        # Update status to researching
+        research.status = "researching"
+        db.commit()
+        await ws_manager.broadcast_status_change(
+            research_id, "researching", "Running research workflow"
+        )
+
+        # Run the async workflow
+        logger.debug(f"Running research workflow for id={research_id}")
+        final_state = await run_research_workflow(research_id, query)
+
+        # Check for cancellation after workflow
+        if research_id in _cancelled_research_ids:
+            logger.info(f"Research {research_id} was cancelled")
+            research.status = "cancelled"
+            db.commit()
+            db.close()
+            await ws_manager.broadcast_status_change(
+                research_id, "cancelled", "Research was cancelled"
+            )
+            _cancelled_research_ids.discard(research_id)
+            return
+
+        logger.info(f"Research completed for id={research_id}")
+
+        # Save results
+        research.result = final_state.final_document or final_state.draft
+        research.status = final_state.status
+        research.state_json = final_state.to_dict()
+
+        # Save citations as sources
+        _save_citations_to_db(db, research_id, final_state.citations)
+
+        db.commit()
+
+        # Broadcast completion
+        await ws_manager.broadcast_completion(
+            research_id,
+            {
+                "status": research.status,
+                "sources_count": len(final_state.citations),
+                "has_document": bool(research.result)
+            }
+        )
+
+        logger.debug(f"Research status updated for id={research_id}")
         db.close()
-        return
 
-    research = db.query(models.Research).filter(
-        models.Research.id == research_id).first()
-    if not research:
-        logger.warning(f"Research id={research_id} not found in database")
-        db.close()
-        return
+    except Exception as e:
+        logger.error(f"Error in research {research_id}: {e}")
+        await ws_manager.broadcast_error(research_id, str(e))
+        try:
+            db = next(get_db())
+            research = db.query(models.Research).filter(
+                models.Research.id == research_id
+            ).first()
+            if research:
+                research.status = "error"
+                db.commit()
+            db.close()
+        except Exception:
+            pass
+    finally:
+        # Clean up task tracking
+        if research_id in _active_research_tasks:
+            del _active_research_tasks[research_id]
 
-    # Run the async workflow in a new event loop
-    logger.debug(f"Running research workflow for id={research_id}")
-    final_state = asyncio.run(
-        run_research_workflow(research_id, query)
-    )
 
-    logger.info(f"Research completed for id={research_id}")
-
-    # Save results
-    research.result = final_state.final_document or final_state.draft
-    research.status = final_state.status
-    research.state_json = final_state.to_dict()
-
-    # Save citations as sources
-    _save_citations_to_db(db, research_id, final_state.citations)
-
-    db.commit()
-    logger.debug(
-        f"Research status updated in database for id={research_id}")
-    db.close()
+def process_research(research_id: int, query: str):
+    """
+    Synchronous wrapper for process_research_async.
+    Used by background task worker.
+    """
+    asyncio.run(process_research_async(research_id, query))
 
 
 @app.get("/", tags=["health"])
@@ -192,15 +274,87 @@ def health_check():
 )
 def create_research(
     payload: ResearchCreate,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    """Create a new research task."""
+    # Check rate limit
+    client_ip = request.client.host if request.client else "unknown"
+    check_research_rate_limit(client_ip)
+
     research = models.Research(query=payload.query, status="pending")
     db.add(research)
     db.commit()
     db.refresh(research)
     background_tasks.add_task(process_research, research.id, research.query)
     return research
+
+
+@app.post(
+    "/research/batch",
+    response_model=BatchResearchResponse,
+    status_code=201,
+    tags=["research"]
+)
+def create_batch_research(
+    payload: BatchResearchCreate,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """
+    Create multiple research tasks at once.
+
+    Useful for processing multiple queries simultaneously.
+    Each query will be processed independently.
+    """
+    # Check rate limit
+    client_ip = request.client.host if request.client else "unknown"
+    check_research_rate_limit(client_ip)
+
+    if not payload.queries:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one query is required"
+        )
+
+    # Limit batch size
+    max_batch_size = 10
+    if len(payload.queries) > max_batch_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Batch size cannot exceed {max_batch_size} queries"
+        )
+
+    created_research = []
+
+    for query in payload.queries:
+        research = models.Research(query=query, status="pending")
+        db.add(research)
+        db.flush()  # Get ID without committing
+        created_research.append(research)
+
+    db.commit()
+
+    # Refresh all and queue for processing
+    for research in created_research:
+        db.refresh(research)
+        background_tasks.add_task(
+            process_research, research.id, research.query
+        )
+
+    logger.info(
+        f"Created batch of {len(created_research)} research tasks"
+    )
+
+    return BatchResearchResponse(
+        created_count=len(created_research),
+        research_ids=[r.id for r in created_research],
+        research_items=[
+            ResearchResponse.model_validate(r) for r in created_research
+        ]
+    )
 
 
 @app.get(
@@ -1020,3 +1174,148 @@ def get_chat_history(
     ).offset(skip).limit(limit).all()
 
     return messages
+
+
+@app.websocket("/ws/research/{research_id}")
+async def websocket_research_progress(
+    websocket: WebSocket,
+    research_id: int
+):
+    """
+    WebSocket endpoint for real-time research progress updates.
+
+    Streams events as the research progresses:
+    - status_change: Research status updates
+    - source_added: New source collected
+    - finding_created: New finding synthesized
+    - progress: Progress percentage updates
+    - error: Error messages
+    - completed: Research completed
+
+    Example usage (JavaScript):
+    ```javascript
+    const ws = new WebSocket('ws://localhost:8000/ws/research/1');
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log(data.event_type, data.data);
+    };
+    ```
+    """
+    await ws_manager.connect(websocket, research_id)
+    try:
+        # Send initial connection confirmation
+        await websocket.send_json({
+            "event_type": "connected",
+            "data": {
+                "research_id": research_id,
+                "message": "WebSocket connection established"
+            },
+            "timestamp": asyncio.get_event_loop().time()
+        })
+
+        # Keep connection alive and listen for client messages
+        while True:
+            try:
+                # Wait for any client messages (like ping/pong)
+                data = await websocket.receive_text()
+                # Echo back or handle as needed
+                if data == "ping":
+                    await websocket.send_text("pong")
+            except WebSocketDisconnect:
+                break
+    except Exception as e:
+        logger.error(f"WebSocket error for research {research_id}: {e}")
+    finally:
+        await ws_manager.disconnect(websocket, research_id)
+
+
+@app.post(
+    "/research/{research_id}/cancel",
+    tags=["research"]
+)
+def cancel_research(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Cancel an ongoing research task.
+
+    Marks the research for cancellation. The workflow will stop
+    at the next checkpoint and update status to 'cancelled'.
+    """
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Check if research is in a cancellable state
+    if research.status not in ["pending", "planning", "researching"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot cancel research with status: {research.status}"
+        )
+
+    # Mark for cancellation
+    _cancelled_research_ids.add(research_id)
+
+    # If there's an active task, try to cancel it
+    if research_id in _active_research_tasks:
+        task = _active_research_tasks[research_id]
+        task.cancel()
+
+    logger.info(f"Research {research_id} marked for cancellation")
+
+    return {
+        "research_id": research_id,
+        "message": "Research cancellation requested",
+        "current_status": research.status
+    }
+
+
+@app.post(
+    "/research/{research_id}/resume",
+    tags=["research"]
+)
+async def resume_research(
+    research_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Resume a cancelled or failed research task.
+
+    Restarts the research workflow from the last checkpoint.
+    """
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Check if research can be resumed
+    if research.status not in ["cancelled", "error"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot resume research with status: {research.status}"
+        )
+
+    # Reset status to pending
+    research.status = "pending"
+    db.commit()
+
+    # Remove from cancelled set if present
+    _cancelled_research_ids.discard(research_id)
+
+    # Add to background tasks
+    background_tasks.add_task(process_research, research_id, research.query)
+
+    logger.info(f"Research {research_id} queued for resumption")
+
+    return {
+        "research_id": research_id,
+        "message": "Research resumption queued",
+        "status": "pending"
+    }

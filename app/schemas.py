@@ -239,3 +239,23 @@ class ResearchPlanUpdate(BaseModel):
         default=None,
         description="Update the refined research question"
     )
+
+
+class BatchResearchCreate(BaseModel):
+    """Request to create multiple research tasks."""
+    queries: list[str] = Field(
+        description="List of research queries to process"
+    )
+
+
+class BatchResearchResponse(BaseModel):
+    """Response for batch research creation."""
+    created_count: int = Field(
+        description="Number of research tasks created"
+    )
+    research_ids: list[int] = Field(
+        description="IDs of created research tasks"
+    )
+    research_items: list[ResearchResponse] = Field(
+        description="Full details of created research tasks"
+    )

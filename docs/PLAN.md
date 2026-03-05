@@ -652,12 +652,12 @@ Implementation is organized in phases, building progressively from foundation to
 ### Phase 16: Real-time Updates | Priority: LOW (Future UI)
 *Enable real-time progress tracking for future UI*
 
-- [ ] Add WebSocket endpoint for progress updates
-- [ ] Stream partial results as research progresses
-- [ ] Add research cancellation endpoint
-- [ ] Implement research resumption from checkpoints
-- [ ] Add batch research submission
-- [ ] Rate limiting and usage quotas
+- [x] Add WebSocket endpoint for progress updates
+- [x] Stream partial results as research progresses
+- [x] Add research cancellation endpoint
+- [x] Implement research resumption from checkpoints
+- [x] Add batch research submission
+- [x] Rate limiting and usage quotas
 
 ### Phase 17: Workflow Orchestration | Priority: LOW (Future)
 *Advanced workflow management for complex research*

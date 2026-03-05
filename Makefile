@@ -44,6 +44,10 @@ test:
 e2e:
 	docker compose exec app python tests/e2e_test.py
 
+## Run WebSocket and real-time features test
+ws:
+	docker compose exec app python test_websocket.py
+
 ## Run linter inside the app container
 lint:
 	docker compose exec app ruff check app/
