@@ -40,6 +40,9 @@ aiofiles>=23.0.0
 # Citation formatting
 citeproc-py>=0.6.0
 
+# PDF export
+pypandoc>=1.12
+
 # HTTP retries and resilience
 tenacity>=8.2.0
 

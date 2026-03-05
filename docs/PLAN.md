@@ -525,7 +525,7 @@ See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
 - [x] Implement `app/output/document_builder.py` (in synthesis_agent.py)
 - [x] Add inline citation markers `[1]`, `[2]` in text
 - [x] Generate references section
-- [ ] PDF export with Pandoc
+- [x] PDF export with Pandoc
 
 ---
 

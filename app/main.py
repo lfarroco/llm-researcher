@@ -1,7 +1,16 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Request
+from fastapi import (
+    FastAPI,
+    Depends,
+    HTTPException,
+    BackgroundTasks,
+    WebSocket,
+    WebSocketDisconnect,
+    Request,
+)
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Set
 
@@ -31,6 +40,12 @@ from app.agents.intent_router import route_user_intent
 from app.memory.research_state import Citation
 from app.websocket_manager import manager as ws_manager
 from app.rate_limiter import check_research_rate_limit
+from app.output.pdf_exporter import (
+    export_research_to_pdf,
+    export_research_to_html,
+    export_research_to_docx,
+    check_pandoc_installed,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -923,6 +938,274 @@ def get_research_document(research_id: int, db: Session = Depends(get_db)):
             s) for s in research.sources],
         created_at=research.created_at,
         updated_at=research.updated_at,
+    )
+
+
+@app.get(
+    "/research/{research_id}/export/pdf",
+    tags=["export"]
+)
+def export_research_as_pdf(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Export research document as PDF.
+
+    Requires pandoc to be installed on the system.
+    Returns PDF file for download.
+    """
+    # Check if pandoc is installed
+    if not check_pandoc_installed():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "PDF export is not available. "
+                "Pandoc is not installed on the server."
+            )
+        )
+
+    # Get research
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Check if document exists
+    if not research.result:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No document available for this research. "
+                "Please complete the research first."
+            )
+        )
+
+    try:
+        # Export to PDF
+        pdf_content = export_research_to_pdf(
+            markdown_content=research.result,
+            title=research.query,
+            author="LLM Researcher",
+            date=research.updated_at.strftime("%Y-%m-%d")
+        )
+
+        # Create safe filename
+        chars = [
+            c for c in research.query
+            if c.isalnum() or c in (' ', '-', '_')
+        ]
+        safe_filename = "".join(chars)[:50]
+        filename = f"research_{research_id}_{safe_filename}.pdf"
+
+        return Response(
+            content=pdf_content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except ValueError as e:
+        logger.error(f"PDF export failed for research {research_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to export PDF: {str(e)}"
+        )
+
+
+@app.get(
+    "/research/{research_id}/export/html",
+    tags=["export"]
+)
+def export_research_as_html(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Export research document as HTML.
+
+    Requires pandoc to be installed on the system.
+    Returns HTML file for download.
+    """
+    # Check if pandoc is installed
+    if not check_pandoc_installed():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "HTML export is not available. "
+                "Pandoc is not installed on the server."
+            )
+        )
+
+    # Get research
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Check if document exists
+    if not research.result:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No document available for this research. "
+                "Please complete the research first."
+            )
+        )
+
+    try:
+        # Export to HTML
+        html_content = export_research_to_html(
+            markdown_content=research.result,
+            title=research.query,
+            author="LLM Researcher"
+        )
+
+        # Create safe filename
+        chars = [
+            c for c in research.query
+            if c.isalnum() or c in (' ', '-', '_')
+        ]
+        safe_filename = "".join(chars)[:50]
+        filename = f"research_{research_id}_{safe_filename}.html"
+
+        return Response(
+            content=html_content,
+            media_type="text/html",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except ValueError as e:
+        logger.error(f"HTML export failed for research {research_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to export HTML: {str(e)}"
+        )
+
+
+@app.get(
+    "/research/{research_id}/export/docx",
+    tags=["export"]
+)
+def export_research_as_docx(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Export research document as DOCX (Microsoft Word).
+
+    Requires pandoc to be installed on the system.
+    Returns DOCX file for download.
+    """
+    # Check if pandoc is installed
+    if not check_pandoc_installed():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "DOCX export is not available. "
+                "Pandoc is not installed on the server."
+            )
+        )
+
+    # Get research
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Check if document exists
+    if not research.result:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No document available for this research. "
+                "Please complete the research first."
+            )
+        )
+
+    try:
+        # Export to DOCX
+        docx_content = export_research_to_docx(
+            markdown_content=research.result,
+            title=research.query,
+            author="LLM Researcher"
+        )
+
+        # Create safe filename
+        chars = [
+            c for c in research.query
+            if c.isalnum() or c in (' ', '-', '_')
+        ]
+        safe_filename = "".join(chars)[:50]
+        filename = f"research_{research_id}_{safe_filename}.docx"
+
+        media_type = (
+            "application/vnd.openxmlformats-officedocument."
+            "wordprocessingml.document"
+        )
+        return Response(
+            content=docx_content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except ValueError as e:
+        logger.error(f"DOCX export failed for research {research_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to export DOCX: {str(e)}"
+        )
+
+
+@app.get(
+    "/research/{research_id}/export/markdown",
+    tags=["export"]
+)
+def export_research_as_markdown(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Export research document as Markdown.
+
+    Returns the raw markdown document.
+    """
+    # Get research
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Check if document exists
+    if not research.result:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No document available for this research. "
+                "Please complete the research first."
+            )
+        )
+
+    # Create safe filename
+    chars = [
+        c for c in research.query
+        if c.isalnum() or c in (' ', '-', '_')
+    ]
+    safe_filename = "".join(chars)[:50]
+    filename = f"research_{research_id}_{safe_filename}.md"
+
+    return Response(
+        content=research.result.encode('utf-8'),
+        media_type="text/markdown",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
     )
 
 
