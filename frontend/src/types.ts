@@ -1,6 +1,7 @@
 export interface Research {
 	id: number;
 	query: string;
+	result?: string;
 	status: 'pending' | 'researching' | 'completed' | 'failed';
 	user_notes?: string;
 	tags?: string[];
@@ -13,10 +14,13 @@ export interface Source {
 	research_id: number;
 	title: string;
 	url: string;
-	content?: string;
+	content_snippet?: string;
 	source_type: string;
-	metadata?: Record<string, any>;
-	created_at: string;
+	author?: string;
+	relevance_score: number;
+	user_notes?: string;
+	tags?: string[];
+	accessed_at: string;
 }
 
 export interface Finding {

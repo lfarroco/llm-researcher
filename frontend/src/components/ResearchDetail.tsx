@@ -11,7 +11,7 @@ interface Props {
 	onUpdate: () => void;
 }
 
-type Tab = 'overview' | 'sources' | 'findings' | 'progress' | 'chat';
+type Tab = 'overview' | 'sources' | 'findings' | 'result' | 'progress' | 'chat';
 
 export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props) {
 	const [research, setResearch] = useState<Research | null>(null);
@@ -95,6 +95,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		{ id: 'overview', label: 'Overview' },
 		{ id: 'sources', label: 'Sources', count: sources.length },
 		{ id: 'findings', label: 'Findings', count: findings.length },
+		{ id: 'result', label: 'Result' },
 		{ id: 'progress', label: 'Progress' },
 		{ id: 'chat', label: 'Chat' },
 	];
@@ -221,11 +222,11 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 										<span className="px-2 py-1 bg-gray-100 rounded">
 											{source.source_type}
 										</span>
-										<span>{new Date(source.created_at).toLocaleString()}</span>
+										<span>{new Date(source.accessed_at).toLocaleString()}</span>
 									</div>
-									{source.content && (
+									{source.content_snippet && (
 										<p className="mt-2 text-sm text-gray-600 line-clamp-3">
-											{source.content}
+											{source.content_snippet}
 										</p>
 									)}
 								</div>
@@ -254,6 +255,25 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 									)}
 								</div>
 							))
+						)}
+					</div>
+				)}
+
+				{activeTab === 'result' && (
+					<div>
+						{!research.result ? (
+							<div className="text-center text-gray-500 py-8">
+								<p>No research report available yet.</p>
+								{research.status === 'researching' && (
+									<p className="mt-2 text-sm">The report will be generated once research is complete.</p>
+								)}
+							</div>
+						) : (
+							<div className="prose max-w-none">
+								<div className="whitespace-pre-wrap text-sm text-gray-900 leading-relaxed">
+									{research.result}
+								</div>
+							</div>
 						)}
 					</div>
 				)}
