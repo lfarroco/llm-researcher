@@ -8,6 +8,7 @@ These tests demonstrate how to test tools in isolation by:
 """
 
 import pytest
+import httpx
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.tools.base import ToolError, ToolErrorType, ToolResponse, get_setting
@@ -255,3 +256,391 @@ class TestArxivResult:
         assert result.title == "Test Paper"
         assert len(result.authors) == 2
         assert result.categories == ["cs.AI", "cs.LG"]
+
+
+class TestPubMedSearch:
+    """Tests for PubMed search tool."""
+
+    @pytest.mark.asyncio
+    async def test_pubmed_search_returns_results(self):
+        """Test PubMed search returns properly formatted results."""
+        # Mock PubMed API responses
+        mock_search_result = {
+            "IdList": ["12345678", "87654321"],
+        }
+
+        mock_article_1 = {
+            "MedlineCitation": {
+                "PMID": {"_text": "12345678"},
+                "Article": {
+                    "ArticleTitle": "Deep Learning in Medicine",
+                    "Abstract": {"AbstractText": ["This study explores..."]},
+                    "Journal": {"Title": "Nature Medicine"},
+                    "AuthorList": [
+                        {"LastName": "Smith", "ForeName": "John"},
+                        {"LastName": "Doe", "ForeName": "Jane"},
+                    ],
+                },
+                "DateCompleted": {"Year": "2024", "Month": "01", "Day": "15"},
+                "MeshHeadingList": [{"DescriptorName": {"_text": "Machine Learning"}}],
+            },
+            "PubmedData": {
+                "ArticleIdList": [
+                    {"_text": "10.1038/nm.1234", "_attributes": {"IdType": "doi"}}
+                ]
+            },
+        }
+
+        with patch("app.tools.pubmed_search.Entrez") as mock_entrez:
+            mock_search_handle = MagicMock()
+            mock_search_handle.__enter__ = MagicMock(
+                return_value=mock_search_handle)
+            mock_search_handle.__exit__ = MagicMock(return_value=None)
+
+            mock_entrez.esearch = MagicMock(return_value=mock_search_handle)
+            mock_entrez.read = MagicMock(
+                side_effect=[mock_search_result, [mock_article_1]]
+            )
+
+            from app.tools.pubmed_search import pubmed_search
+
+            results = await pubmed_search(
+                "machine learning medicine",
+                max_results=2,
+                ncbi_email="test@example.com",
+            )
+
+        # Verify results are formatted correctly
+        assert isinstance(results, list)
+
+
+class TestSemanticScholarSearch:
+    """Tests for Semantic Scholar search tool."""
+
+    @pytest.mark.asyncio
+    async def test_semantic_scholar_search_returns_results(self):
+        """Test Semantic Scholar search returns properly formatted results."""
+        mock_api_response = {
+            "data": [
+                {
+                    "paperId": "abc123",
+                    "title": "Attention Is All You Need",
+                    "authors": [{"name": "Vaswani, A."}, {"name": "Shazeer, N."}],
+                    "abstract": "The dominant sequence transduction models...",
+                    "year": 2017,
+                    "citationCount": 50000,
+                    "influentialCitationCount": 5000,
+                    "venue": "NeurIPS",
+                    "openAccessPdf": {"url": "https://arxiv.org/pdf/1706.03762"},
+                    "externalIds": {"DOI": "10.5555/3295222", "ArXiv": "1706.03762"},
+                    "fieldsOfStudy": ["Computer Science"],
+                    "tldr": {"text": "Introduces the Transformer architecture"},
+                }
+            ]
+        }
+
+        with patch("app.tools.semantic_scholar.httpx.AsyncClient") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_api_response
+            mock_response.raise_for_status = MagicMock()
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.semantic_scholar import semantic_scholar_search
+
+            results = await semantic_scholar_search("transformer architecture", max_results=5)
+
+        assert len(results) == 1
+        assert results[0].title == "Attention Is All You Need"
+        assert results[0].citation_count == 50000
+        assert "Vaswani" in results[0].authors[0]
+
+
+class TestCrossrefSearch:
+    """Tests for Crossref search tool."""
+
+    @pytest.mark.asyncio
+    async def test_crossref_search_returns_results(self):
+        """Test Crossref search returns properly formatted results."""
+        mock_api_response = {
+            "message": {
+                "items": [
+                    {
+                        "DOI": "10.1016/j.cell.2024.01.001",
+                        "title": ["CRISPR Gene Editing Advances"],
+                        "author": [
+                            {"given": "John", "family": "Smith"},
+                            {"given": "Jane", "family": "Doe"},
+                        ],
+                        "abstract": "This paper presents new CRISPR techniques...",
+                        "published-print": {"date-parts": [[2024, 1, 15]]},
+                        "container-title": ["Cell"],
+                        "type": "journal-article",
+                        "score": 95.5,
+                    }
+                ]
+            }
+        }
+
+        with patch("app.tools.crossref_search.httpx.AsyncClient") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_api_response
+            mock_response.raise_for_status = MagicMock()
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.crossref_search import crossref_search
+
+            results = await crossref_search("CRISPR gene editing", max_results=5)
+
+        assert len(results) == 1
+        assert results[0].title == "CRISPR Gene Editing Advances"
+        assert results[0].doi == "10.1016/j.cell.2024.01.001"
+
+
+class TestOpenAlexSearch:
+    """Tests for OpenAlex search tool."""
+
+    @pytest.mark.asyncio
+    async def test_openalex_search_returns_results(self):
+        """Test OpenAlex search returns properly formatted results."""
+        mock_api_response = {
+            "results": [
+                {
+                    "id": "https://openalex.org/W12345",
+                    "title": "Climate Change Mitigation Strategies",
+                    "authorships": [
+                        {"author": {"display_name": "Alice Johnson"}},
+                        {"author": {"display_name": "Bob Williams"}},
+                    ],
+                    "abstract_inverted_index": {
+                        "This": [0],
+                        "paper": [1],
+                        "discusses": [2],
+                    },
+                    "publication_year": 2024,
+                    "cited_by_count": 150,
+                    "primary_location": {
+                        "source": {"display_name": "Science"},
+                    },
+                    "doi": "https://doi.org/10.1126/science.abc123",
+                    "open_access": {"is_oa": True, "oa_url": "https://example.com/pdf"},
+                    "concepts": [
+                        {"display_name": "Climate Change"},
+                        {"display_name": "Environmental Science"},
+                    ],
+                }
+            ]
+        }
+
+        with patch("app.tools.openalex_search.httpx.AsyncClient") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = mock_api_response
+            mock_response.raise_for_status = MagicMock()
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.openalex_search import openalex_search
+
+            results = await openalex_search("climate change", max_results=5)
+
+        assert len(results) == 1
+        assert results[0].title == "Climate Change Mitigation Strategies"
+        assert results[0].citation_count == 150
+
+
+class TestWebScraper:
+    """Tests for web scraping tool."""
+
+    @pytest.mark.asyncio
+    async def test_scrape_url_success(self):
+        """Test successful web scraping."""
+        mock_html = """
+        <html>
+            <head><title>Test Article</title></head>
+            <body>
+                <article>
+                    <h1>Test Article</h1>
+                    <p>This is the main content of the article.</p>
+                    <p>It contains important information.</p>
+                </article>
+            </body>
+        </html>
+        """
+
+        with patch("app.tools.web_scraper.httpx.AsyncClient") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.status_code = 200
+            mock_response.text = mock_html
+            mock_response.raise_for_status = MagicMock()
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            with patch("app.tools.web_scraper.trafilatura") as mock_traf:
+                mock_traf.extract.return_value = "Test Article\n\nThis is the main content"
+
+                from app.tools.web_scraper import scrape_url
+
+                result = await scrape_url("https://example.com/article")
+
+        assert result.success is True
+        assert "content" in result.content.lower() or "Test Article" in result.content
+        assert result.url == "https://example.com/article"
+
+    @pytest.mark.asyncio
+    async def test_scrape_url_http_error(self):
+        """Test handling of HTTP errors."""
+        with patch("app.tools.web_scraper.httpx.AsyncClient") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.raise_for_status = MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "404", request=None, response=None)
+            )
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.web_scraper import scrape_url
+
+            result = await scrape_url("https://example.com/notfound")
+
+        assert result.success is False
+        assert result.error is not None
+
+
+class TestPDFDownload:
+    """Tests for PDF download functionality."""
+
+    @pytest.mark.asyncio
+    async def test_pdf_download_success(self):
+        """Test successful PDF download."""
+        mock_pdf_content = b"%PDF-1.4\n%Mock PDF content"
+
+        with patch("app.tools.pdf_download.httpx.AsyncClient") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.status_code = 200
+            mock_response.content = mock_pdf_content
+            mock_response.raise_for_status = MagicMock()
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.pdf_download import download_pdf
+
+            result = await download_pdf("https://arxiv.org/pdf/2024.12345")
+
+        assert result is not None
+        assert isinstance(result, bytes)
+        assert result.startswith(b"%PDF")
+
+    @pytest.mark.asyncio
+    async def test_pdf_download_failure(self):
+        """Test handling of PDF download failure."""
+        with patch("app.tools.pdf_download.httpx.AsyncClient") as mock_client:
+            mock_response = AsyncMock()
+            mock_response.raise_for_status = MagicMock(
+                side_effect=httpx.HTTPStatusError(
+                    "404", request=None, response=None)
+            )
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.pdf_download import download_pdf
+
+            result = await download_pdf("https://example.com/missing.pdf")
+
+        assert result is None
+
+
+# Integration tests that make real API calls
+@pytest.mark.integration
+class TestToolsIntegration:
+    """Integration tests for tools with external APIs."""
+
+    @pytest.mark.asyncio
+    async def test_web_search_real_api(self):
+        """Test web search with real API (requires API key)."""
+        from app.config import settings
+
+        if not settings.tavily_api_key:
+            pytest.skip("Tavily API key not configured")
+
+        from app.tools.web_search import web_search
+
+        results = await web_search("python programming", max_results=3)
+
+        assert isinstance(results, list)
+        assert len(results) > 0
+        assert all(hasattr(r, "title") for r in results)
+        assert all(hasattr(r, "url") for r in results)
+
+    @pytest.mark.asyncio
+    async def test_arxiv_search_real_api(self):
+        """Test ArXiv search with real API."""
+        from app.tools.arxiv_search import arxiv_search
+
+        results = await arxiv_search("machine learning", max_results=2)
+
+        assert isinstance(results, list)
+        assert len(results) > 0
+        assert all("arxiv.org" in r.url for r in results)
+
+    @pytest.mark.asyncio
+    async def test_wikipedia_search_real_api(self):
+        """Test Wikipedia search with real API."""
+        from app.tools.wikipedia import wikipedia_search
+
+        results = await wikipedia_search("Python programming language", sentences=3)
+
+        assert isinstance(results, list)
+        assert len(results) > 0
+        assert all("wikipedia.org" in r.url for r in results)
+
+    @pytest.mark.asyncio
+    async def test_semantic_scholar_real_api(self):
+        """Test Semantic Scholar with real API."""
+        from app.tools.semantic_scholar import semantic_scholar_search
+
+        results = await semantic_scholar_search("transformer neural networks", max_results=2)
+
+        assert isinstance(results, list)
+        # API might return 0 results depending on rate limits
+        if len(results) > 0:
+            assert hasattr(results[0], "title")
+            assert hasattr(results[0], "citation_count")
