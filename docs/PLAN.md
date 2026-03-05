@@ -462,7 +462,7 @@ Implementation is organized in phases, building progressively from foundation to
 
 ### Implementation Status Summary
 
-**Completed Phases**: 9 out of 19 phases (47%)
+**Completed Phases**: 9 out of 20 phases (45%)
 - ✅ Phase 1: Foundation (HIGH)
 - ✅ Phase 2: Core Tools (HIGH)
 - ✅ Phase 3: Core Agents (HIGH)
@@ -472,14 +472,22 @@ Implementation is organized in phases, building progressively from foundation to
 - ✅ Phase 7: Interactive Knowledge Base API (HIGH)
 - ✅ Phase 8: Extended Search Tools (HIGH)
 - ✅ Phase 16: Real-time Updates (LOW - Future UI)
-- ✅ Phase 19: Web UI (COMPLETE)
+- ✅ Phase 19: Web UI v1.0 (COMPLETE)
 
-**HIGH Priority Remaining**:
+**HIGH Priority In Progress**:
+- 🚀 **Phase 20: Frontend v2.0** - User Productivity Features (NEW)
+  - Sprint 1: CRUD operations for sources, findings, research editing
+  - Sprint 2: Search & filtering for all resources
+  - Sprint 3: Bulk operations & export features
+  - Sprint 4: Research plan & AI state visualization
+  - Sprint 5: UX polish & quality of life improvements
+
+**HIGH Priority Remaining (Backend)**:
 - ⏳ Phase 9: PDF & Document Parsing
 - ⏳ Phase 10: NLP & Knowledge Extraction
 - ⏳ Phase 11: Knowledge Graph & Storage
 
-**System Status**: Production-ready for web-based research with real-time UI. Advanced knowledge extraction and graph features pending.
+**System Status**: Production-ready for web-based research with real-time UI. Frontend v1.0 provides read-only views; v2.0 will add full CRUD capabilities. Advanced backend features (knowledge extraction, graphs) are pending.
 
 See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
 
@@ -750,104 +758,306 @@ See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
   - Gzip compression
   - Environment-agnostic (proxied API)
 
-#### 🔜 Potential Future Features (Backend Support Exists)
+---
 
-**Priority: MEDIUM - User Productivity**
-- [ ] **Source Management**
-  - Add sources manually via URL/DOI
-  - Edit source notes and tags
-  - Mark sources as relevant/irrelevant
-  - Filter sources by type (web, arxiv, pubmed, etc.)
-  - Search sources by keyword
-  - Bulk operations (select multiple, delete, tag)
+### Phase 20: Frontend v2.0 - User Productivity Features | Priority: HIGH
+*Enhance frontend with CRUD operations and user workflows*
 
-- [ ] **Findings Management**
-  - Create findings manually
-  - Edit finding content and notes
-  - Link findings to sources
-  - Set finding importance level
-  - Categorize findings by topic
-  - Export findings to various formats
+#### 📦 Sprint 1: Core CRUD Operations (Week 1-2)
+**Goal**: Enable users to manage their research data directly in the UI
 
-- [ ] **Research Plan Editing**
-  - View current research plan with sub-queries
-  - Add/remove sub-queries manually
-  - Track progress per sub-query
-  - Reorder plan steps
-  - Reset research direction
+**Backend APIs**: ✅ All endpoints exist
+- `POST/PUT/DELETE /research/{id}/sources`
+- `POST/PUT/DELETE /research/{id}/findings`
+- `PATCH /research/{id}` for notes/tags
 
-- [ ] **Export & Import**
-  - Export research as JSON (full backup)
-  - Export citations as BibTeX
-  - Import sources from BibTeX file
-  - Download research report (if generated)
-  - Export to PDF/DOCX/Markdown
+**Frontend Implementation**:
 
-**Priority: MEDIUM - User Experience**
-- [ ] **Advanced Search & Filtering**
-  - Full-text search across all research
-  - Filter by date range, status, tags
-  - Sort by relevance, date, status
-  - Saved search queries
-  - Quick filters (completed today, failed, etc.)
+- [ ] **Research Editing**
+  - Edit research query inline (with confirmation)
+  - Edit user notes (textarea with save/cancel)
+  - Add/edit/remove tags (tag input component)
+  - Display last updated timestamp
 
-- [ ] **Improved Navigation**
+- [ ] **Source CRUD Operations**
+  - "Add Source" button with modal form (URL/DOI input, auto-fetch metadata)
+  - Edit source modal (title, URL, notes, metadata)
+  - Delete source with confirmation
+  - Inline edit notes on sources
+  - Visual feedback for save/delete operations
+
+- [ ] **Finding CRUD Operations**
+  - "Add Finding" button with form (content, category, importance, source link)
+  - Edit finding modal (all fields editable)
+  - Delete finding with confirmation
+  - Drag-and-drop importance slider (1-5 stars)
+  - Link finding to source (dropdown selector)
+  - Category autocomplete based on existing categories
+
+**Components to Build**:
+- `EditableResearchHeader.tsx` - Inline editing for query/notes
+- `SourceFormModal.tsx` - Add/edit source form
+- `FindingFormModal.tsx` - Add/edit finding form
+- `TagInput.tsx` - Multi-tag input with autocomplete
+- `ConfirmDialog.tsx` - Reusable confirmation dialog
+
+**Estimated Effort**: 8-12 hours
+**User Value**: HIGH - Core productivity features
+
+---
+
+#### 📦 Sprint 2: Search & Filtering (Week 3)
+**Goal**: Help users find information quickly in large research collections
+
+**Backend APIs**: ✅ Query parameters exist for filtering
+- `/research?status=completed&tags=ai&search=query`
+- `/research/{id}/sources?source_type=arxiv&search=keyword`
+- `/research/{id}/findings?category=methods&min_importance=3`
+
+**Frontend Implementation**:
+
+- [ ] **Research List Filtering**
+  - Status filter dropdown (all, pending, researching, completed, failed)
+  - Tag filter (multi-select from existing tags)
+  - Date range picker (created between X and Y)
+  - Text search across queries and notes
+  - Active filters display with "clear" buttons
+  - Filter result count
+
+- [ ] **Source Filtering & Search**
+  - Source type filter (web, arxiv, pubmed, semantic_scholar, wikipedia, etc.)
+  - Text search in title/content
+  - Sort by: date added (newest/oldest), title (A-Z/Z-A)
+  - Quick filters: "Recently added", "Academic only", "No content"
+
+- [ ] **Finding Filtering & Search**
+  - Category filter (multi-select dropdown)
+  - Importance filter (slider: show >= X stars)
+  - Source filter (show findings from specific source)
+  - Text search in content and notes
+  - Sort by: importance, date created, category
+
+**Components to Build**:
+- `FilterBar.tsx` - Reusable filter component
+- `MultiSelect.tsx` - Multi-select dropdown
+- `DateRangePicker.tsx` - Date range selection
+- `SearchInput.tsx` - Debounced search input with clear button
+
+**Estimated Effort**: 6-8 hours
+**User Value**: HIGH - Essential for managing many items
+
+---
+
+#### 📦 Sprint 3: Bulk Operations & Export (Week 4)
+**Goal**: Power-user features for efficiency
+
+**Backend APIs**: Partial support, may need batch endpoints
+- Export endpoints exist: `/research/{id}/export/bibtex`, `/research/{id}/export/json`
+
+**Frontend Implementation**:
+
+- [ ] **Bulk Selection**
+  - Checkbox on each source/finding
+  - "Select all" / "Select none" controls
+  - Selection counter (X items selected)
+  - Available on Sources and Findings tabs
+
+- [ ] **Bulk Actions**
+  - Delete selected (with count confirmation)
+  - Categorize selected findings (batch update)
+  - Tag selected sources (batch add/remove tags)
+  - Export selected to JSON/CSV
+  - Progress indicator for bulk operations
+
+- [ ] **Export Features**
+  - Export all sources as BibTeX (download button)
+  - Export all findings as CSV/JSON
+  - Export full research as JSON backup
+  - Copy sources to clipboard (formatted text)
+  - Share research summary (generate shareable link)
+
+**Components to Build**:
+- `SelectableList.tsx` - List with checkbox selection
+- `BulkActionBar.tsx` - Action bar shown when items selected
+- `ExportMenu.tsx` - Dropdown menu for export options
+
+**Estimated Effort**: 6-8 hours
+**User Value**: MEDIUM - Power users will love it
+
+---
+
+#### 📦 Sprint 4: Research Plan & State Visualization (Week 5)
+**Goal**: Give users visibility into AI research process
+
+**Backend APIs**: ✅ Endpoints exist
+- `GET /research/{id}/plan` - Current plan with sub-queries
+- `GET /research/{id}/state` - Full LangGraph state
+- `PATCH /research/{id}/plan` - Modify plan
+
+**Frontend Implementation**:
+
+- [ ] **Research Plan View** (New tab in ResearchDetail)
+  - Display main research question
+  - List all sub-queries with status (completed/pending)
+  - Show which sources/findings answer each sub-query
+  - "Add sub-query" button
+  - "Remove sub-query" button (with impact warning)
+  - Reorder sub-queries (drag-and-drop)
+
+- [ ] **AI State Inspector** (Expandable panel)
+  - Display current research step
+  - Show reasoning log (why decisions were made)
+  - View intermediate results
+  - Checkpoint browser (view state at different times)
+  - "Restart from checkpoint" button
+
+- [ ] **Improved Overview Tab**
+  - Visual progress indicator (% complete)
+  - Timeline of research events
+  - Key metrics cards (sources count, findings count, sub-queries)
+  - Recent activity feed
+  - Estimated time remaining (if researching)
+
+**Components to Build**:
+- `ResearchPlanTab.tsx` - New tab for plan management
+- `StateInspector.tsx` - AI state visualization
+- `TimelineView.tsx` - Event timeline
+- `MetricsCards.tsx` - Statistics dashboard
+
+**Estimated Effort**: 8-10 hours
+**User Value**: MEDIUM-HIGH - Transparency and control
+
+---
+
+#### 📦 Sprint 5: UX Polish & Quality of Life (Week 6)
+**Goal**: Make the interface delightful to use
+
+**Frontend Implementation**:
+
+- [ ] **Navigation Improvements**
+  - Keyboard shortcuts (? to show help, / to search, n for new research)
   - Breadcrumb navigation
-  - Keyboard shortcuts
-  - Recent research quick access
-  - Pinned/starred research
-  - Research folders/organization
+  - Back/forward history
+  - "Jump to research" quick search (Cmd/Ctrl + K)
+  - Recent research sidebar (last 5 viewed)
 
-- [ ] **User Settings & Preferences**
-  - API key management (if multi-user)
-  - Default citation style
-  - UI theme preferences
-  - Notification preferences
-  - Research auto-archive settings
+- [ ] **Visual Enhancements**
+  - Dark mode toggle (save preference)
+  - Improved loading skeletons (not just "Loading...")
+  - Empty state illustrations
+  - Success/error toast notifications (not just alerts)
+  - Smooth page transitions
+  - Animated progress bars
 
-**Priority: LOW - Enhancements**
+- [ ] **User Preferences**
+  - Persistent UI preferences (localStorage)
+  - Default sort/filter preferences
+  - Auto-refresh interval setting
+  - Notification settings
+  - Compact/comfortable/spacious view density
+
+- [ ] **Accessibility**
+  - ARIA labels on all interactive elements
+  - Keyboard navigation for all features
+  - Screen reader friendly
+  - High contrast mode
+  - Focus indicators
+
+**Components to Build**:
+- `KeyboardShortcuts.tsx` - Help modal with shortcuts
+- `CommandPalette.tsx` - Quick search/navigation
+- `Toast.tsx` - Notification system
+- `SettingsPanel.tsx` - User preferences
+
+**Estimated Effort**: 10-12 hours
+**User Value**: MEDIUM - Quality of life improvements
+
+---
+
+#### 🔮 Future Considerations (Post v2.0)
+
+**Priority: LOW - Advanced Features**
 - [ ] **Visualization**
-  - Knowledge graph visualization (if Phase 11 implemented)
+  - Knowledge graph visualization (requires Phase 11 backend)
   - Topic distribution charts
   - Source type breakdown pie charts
-  - Research progress timeline
-  - Citation network graph
+  - Research timeline visualization
+  - Citation network graph (if knowledge graph implemented)
 
-- [ ] **Collaboration** (requires backend Phase 17)
+- [ ] **Collaboration** (Requires multi-user backend Phase 17)
   - Share research with collaborators
   - Comments on sources/findings
   - Activity feed (who did what)
   - Permission management
-  - Export share links
+  - Real-time collaborative editing
 
-- [ ] **Advanced Features**
-  - Dark mode toggle
-  - Multi-language support
-  - Accessibility improvements (ARIA labels, screen reader)
-  - Offline mode with service worker
-  - Progressive Web App (PWA)
-  - Browser notifications for research completion
-
-- [ ] **Hypothesis Management** (if backend Phase 12 implemented)
-  - View generated hypotheses
-  - Vote on hypothesis relevance
-  - Add notes to hypotheses
-  - Track hypothesis testing status
-  - Visualize evidence for/against
-
-- [ ] **Document Generation** (if backend Phase 15 implemented)
-  - Choose output format (blog, paper, summary)
-  - Preview generated drafts
-  - Iterate on drafts with feedback
+- [ ] **Advanced AI Features** (Requires backend phases 12-15)
+  - Hypothesis management UI (Phase 12)
+  - Analysis results viewer (Phase 13-14)
+  - Document generation interface (Phase 15)
   - Side-by-side draft comparison
-  - Style customization
 
-- [ ] **Analysis Results** (if backend Phase 13-14 implemented)
-  - View experiment results
-  - Interactive charts and figures
-  - Statistical test results
-  - Filter by p-value, effect size
-  - Export figures
+- [ ] **Mobile App**
+  - React Native mobile app
+  - Offline mode with sync
+  - Push notifications
+  - Mobile-optimized research browsing
+
+**Priority: MEDIUM - User Experience**
+- [ ] **Advanced Search & Filtering**
+  - Full-text search across all research
+  - Saved search queries
+  - Smart suggestions based on history
+  - Related research recommendations
+
+- [ ] **Improved Navigation**
+  - Pinned/starred research
+  - Research folders/organization
+  - Custom views and dashboards
+  - Workspace switching (for different projects)
+
+**Priority: LOW - Infrastructure**
+- [ ] **Performance Optimizations**
+  - Lazy loading for large lists
+  - Virtual scrolling for thousands of items
+  - Image lazy loading
+  - Code splitting for faster initial load
+  - Service worker for caching
+
+- [ ] **Progressive Web App (PWA)**
+  - Offline mode with sync
+  - Install as app
+  - Background sync
+  - Push notifications
+  - App-like experience
+
+- [ ] **Internationalization**
+  - Multi-language support (i18n)
+  - RTL language support
+  - Date/time localization
+  - Number formatting
+
+---
+
+#### 📊 Frontend v2.0 Summary
+
+**Total Estimated Effort**: 38-50 hours (6-8 weeks at part-time pace)
+
+**Prioritized Implementation Order**:
+1. **Sprint 1** (HIGH) - CRUD operations unlock core user workflows
+2. **Sprint 2** (HIGH) - Search/filter essential for scale
+3. **Sprint 4** (MEDIUM-HIGH) - Transparency & control = user trust
+4. **Sprint 3** (MEDIUM) - Power users = engaged users
+5. **Sprint 5** (MEDIUM) - Polish = professional product
+
+**Success Metrics**:
+- Users can manage 100+ sources without frustration
+- Finding a specific source/finding takes <10 seconds
+- Users understand what the AI is doing and why
+- No need to use API docs for common operations
+- Users prefer UI over direct API calls
+
+**Backend Dependency**: All Sprint 1-4 features use existing APIs ✅
 
 #### 📊 Current UI Tech Stack
 - **React 18** - UI library
