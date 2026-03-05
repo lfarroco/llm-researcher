@@ -11,6 +11,7 @@ import logging
 from typing import Optional
 
 from pydantic import BaseModel, Field
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.tools.base import get_setting
 
@@ -76,6 +77,11 @@ async def web_search(
     return results
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(Exception)
+)
 async def _tavily_search(
     query: str,
     max_results: int,
@@ -83,7 +89,7 @@ async def _tavily_search(
     exclude_domains: Optional[list[str]],
     api_key: str,
 ) -> list[WebSearchResult]:
-    """Search using Tavily API."""
+    """Search using Tavily API with automatic retries."""
     from tavily import TavilyClient
 
     logger.debug("[TAVILY] Initializing Tavily client")
@@ -124,11 +130,16 @@ async def _tavily_search(
     return results
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(Exception)
+)
 async def _duckduckgo_search(
     query: str,
     max_results: int,
 ) -> list[WebSearchResult]:
-    """Search using DuckDuckGo (free fallback)."""
+    """Search using DuckDuckGo (free fallback) with automatic retries."""
     from duckduckgo_search import DDGS
 
     logger.debug(f"[DUCKDUCKGO] Starting search for: '{query[:80]}...'")

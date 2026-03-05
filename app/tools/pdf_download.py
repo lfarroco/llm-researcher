@@ -15,6 +15,7 @@ from typing import Optional
 import httpx
 import aiofiles
 from pydantic import BaseModel, Field
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from app.tools.base import get_setting
 
@@ -82,12 +83,19 @@ def _validate_pdf_header(content: bytes) -> bool:
     return content.startswith(PDF_MAGIC_BYTES)
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException))
+)
 async def download_pdf(
     url: str,
     force_redownload: bool = False,
 ) -> PDFDownloadResult:
     """
     Download a PDF from a URL and cache it locally.
+
+    Automatically retries up to 3 times with exponential backoff on network errors.
 
     Args:
         url: URL of the PDF to download

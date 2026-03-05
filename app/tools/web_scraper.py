@@ -9,6 +9,7 @@ from typing import Optional
 
 import httpx
 from pydantic import BaseModel, Field
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,11 @@ class ScrapedContent(BaseModel):
         default=None, description="Error message if failed")
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException))
+)
 async def scrape_url(url: str) -> ScrapedContent:
     """
     Scrape and extract clean text content from a URL.
@@ -43,6 +49,8 @@ async def scrape_url(url: str) -> ScrapedContent:
     - Removing boilerplate (ads, navigation, footers)
     - Extracting main article content
     - Finding metadata (author, date, title)
+
+    Automatically retries up to 3 times with exponential backoff on network errors.
 
     Args:
         url: URL to scrape

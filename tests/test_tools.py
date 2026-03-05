@@ -499,8 +499,11 @@ class TestWebScraper:
 
             mock_client.return_value = mock_ctx
 
-            with patch("app.tools.web_scraper.trafilatura") as mock_traf:
-                mock_traf.extract.return_value = "Test Article\n\nThis is the main content"
+            # Patch trafilatura at the point it's used, not at module level
+            with patch("trafilatura.extract") as mock_extract, \
+                    patch("trafilatura.extract_metadata") as mock_metadata:
+                mock_extract.return_value = "Test Article\n\nThis is the main content"
+                mock_metadata.return_value = None
 
                 from app.tools.web_scraper import scrape_url
 
@@ -512,7 +515,9 @@ class TestWebScraper:
 
     @pytest.mark.asyncio
     async def test_scrape_url_http_error(self):
-        """Test handling of HTTP errors."""
+        """Test handling of HTTP errors with retry logic."""
+        from tenacity import RetryError
+
         with patch("app.tools.web_scraper.httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.raise_for_status = MagicMock(
@@ -529,10 +534,9 @@ class TestWebScraper:
 
             from app.tools.web_scraper import scrape_url
 
-            result = await scrape_url("https://example.com/notfound")
-
-        assert result.success is False
-        assert result.error is not None
+            # With retry logic, it should raise RetryError after all attempts
+            with pytest.raises(RetryError):
+                await scrape_url("https://example.com/notfound")
 
 
 class TestPDFDownload:
@@ -543,49 +547,79 @@ class TestPDFDownload:
         """Test successful PDF download."""
         mock_pdf_content = b"%PDF-1.4\n%Mock PDF content"
 
-        with patch("app.tools.pdf_download.httpx.AsyncClient") as mock_client:
+        with patch("app.tools.pdf_download.httpx.AsyncClient") as mock_client, \
+                patch("app.tools.pdf_download.aiofiles.open") as mock_open, \
+                patch("app.tools.pdf_download.Path.exists", return_value=False):
+
+            # Mock the streaming response
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.content = mock_pdf_content
+            mock_response.headers = {
+                "content-type": "application/pdf", "content-length": "100"}
             mock_response.raise_for_status = MagicMock()
+            mock_response.aiter_bytes = AsyncMock(
+                return_value=iter([mock_pdf_content]))
 
-            mock_ctx = AsyncMock()
-            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_ctx.__aexit__ = AsyncMock(return_value=None)
-            mock_ctx.get = AsyncMock(return_value=mock_response)
+            # Mock async context managers
+            mock_stream_ctx = AsyncMock()
+            mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
 
-            mock_client.return_value = mock_ctx
+            mock_client_ctx = AsyncMock()
+            mock_client_ctx.__aenter__ = AsyncMock(
+                return_value=mock_client_ctx)
+            mock_client_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_client_ctx.stream = MagicMock(return_value=mock_stream_ctx)
 
-            from app.tools.pdf_download import download_pdf
+            mock_client.return_value = mock_client_ctx
+
+            # Mock file writing
+            mock_file = AsyncMock()
+            mock_file.__aenter__ = AsyncMock(return_value=mock_file)
+            mock_file.__aexit__ = AsyncMock(return_value=None)
+            mock_file.write = AsyncMock()
+            mock_open.return_value = mock_file
+
+            from app.tools.pdf_download import download_pdf, PDFDownloadResult
 
             result = await download_pdf("https://arxiv.org/pdf/2024.12345")
 
         assert result is not None
-        assert isinstance(result, bytes)
-        assert result.startswith(b"%PDF")
+        assert isinstance(result, PDFDownloadResult)
+        assert result.success is True
+        assert result.file_path is not None
 
     @pytest.mark.asyncio
     async def test_pdf_download_failure(self):
-        """Test handling of PDF download failure."""
-        with patch("app.tools.pdf_download.httpx.AsyncClient") as mock_client:
+        """Test handling of PDF download failure with retry logic."""
+        from tenacity import RetryError
+
+        with patch("app.tools.pdf_download.httpx.AsyncClient") as mock_client, \
+                patch("app.tools.pdf_download.Path.exists", return_value=False):
+
             mock_response = AsyncMock()
             mock_response.raise_for_status = MagicMock(
                 side_effect=httpx.HTTPStatusError(
                     "404", request=None, response=None)
             )
 
-            mock_ctx = AsyncMock()
-            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
-            mock_ctx.__aexit__ = AsyncMock(return_value=None)
-            mock_ctx.get = AsyncMock(return_value=mock_response)
+            mock_stream_ctx = AsyncMock()
+            mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_stream_ctx.__aexit__ = AsyncMock(return_value=None)
 
-            mock_client.return_value = mock_ctx
+            mock_client_ctx = AsyncMock()
+            mock_client_ctx.__aenter__ = AsyncMock(
+                return_value=mock_client_ctx)
+            mock_client_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_client_ctx.stream = MagicMock(return_value=mock_stream_ctx)
+
+            mock_client.return_value = mock_client_ctx
 
             from app.tools.pdf_download import download_pdf
 
-            result = await download_pdf("https://example.com/missing.pdf")
-
-        assert result is None
+            # With retry logic, it should raise RetryError after all attempts
+            with pytest.raises(RetryError):
+                await download_pdf("https://example.com/missing.pdf")
 
 
 # Integration tests that make real API calls

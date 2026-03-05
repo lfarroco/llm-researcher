@@ -13,6 +13,9 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import aiohttp
+import validators
+from dateutil import parser as dateutil_parser
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from citeproc import CitationStylesStyle, CitationStylesBibliography
 from citeproc import Citation as CiteProc_Citation
 from citeproc import CitationItem
@@ -132,19 +135,18 @@ class CitationFormatter:
 
     @staticmethod
     def _parse_date(date_string: str) -> Optional[datetime]:
-        """Parse an ISO date string into a datetime object."""
+        """Parse a date string into a datetime object using python-dateutil."""
         try:
-            # Handle ISO format with timezone
-            if "T" in date_string:
-                cleaned = date_string.replace("Z", "+00:00")
-                return datetime.fromisoformat(cleaned)
-            return datetime.strptime(date_string, "%Y-%m-%d")
-        except (ValueError, TypeError):
+            return dateutil_parser.parse(date_string)
+        except (ValueError, TypeError, dateutil_parser.ParserError):
             return None
 
     @staticmethod
     def _get_domain(url: str) -> str:
-        """Extract the domain from a URL."""
+        """Extract the domain from a URL with validation."""
+        if not validators.url(url):
+            return url
+
         try:
             parsed = urlparse(url)
             domain = parsed.netloc
@@ -349,12 +351,19 @@ def format_references_section(
     return "\n".join(lines)
 
 
+@retry(
+    stop=stop_after_attempt(2),
+    wait=wait_exponential(multiplier=1, min=1, max=5),
+    retry=retry_if_exception_type((aiohttp.ClientError, TimeoutError))
+)
 async def validate_citation_url(
     citation: Citation,
     timeout: float = 5.0
 ) -> bool:
     """
     Validate that a citation URL is accessible.
+
+    Automatically retries up to 2 times with exponential backoff on network errors.
 
     Args:
         citation: The citation to validate
