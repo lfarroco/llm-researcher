@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { api } from '../api/client';
 import type { Research, Source, Finding } from '../types';
 import ProgressMonitor from './ProgressMonitor';
@@ -269,10 +270,8 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								)}
 							</div>
 						) : (
-							<div className="prose max-w-none">
-								<div className="whitespace-pre-wrap text-sm text-gray-900 leading-relaxed">
-									{research.result}
-								</div>
+							<div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-code:text-pink-600 prose-pre:bg-gray-50">
+								<ReactMarkdown>{research.result}</ReactMarkdown>
 							</div>
 						)}
 					</div>
