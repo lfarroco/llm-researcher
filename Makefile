@@ -1,4 +1,11 @@
-.PHONY: up down build restart logs shell db-shell test lint
+.PHONY: up down build restart logs shell db-shell test e2e lint help
+
+## Show this help message
+help:
+	@echo "LLM Researcher - Available Make Commands"
+	@echo "========================================"
+	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/^## /  /'
+	@echo ""
 
 ## Start all services
 up:
@@ -32,6 +39,10 @@ db-shell:
 ## Run tests inside the app container
 test:
 	docker compose exec app pytest tests/ -v
+
+## Run end-to-end test
+e2e:
+	docker compose exec app python tests/e2e_test.py
 
 ## Run linter inside the app container
 lint:
