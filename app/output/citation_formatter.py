@@ -2,7 +2,7 @@
 Citation formatter - formats citations in APA, MLA, and Chicago styles.
 
 This module provides utilities to format citations and generate reference
-sections in various academic citation styles.
+sections in various academic citation styles using citeproc-py and CSL.
 """
 
 import logging
@@ -13,6 +13,10 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import aiohttp
+from citeproc import CitationStylesStyle, CitationStylesBibliography
+from citeproc import Citation as CiteProc_Citation
+from citeproc import CitationItem
+from citeproc.source.json import CiteProcJSON
 
 from app.memory.research_state import Citation, SourceType
 
@@ -26,9 +30,102 @@ class CitationStyle(str, Enum):
     CHICAGO = "chicago"
 
 
+# CSL style XML content (simplified versions - in production, use full CSL files)
+CSL_STYLES = {
+    CitationStyle.APA: """<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0" demote-non-dropping-particle="never">
+  <info>
+    <title>American Psychological Association 7th edition</title>
+    <id>http://www.zotero.org/styles/apa</id>
+  </info>
+  <macro name="author">
+    <names variable="author">
+      <name name-as-sort-order="all" and="symbol" sort-separator=", " initialize-with=". " delimiter=", " delimiter-precedes-last="always"/>
+    </names>
+  </macro>
+  <macro name="issued">
+    <date variable="issued">
+      <date-part name="year"/>
+    </date>
+  </macro>
+  <bibliography hanging-indent="true" et-al-min="8" et-al-use-first="6" et-al-use-last="true" entry-spacing="0" line-spacing="2">
+    <sort>
+      <key macro="author"/>
+      <key macro="issued" sort="ascending"/>
+    </sort>
+    <layout>
+      <text macro="author" suffix=". "/>
+      <text macro="issued" prefix="(" suffix="). "/>
+      <text variable="title" font-style="italic" suffix=". "/>
+      <text variable="URL"/>
+    </layout>
+  </bibliography>
+</style>""",
+    CitationStyle.MLA: """<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0">
+  <info>
+    <title>Modern Language Association 9th edition</title>
+    <id>http://www.zotero.org/styles/mla</id>
+  </info>
+  <macro name="author">
+    <names variable="author">
+      <name name-as-sort-order="first" and="text" sort-separator=", " delimiter=", " delimiter-precedes-last="always"/>
+    </names>
+  </macro>
+  <bibliography hanging-indent="true" et-al-min="3" et-al-use-first="1" line-spacing="2" entry-spacing="0">
+    <sort>
+      <key macro="author"/>
+      <key variable="title"/>
+    </sort>
+    <layout>
+      <text macro="author" suffix=". "/>
+      <text variable="title" quotes="true" suffix=". "/>
+      <text variable="container-title" font-style="italic" suffix=", "/>
+      <date variable="issued">
+        <date-part name="day" suffix=" "/>
+        <date-part name="month" form="short" suffix=" "/>
+        <date-part name="year" suffix=", "/>
+      </date>
+      <text variable="URL" suffix="."/>
+    </layout>
+  </bibliography>
+</style>""",
+    CitationStyle.CHICAGO: """<?xml version="1.0" encoding="utf-8"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="note" version="1.0">
+  <info>
+    <title>Chicago Manual of Style 17th edition (note)</title>
+    <id>http://www.zotero.org/styles/chicago-note-bibliography</id>
+  </info>
+  <macro name="author">
+    <names variable="author">
+      <name name-as-sort-order="first" and="text" sort-separator=", " delimiter=", "/>
+    </names>
+  </macro>
+  <bibliography hanging-indent="true" et-al-min="11" et-al-use-first="7" subsequent-author-substitute="———" entry-spacing="0">
+    <sort>
+      <key macro="author"/>
+      <key variable="title"/>
+    </sort>
+    <layout>
+      <text macro="author" suffix=". "/>
+      <text variable="title" quotes="true" suffix=". "/>
+      <text variable="container-title" font-style="italic" suffix=". "/>
+      <text value="Accessed "/>
+      <date variable="accessed">
+        <date-part name="month" suffix=" "/>
+        <date-part name="day" suffix=", "/>
+        <date-part name="year" suffix=". "/>
+      </date>
+      <text variable="URL" suffix="."/>
+    </layout>
+  </bibliography>
+</style>"""
+}
+
+
 class CitationFormatter:
     """
-    Formats citations in various academic styles.
+    Formats citations in various academic styles using citeproc-py and CSL.
 
     Supports APA (7th edition), MLA (9th edition), and Chicago (17th edition).
     """
@@ -59,182 +156,65 @@ class CitationFormatter:
             return url
 
     @staticmethod
-    def _format_author_apa(author: Optional[str]) -> str:
+    def _citation_to_csl_json(citation: Citation) -> dict:
         """
-        Format author name for APA style.
-        Expected format: "Last, F. M." or "Organization Name"
+        Convert a Citation object to CSL JSON format.
+
+        CSL JSON is the standard format for bibliographic data used by citeproc-py.
         """
-        if not author:
-            return ""
+        # Extract numeric ID from citation.id (e.g., "[1]" -> "1")
+        match = re.search(r'\[(\d+)\]', citation.id)
+        csl_id = match.group(1) if match else citation.id.strip("[]")
 
-        # Check if it's likely an organization (no comma, multiple words)
-        if "," not in author and " " in author:
-            return author
-
-        # Split by comma for "Last, First" format
-        parts = author.split(",")
-        if len(parts) >= 2:
-            last_name = parts[0].strip()
-            first_names = parts[1].strip().split()
-            initials = " ".join(f"{name[0]}." for name in first_names if name)
-            return f"{last_name}, {initials}"
-
-        return author
-
-    @staticmethod
-    def _format_author_mla(author: Optional[str]) -> str:
-        """
-        Format author name for MLA style.
-        Expected format: "Last, First Middle"
-        """
-        if not author:
-            return ""
-        return author
-
-    @staticmethod
-    def _format_author_chicago(author: Optional[str]) -> str:
-        """
-        Format author name for Chicago style.
-        Same as MLA for bibliography entries.
-        """
-        if not author:
-            return ""
-        return author
-
-    @classmethod
-    def format_apa(cls, citation: Citation) -> str:
-        """
-        Format a citation in APA 7th edition style.
-
-        Format:
-        Author, A. A. (Year, Month Day). Title. Site Name. URL
-
-        For web sources without author:
-        Title. (Year, Month Day). Site Name. URL
-        """
-        parts = []
-
-        # Author
-        author_str = cls._format_author_apa(citation.author)
-        if author_str:
-            parts.append(author_str)
-
-        # Date
-        date_obj = cls._parse_date(citation.date_accessed)
+        # Parse date
+        date_obj = CitationFormatter._parse_date(citation.date_accessed)
+        date_parts = None
         if date_obj:
-            month = date_obj.strftime('%B')
-            date_str = f"({date_obj.year}, {month} {date_obj.day})"
-        else:
-            date_str = "(n.d.)"
+            date_parts = [[date_obj.year, date_obj.month, date_obj.day]]
 
-        if author_str:
-            parts.append(date_str + ".")
-        else:
-            # Title first, then date
-            parts.append(f"{citation.title}.")
-            parts.append(date_str + ".")
-
-        # Title (if author exists)
-        if author_str:
-            parts.append(f"{citation.title}.")
-
-        # Source type specific additions
-        domain = cls._get_domain(citation.url)
+        # Determine type based on source
+        item_type = "webpage"
         if citation.source_type == SourceType.ARXIV:
-            parts.append("arXiv.")
+            item_type = "article"
         elif citation.source_type == SourceType.WIKIPEDIA:
-            parts.append("Wikipedia.")
+            item_type = "entry-encyclopedia"
+
+        # Build CSL JSON
+        csl_data = {
+            "id": csl_id,
+            "type": item_type,
+            "title": citation.title,
+            "URL": citation.url,
+        }
+
+        # Add author if present (convert to CSL name format)
+        if citation.author:
+            # Handle "Last, First" format
+            if "," in citation.author:
+                parts = citation.author.split(",", 1)
+                csl_data["author"] = [{
+                    "family": parts[0].strip(),
+                    "given": parts[1].strip() if len(parts) > 1 else ""
+                }]
+            else:
+                # Organization or single name
+                csl_data["author"] = [{"literal": citation.author}]
+
+        # Add dates
+        if date_parts:
+            csl_data["issued"] = {"date-parts": date_parts}
+            csl_data["accessed"] = {"date-parts": date_parts}
+
+        # Add container/publisher based on source type
+        if citation.source_type == SourceType.WIKIPEDIA:
+            csl_data["container-title"] = "Wikipedia"
+        elif citation.source_type == SourceType.ARXIV:
+            csl_data["container-title"] = "arXiv"
         else:
-            parts.append(f"{domain}.")
+            domain = CitationFormatter._get_domain(citation.url)
+            csl_data["container-title"] = domain
 
-        # URL
-        parts.append(citation.url)
-
-        return " ".join(parts)
-
-    @classmethod
-    def format_mla(cls, citation: Citation) -> str:
-        """
-        Format a citation in MLA 9th edition style.
-
-        Format:
-        Author. "Title." Website Name, Publisher, Day Month Year, URL.
-
-        For web sources without author:
-        "Title." Website Name, Day Month Year, URL.
-        """
-        parts = []
-
-        # Author
-        author_str = cls._format_author_mla(citation.author)
-        if author_str:
-            parts.append(f"{author_str}.")
-
-        # Title in quotes
-        parts.append(f'"{citation.title}."')
-
-        # Website/Source name
-        if citation.source_type == SourceType.ARXIV:
-            parts.append("arXiv,")
-        elif citation.source_type == SourceType.WIKIPEDIA:
-            parts.append("Wikipedia,")
-        else:
-            domain = cls._get_domain(citation.url)
-            parts.append(f"{domain},")
-
-        # Date
-        date_obj = cls._parse_date(citation.date_accessed)
-        if date_obj:
-            month = date_obj.strftime('%b')
-            date_str = f"{date_obj.day} {month}. {date_obj.year},"
-            parts.append(date_str)
-
-        # URL
-        parts.append(f"{citation.url}.")
-
-        return " ".join(parts)
-
-    @classmethod
-    def format_chicago(cls, citation: Citation) -> str:
-        """
-        Format a citation in Chicago 17th edition style (Notes-Bibliography).
-
-        Bibliography format:
-        Author. "Title." Source Name. Last modified/Accessed Date. URL.
-
-        For web sources without author:
-        "Title." Source Name. Accessed Date. URL.
-        """
-        parts = []
-
-        # Author
-        author_str = cls._format_author_chicago(citation.author)
-        if author_str:
-            parts.append(f"{author_str}.")
-
-        # Title in quotes
-        parts.append(f'"{citation.title}."')
-
-        # Source name
-        if citation.source_type == SourceType.ARXIV:
-            parts.append("arXiv.")
-        elif citation.source_type == SourceType.WIKIPEDIA:
-            parts.append("Wikipedia.")
-        else:
-            domain = cls._get_domain(citation.url)
-            parts.append(f"{domain}.")
-
-        # Accessed date
-        date_obj = cls._parse_date(citation.date_accessed)
-        if date_obj:
-            month = date_obj.strftime('%B')
-            date_str = f"Accessed {month} {date_obj.day}, {date_obj.year}."
-            parts.append(date_str)
-
-        # URL
-        parts.append(citation.url)
-
-        return " ".join(parts)
+        return csl_data
 
     @classmethod
     def format(
@@ -243,7 +223,7 @@ class CitationFormatter:
         style: CitationStyle = CitationStyle.APA
     ) -> str:
         """
-        Format a citation in the specified style.
+        Format a citation in the specified style using citeproc-py.
 
         Args:
             citation: The citation to format
@@ -252,12 +232,68 @@ class CitationFormatter:
         Returns:
             Formatted citation string
         """
-        formatters = {
-            CitationStyle.APA: cls.format_apa,
-            CitationStyle.MLA: cls.format_mla,
-            CitationStyle.CHICAGO: cls.format_chicago,
-        }
-        return formatters[style](citation)
+        try:
+            # Convert to CSL JSON format
+            csl_data = cls._citation_to_csl_json(citation)
+            csl_id = csl_data["id"]
+
+            # Create citation source
+            bib_source = CiteProcJSON([csl_data])
+
+            # Load CSL style
+            style_xml = CSL_STYLES[style]
+            bib_style = CitationStylesStyle(style_xml, validate=False)
+
+            # Create bibliography
+            bibliography = CitationStylesBibliography(
+                bib_style, bib_source, None)
+
+            # Register citation
+            citation_item = CitationItem(csl_id)
+            bibliography.register(CiteProc_Citation([citation_item]))
+
+            # Generate bibliography
+            for item in bibliography.bibliography():
+                # Remove HTML tags and clean up
+                result = str(item)
+                result = re.sub(r'<[^>]+>', '', result)
+                result = re.sub(r'\s+', ' ', result).strip()
+                return result
+
+            # Fallback if citeproc fails
+            return cls._format_fallback(citation, style)
+
+        except Exception as e:
+            logger.warning(
+                f"citeproc-py formatting failed: {e}, using fallback")
+            return cls._format_fallback(citation, style)
+
+    @classmethod
+    def _format_fallback(cls, citation: Citation, style: CitationStyle) -> str:
+        """Simple fallback formatting if citeproc-py fails."""
+        parts = []
+
+        if citation.author:
+            parts.append(f"{citation.author}.")
+
+        if style == CitationStyle.MLA or style == CitationStyle.CHICAGO:
+            parts.append(f'"{citation.title}."')
+        else:
+            parts.append(f"{citation.title}.")
+
+        domain = cls._get_domain(citation.url)
+        parts.append(f"{domain}.")
+
+        date_obj = cls._parse_date(citation.date_accessed)
+        if date_obj:
+            if style == CitationStyle.APA:
+                parts.append(f"({date_obj.year}).")
+            else:
+                parts.append(f"Accessed {date_obj.strftime('%B %d, %Y')}.")
+
+        parts.append(citation.url)
+
+        return " ".join(parts)
 
 
 def format_citation(

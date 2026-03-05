@@ -36,3 +36,6 @@ aiohttp>=3.9.0
 
 # File I/O
 aiofiles>=23.0.0
+
+# Citation formatting
+citeproc-py>=0.6.0
