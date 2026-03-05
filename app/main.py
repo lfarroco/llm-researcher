@@ -383,7 +383,9 @@ def list_research(
     limit: int = 20,
     db: Session = Depends(get_db)
 ):
-    return db.query(models.Research).offset(skip).limit(limit).all()
+    return db.query(models.Research).order_by(
+        models.Research.created_at.desc()
+    ).offset(skip).limit(limit).all()
 
 
 @app.get(
