@@ -134,3 +134,108 @@ class ConversationMessageResponse(BaseModel):
     content: str
     action_taken: Optional[str] = None
     timestamp: datetime
+
+
+class ResearchFindingCreate(BaseModel):
+    """Request to create a new finding."""
+    content: str = Field(description="The finding text/content")
+    source_ids: Optional[list[int]] = Field(
+        default=None,
+        description="IDs of sources supporting this finding"
+    )
+
+
+class ResearchFindingUpdate(BaseModel):
+    """Request to update a finding."""
+    content: Optional[str] = Field(
+        default=None,
+        description="Updated finding text"
+    )
+    source_ids: Optional[list[int]] = Field(
+        default=None,
+        description="Updated list of source IDs"
+    )
+
+
+class ResearchFindingResponse(BaseModel):
+    """Response for a research finding."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    content: str
+    source_ids: Optional[list[int]] = None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ResearchStateResponse(BaseModel):
+    """Response for AI research state."""
+    status: str = Field(
+        description="Current research status"
+    )
+    current_plan: Optional[dict] = Field(
+        default=None,
+        description="Current research plan breakdown"
+    )
+    pending_queries: list[str] = Field(
+        default=[],
+        description="Queries not yet researched"
+    )
+    completed_queries: list[str] = Field(
+        default=[],
+        description="Queries that have been researched"
+    )
+    reasoning_log: list[dict] = Field(
+        default=[],
+        description="AI decision history"
+    )
+    last_activity: Optional[datetime] = Field(
+        default=None,
+        description="Timestamp of last activity"
+    )
+    source_count: int = Field(
+        default=0,
+        description="Number of sources in knowledge base"
+    )
+    finding_count: int = Field(
+        default=0,
+        description="Number of findings created"
+    )
+
+
+class ResearchPlanResponse(BaseModel):
+    """Response for research plan."""
+    query: str = Field(description="Main research query")
+    refined_question: Optional[str] = Field(
+        default=None,
+        description="Clarified research question"
+    )
+    sub_queries: list[str] = Field(
+        default=[],
+        description="Decomposed sub-questions"
+    )
+    progress: dict = Field(
+        default={},
+        description="Progress on each sub-query"
+    )
+    outline: Optional[str] = Field(
+        default=None,
+        description="Document outline structure"
+    )
+
+
+class ResearchPlanUpdate(BaseModel):
+    """Request to update research plan."""
+    add_queries: Optional[list[str]] = Field(
+        default=None,
+        description="New queries to add to the research plan"
+    )
+    remove_queries: Optional[list[str]] = Field(
+        default=None,
+        description="Queries to remove from the plan"
+    )
+    refined_question: Optional[str] = Field(
+        default=None,
+        description="Update the refined research question"
+    )

@@ -17,6 +17,12 @@ from app.schemas import (
     ChatMessageRequest,
     ChatMessageResponse,
     ConversationMessageResponse,
+    ResearchFindingCreate,
+    ResearchFindingUpdate,
+    ResearchFindingResponse,
+    ResearchStateResponse,
+    ResearchPlanResponse,
+    ResearchPlanUpdate,
 )
 from app.agents.orchestrator import run_research_workflow
 from app.agents.intent_router import route_user_intent
@@ -384,6 +390,362 @@ def delete_research_source(
     db.delete(source)
     db.commit()
     return None
+
+
+@app.get(
+    "/research/{research_id}/findings",
+    response_model=List[ResearchFindingResponse],
+    tags=["research"]
+)
+def get_research_findings(
+    research_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get all findings for a research project."""
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    findings = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.research_id == research_id
+    ).order_by(
+        models.ResearchFinding.created_at.desc()
+    ).offset(skip).limit(limit).all()
+
+    return findings
+
+
+@app.post(
+    "/research/{research_id}/findings",
+    response_model=ResearchFindingResponse,
+    status_code=201,
+    tags=["research"]
+)
+def create_research_finding(
+    research_id: int,
+    payload: ResearchFindingCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new finding in the research knowledge base."""
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Validate that source_ids exist if provided
+    if payload.source_ids:
+        for source_id in payload.source_ids:
+            source = db.query(models.ResearchSource).filter(
+                models.ResearchSource.id == source_id,
+                models.ResearchSource.research_id == research_id
+            ).first()
+            if not source:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Source ID {source_id} not found in this research"
+                )
+
+    # Create finding
+    finding = models.ResearchFinding(
+        research_id=research_id,
+        content=payload.content,
+        source_ids=payload.source_ids,
+        created_by="user"
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return finding
+
+
+@app.get(
+    "/research/{research_id}/findings/{finding_id}",
+    response_model=ResearchFindingResponse,
+    tags=["research"]
+)
+def get_research_finding(
+    research_id: int,
+    finding_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific finding by ID."""
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    finding = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.id == finding_id,
+        models.ResearchFinding.research_id == research_id
+    ).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    return finding
+
+
+@app.patch(
+    "/research/{research_id}/findings/{finding_id}",
+    response_model=ResearchFindingResponse,
+    tags=["research"]
+)
+def update_research_finding(
+    research_id: int,
+    finding_id: int,
+    payload: ResearchFindingUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update a finding's content or linked sources."""
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Find the finding
+    finding = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.id == finding_id,
+        models.ResearchFinding.research_id == research_id
+    ).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    # Validate source_ids if provided
+    if payload.source_ids is not None:
+        for source_id in payload.source_ids:
+            source = db.query(models.ResearchSource).filter(
+                models.ResearchSource.id == source_id,
+                models.ResearchSource.research_id == research_id
+            ).first()
+            if not source:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Source ID {source_id} not found in this research"
+                )
+
+    # Update fields
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(finding, field, value)
+
+    db.commit()
+    db.refresh(finding)
+    return finding
+
+
+@app.delete(
+    "/research/{research_id}/findings/{finding_id}",
+    status_code=204,
+    tags=["research"]
+)
+def delete_research_finding(
+    research_id: int,
+    finding_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a finding from the research knowledge base."""
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Find and delete the finding
+    finding = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.id == finding_id,
+        models.ResearchFinding.research_id == research_id
+    ).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    db.delete(finding)
+    db.commit()
+    return None
+
+
+@app.get(
+    "/research/{research_id}/state",
+    response_model=ResearchStateResponse,
+    tags=["research"]
+)
+def get_research_state(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get the current AI state for a research project.
+
+    Returns current status, pending/completed queries, reasoning log,
+    and statistics about the knowledge base.
+    """
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Parse state from JSON
+    state_data = research.state_json or {}
+
+    # Count sources and findings
+    source_count = db.query(models.ResearchSource).filter(
+        models.ResearchSource.research_id == research_id
+    ).count()
+
+    finding_count = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.research_id == research_id
+    ).count()
+
+    # Extract sub-queries and findings from state
+    sub_queries = state_data.get("sub_queries", [])
+    findings = state_data.get("findings", {})
+
+    # Determine which queries are completed (have findings)
+    completed_queries = [q for q in sub_queries if q in findings]
+    pending_queries = [q for q in sub_queries if q not in findings]
+
+    # Extract reasoning log (AI decision history)
+    reasoning_log = state_data.get("ai_reasoning", [])
+
+    # Build current plan
+    current_plan = None
+    if sub_queries:
+        current_plan = {
+            "main_query": state_data.get("query", research.query),
+            "refined_question": state_data.get("refined_question"),
+            "total_queries": len(sub_queries),
+            "completed": len(completed_queries),
+            "pending": len(pending_queries),
+            "outline": state_data.get("outline")
+        }
+
+    return ResearchStateResponse(
+        status=research.status,
+        current_plan=current_plan,
+        pending_queries=pending_queries,
+        completed_queries=completed_queries,
+        reasoning_log=reasoning_log,
+        last_activity=research.updated_at,
+        source_count=source_count,
+        finding_count=finding_count
+    )
+
+
+@app.get(
+    "/research/{research_id}/plan",
+    response_model=ResearchPlanResponse,
+    tags=["research"]
+)
+def get_research_plan(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get the research plan with progress details.
+
+    Returns the main query, refined question, sub-queries with
+    progress tracking, and document outline.
+    """
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Parse state from JSON
+    state_data = research.state_json or {}
+
+    # Extract plan components
+    sub_queries = state_data.get("sub_queries", [])
+    findings = state_data.get("findings", {})
+
+    # Build progress map
+    progress = {}
+    for query in sub_queries:
+        if query in findings:
+            progress[query] = {
+                "status": "completed",
+                "finding": findings[query][:200] + "..." if len(
+                    findings[query]
+                ) > 200 else findings[query]
+            }
+        else:
+            progress[query] = {
+                "status": "pending",
+                "finding": None
+            }
+
+    return ResearchPlanResponse(
+        query=state_data.get("query", research.query),
+        refined_question=state_data.get("refined_question"),
+        sub_queries=sub_queries,
+        progress=progress,
+        outline=state_data.get("outline")
+    )
+
+
+@app.patch(
+    "/research/{research_id}/plan",
+    response_model=ResearchPlanResponse,
+    tags=["research"]
+)
+def update_research_plan(
+    research_id: int,
+    payload: ResearchPlanUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update the research plan by adding/removing queries.
+
+    Allows users to manually adjust the research direction
+    by modifying the list of sub-queries to investigate.
+    """
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Parse existing state
+    state_data = research.state_json or {}
+    sub_queries = state_data.get("sub_queries", [])
+
+    # Apply updates
+    if payload.add_queries:
+        # Add new queries that don't already exist
+        for query in payload.add_queries:
+            if query not in sub_queries:
+                sub_queries.append(query)
+
+    if payload.remove_queries:
+        # Remove specified queries
+        for query in payload.remove_queries:
+            if query in sub_queries:
+                sub_queries.remove(query)
+
+    if payload.refined_question is not None:
+        state_data["refined_question"] = payload.refined_question
+
+    # Update state
+    state_data["sub_queries"] = sub_queries
+    research.state_json = state_data
+
+    db.commit()
+    db.refresh(research)
+
+    # Return updated plan using the get endpoint logic
+    return get_research_plan(research_id, db)
 
 
 @app.get(

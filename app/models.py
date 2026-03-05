@@ -33,6 +33,11 @@ class Research(Base):
         back_populates="research",
         cascade="all, delete-orphan"
     )
+    findings = relationship(
+        "ResearchFinding",
+        back_populates="research",
+        cascade="all, delete-orphan"
+    )
 
 
 class ConversationMessage(Base):
@@ -70,3 +75,22 @@ class ResearchSource(Base):
 
     # Relationships
     research = relationship("Research", back_populates="sources")
+
+
+class ResearchFinding(Base):
+    """Stores synthesized findings from research, linked to sources."""
+    __tablename__ = "research_findings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    research_id = Column(Integer, ForeignKey("research.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    # List of source IDs supporting this finding
+    source_ids = Column(JSON, nullable=True)
+    created_by = Column(String(50), default="user")  # user|ai
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    # Relationships
+    research = relationship("Research", back_populates="findings")

@@ -511,10 +511,10 @@ Implementation is organized in phases, building progressively from foundation to
   - PATCH `/research/{id}/sources/{id}` - update notes/tags
   - DELETE `/research/{id}/sources/{id}` - remove source
   - GET `/research/{id}/sources` with filtering/search
-- [ ] Implement findings management endpoints
+- [x] Implement findings management endpoints
   - CRUD for user-created findings
   - Link findings to sources
-- [ ] Implement AI state transparency endpoints
+- [x] Implement AI state transparency endpoints
   - GET `/research/{id}/state` - current AI state
   - GET `/research/{id}/plan` - research plan with progress
   - PATCH `/research/{id}/plan` - modify plan
@@ -527,9 +527,9 @@ Implementation is organized in phases, building progressively from foundation to
 
 - [x] Implement `app/tools/pubmed_search.py` - PubMed/MEDLINE API
 - [x] Implement `app/tools/semantic_scholar.py` - Semantic Scholar API
-- [ ] Implement `app/tools/crossref_search.py` - Crossref DOI/metadata
-- [ ] Implement `app/tools/openalex_search.py` - OpenAlex open scholarly data
-- [ ] Add PDF download and caching for full-text retrieval
+- [x] Implement `app/tools/crossref_search.py` - Crossref DOI/metadata
+- [x] Implement `app/tools/openalex_search.py` - OpenAlex open scholarly data
+- [x] Add PDF download and caching for full-text retrieval
 
 ### Phase 9: PDF & Document Parsing | Priority: HIGH
 *Extract structured content from academic PDFs*
