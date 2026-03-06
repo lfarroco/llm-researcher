@@ -52,7 +52,7 @@ def test_health_check(client):
 
 
 def test_create_research(client):
-    with patch("app.main.process_research"):
+    with patch("app.routers.research.process_research"):
         response = client.post(
             "/research", json={"query": "What is machine learning?"})
     assert response.status_code == 201
@@ -63,7 +63,7 @@ def test_create_research(client):
 
 
 def test_list_research(client):
-    with patch("app.main.process_research"):
+    with patch("app.routers.research.process_research"):
         client.post("/research", json={"query": "Test query 1"})
         client.post("/research", json={"query": "Test query 2"})
     response = client.get("/research")
@@ -73,7 +73,7 @@ def test_list_research(client):
 
 
 def test_get_research(client):
-    with patch("app.main.process_research"):
+    with patch("app.routers.research.process_research"):
         create_response = client.post(
             "/research", json={"query": "Specific query"})
     research_id = create_response.json()["id"]
