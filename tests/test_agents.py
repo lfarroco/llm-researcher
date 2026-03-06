@@ -93,7 +93,7 @@ class TestPlannerAgent:
         assert "sub_queries" in result
         assert len(result["sub_queries"]) == 3
         assert result["status"] == "searching"
-        assert result["current_step"] == "Searching for information"
+        assert result["current_step"] == "Planning complete. Searching 3 sub-topics."
 
     @pytest.mark.asyncio
     async def test_plan_research_handles_missing_fields(self):
@@ -136,13 +136,14 @@ class TestSearchAgentSubquery:
             )
         ]
 
-        with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-            with patch("app.agents.search_agent.is_academic_query", return_value=False):
-                result = await search_for_subquery(
-                    sub_query,
-                    include_academic=False,
-                    include_wikipedia=False,
-                )
+        with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
+            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
+                with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                    result = await search_for_subquery(
+                        sub_query,
+                        include_academic=False,
+                        include_wikipedia=False,
+                    )
 
         assert result.sub_query == sub_query
         assert len(result.citations) == 1
@@ -176,14 +177,15 @@ class TestSearchAgentSubquery:
             )
         ]
 
-        with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-            with patch("app.agents.search_agent.arxiv_search", return_value=mock_arxiv_results):
-                with patch("app.agents.search_agent.is_academic_query", return_value=True):
-                    result = await search_for_subquery(
-                        sub_query,
-                        include_academic=True,
-                        include_wikipedia=False,
-                    )
+        with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
+            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
+                with patch("app.agents.search_agent.arxiv_search", return_value=mock_arxiv_results):
+                    with patch("app.agents.search_agent.is_academic_query", return_value=True):
+                        result = await search_for_subquery(
+                            sub_query,
+                            include_academic=True,
+                            include_wikipedia=False,
+                        )
 
         assert len(result.citations) == 2
         # Check we have both WEB and ARXIV sources
@@ -205,14 +207,15 @@ class TestSearchAgentSubquery:
             )
         ]
 
-        with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-            with patch("app.agents.search_agent.wikipedia_search", return_value=mock_wiki_results):
-                with patch("app.agents.search_agent.is_academic_query", return_value=False):
-                    result = await search_for_subquery(
-                        sub_query,
-                        include_academic=False,
-                        include_wikipedia=True,
-                    )
+        with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
+            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
+                with patch("app.agents.search_agent.wikipedia_search", return_value=mock_wiki_results):
+                    with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                        result = await search_for_subquery(
+                            sub_query,
+                            include_academic=False,
+                            include_wikipedia=True,
+                        )
 
         assert len(result.citations) == 1
         assert result.citations[0].source_type == SourceType.WIKIPEDIA
@@ -223,13 +226,14 @@ class TestSearchAgentSubquery:
         sub_query = "Test query"
 
         # Mock web search to raise exception
-        with patch("app.agents.search_agent.web_search", side_effect=Exception("API error")):
-            with patch("app.agents.search_agent.is_academic_query", return_value=False):
-                result = await search_for_subquery(
-                    sub_query,
-                    include_academic=False,
-                    include_wikipedia=False,
-                )
+        with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
+            with patch("app.agents.search_agent.web_search", side_effect=Exception("API error")):
+                with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                    result = await search_for_subquery(
+                        sub_query,
+                        include_academic=False,
+                        include_wikipedia=False,
+                    )
 
         # Should still return a result, but marked as failed
         assert result.sub_query == sub_query
@@ -257,13 +261,14 @@ class TestSearchAgentSubquery:
             ),
         ]
 
-        with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-            with patch("app.agents.search_agent.is_academic_query", return_value=False):
-                result = await search_for_subquery(
-                    sub_query,
-                    include_academic=False,
-                    include_wikipedia=False,
-                )
+        with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
+            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
+                with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                    result = await search_for_subquery(
+                        sub_query,
+                        include_academic=False,
+                        include_wikipedia=False,
+                    )
 
         # Citation IDs should be sequential
         assert result.citations[0].id == "[1]"
@@ -441,17 +446,18 @@ class TestSearchAgentIntegration:
 
         sub_query = "Test query"
 
-        with patch("app.agents.search_agent.web_search", side_effect=slow_search):
-            with patch("app.agents.search_agent.arxiv_search", side_effect=slow_search):
-                with patch("app.agents.search_agent.wikipedia_search", side_effect=slow_search):
-                    with patch("app.agents.search_agent.is_academic_query", return_value=True):
-                        start = time.time()
-                        await search_for_subquery(
-                            sub_query,
-                            include_academic=True,
-                            include_wikipedia=True,
-                        )
-                        elapsed = time.time() - start
+        with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
+            with patch("app.agents.search_agent.web_search", side_effect=slow_search):
+                with patch("app.agents.search_agent.arxiv_search", side_effect=slow_search):
+                    with patch("app.agents.search_agent.wikipedia_search", side_effect=slow_search):
+                        with patch("app.agents.search_agent.is_academic_query", return_value=True):
+                            start = time.time()
+                            await search_for_subquery(
+                                sub_query,
+                                include_academic=True,
+                                include_wikipedia=True,
+                            )
+                            elapsed = time.time() - start
 
         # If parallel: ~0.1s, if sequential: ~0.3s
         # Allow some overhead
@@ -478,13 +484,14 @@ class TestSearchAgentIntegration:
             ),
         ]
 
-        with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-            with patch("app.agents.search_agent.is_academic_query", return_value=False):
-                result = await search_for_subquery(
-                    sub_query,
-                    include_academic=False,
-                    include_wikipedia=False,
-                )
+        with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
+            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
+                with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                    result = await search_for_subquery(
+                        sub_query,
+                        include_academic=False,
+                        include_wikipedia=False,
+                    )
 
         # Should keep both initially (deduplication happens at state level)
         assert len(result.citations) == 2

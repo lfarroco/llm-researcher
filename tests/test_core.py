@@ -277,9 +277,13 @@ class TestTokenBucket:
     def test_token_refill_over_time(self):
         """Test that tokens refill over time."""
         bucket = TokenBucket(
-            tokens=0, refill_rate=20.0)  # 20 tokens/sec (faster)
+            tokens=10, refill_rate=20.0)  # 20 tokens/sec (faster)
 
-        # Wait 1 second (should refill ~20 tokens)
+        # Consume all tokens first
+        bucket.consume(10)
+        assert bucket.tokens == 0
+
+        # Wait 1 second (should refill ~20 tokens, capped at capacity 10)
         time.sleep(1.0)
 
         # Refill is called automatically by consume

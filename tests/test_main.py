@@ -7,13 +7,15 @@ from unittest.mock import patch
 from app.main import app
 from app.database import Base, get_db
 import app.database as db_module
+import app.rate_limiter as rate_limiter_module
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
 test_engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+TestingSessionLocal = sessionmaker(
+    autocommit=False, autoflush=False, bind=test_engine)
 
 
 def override_get_db():
@@ -33,6 +35,10 @@ def client():
     original_engine = db_module.engine
     db_module.engine = test_engine
     Base.metadata.create_all(bind=test_engine)
+    # Reset rate limiters between tests to prevent cross-test interference
+    rate_limiter_module._research_rate_limiter = rate_limiter_module.RateLimiter(
+        requests_per_minute=10, burst_size=100
+    )
     with TestClient(app) as c:
         yield c
     Base.metadata.drop_all(bind=test_engine)
@@ -47,7 +53,8 @@ def test_health_check(client):
 
 def test_create_research(client):
     with patch("app.main.process_research"):
-        response = client.post("/research", json={"query": "What is machine learning?"})
+        response = client.post(
+            "/research", json={"query": "What is machine learning?"})
     assert response.status_code == 201
     data = response.json()
     assert data["query"] == "What is machine learning?"
@@ -67,7 +74,8 @@ def test_list_research(client):
 
 def test_get_research(client):
     with patch("app.main.process_research"):
-        create_response = client.post("/research", json={"query": "Specific query"})
+        create_response = client.post(
+            "/research", json={"query": "Specific query"})
     research_id = create_response.json()["id"]
     response = client.get(f"/research/{research_id}")
     assert response.status_code == 200

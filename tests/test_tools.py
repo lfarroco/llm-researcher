@@ -266,41 +266,55 @@ class TestPubMedSearch:
         """Test PubMed search returns properly formatted results."""
         # Mock PubMed API responses
         mock_search_result = {
-            "IdList": ["12345678", "87654321"],
+            "IdList": ["12345678"],
         }
 
-        mock_article_1 = {
-            "MedlineCitation": {
-                "PMID": {"_text": "12345678"},
-                "Article": {
-                    "ArticleTitle": "Deep Learning in Medicine",
-                    "Abstract": {"AbstractText": ["This study explores..."]},
-                    "Journal": {"Title": "Nature Medicine"},
-                    "AuthorList": [
-                        {"LastName": "Smith", "ForeName": "John"},
-                        {"LastName": "Doe", "ForeName": "Jane"},
-                    ],
-                },
-                "DateCompleted": {"Year": "2024", "Month": "01", "Day": "15"},
-                "MeshHeadingList": [{"DescriptorName": {"_text": "Machine Learning"}}],
-            },
-            "PubmedData": {
-                "ArticleIdList": [
-                    {"_text": "10.1038/nm.1234", "_attributes": {"IdType": "doi"}}
-                ]
-            },
-        }
+        mock_xml_response = b"""<?xml version="1.0" ?>
+        <PubmedArticleSet>
+        <PubmedArticle>
+            <MedlineCitation>
+                <PMID>12345678</PMID>
+                <Article>
+                    <ArticleTitle>Deep Learning in Medicine</ArticleTitle>
+                    <Abstract>
+                        <AbstractText>This study explores deep learning.</AbstractText>
+                    </Abstract>
+                    <Journal>
+                        <Title>Nature Medicine</Title>
+                        <JournalIssue>
+                            <PubDate><Year>2024</Year><Month>Jan</Month></PubDate>
+                        </JournalIssue>
+                    </Journal>
+                    <AuthorList>
+                        <Author><ForeName>John</ForeName><LastName>Smith</LastName></Author>
+                        <Author><ForeName>Jane</ForeName><LastName>Doe</LastName></Author>
+                    </AuthorList>
+                </Article>
+                <MeshHeadingList>
+                    <MeshHeading><DescriptorName>Machine Learning</DescriptorName></MeshHeading>
+                </MeshHeadingList>
+            </MedlineCitation>
+            <PubmedData>
+                <ArticleIdList>
+                    <ArticleId IdType="doi">10.1038/nm.1234</ArticleId>
+                </ArticleIdList>
+            </PubmedData>
+        </PubmedArticle>
+        </PubmedArticleSet>
+        """
 
-        with patch("app.tools.pubmed_search.Entrez") as mock_entrez:
+        with patch("Bio.Entrez", create=True) as mock_entrez:
+            # Mock esearch
             mock_search_handle = MagicMock()
-            mock_search_handle.__enter__ = MagicMock(
-                return_value=mock_search_handle)
-            mock_search_handle.__exit__ = MagicMock(return_value=None)
-
+            mock_search_handle.close = MagicMock()
             mock_entrez.esearch = MagicMock(return_value=mock_search_handle)
-            mock_entrez.read = MagicMock(
-                side_effect=[mock_search_result, [mock_article_1]]
-            )
+            mock_entrez.read = MagicMock(return_value=mock_search_result)
+
+            # Mock efetch - returns handle whose .read() gives XML bytes
+            mock_fetch_handle = MagicMock()
+            mock_fetch_handle.read = MagicMock(return_value=mock_xml_response)
+            mock_fetch_handle.close = MagicMock()
+            mock_entrez.efetch = MagicMock(return_value=mock_fetch_handle)
 
             from app.tools.pubmed_search import pubmed_search
 
@@ -312,6 +326,11 @@ class TestPubMedSearch:
 
         # Verify results are formatted correctly
         assert isinstance(results, list)
+        assert len(results) == 1
+        assert results[0].title == "Deep Learning in Medicine"
+        assert results[0].pmid == "12345678"
+        assert "John Smith" in results[0].authors
+        assert results[0].doi == "10.1038/nm.1234"
 
 
 class TestSemanticScholarSearch:
@@ -342,7 +361,7 @@ class TestSemanticScholarSearch:
         with patch("app.tools.semantic_scholar.httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = mock_api_response
+            mock_response.json = MagicMock(return_value=mock_api_response)
             mock_response.raise_for_status = MagicMock()
 
             mock_ctx = AsyncMock()
@@ -391,7 +410,7 @@ class TestCrossrefSearch:
         with patch("app.tools.crossref_search.httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = mock_api_response
+            mock_response.json = MagicMock(return_value=mock_api_response)
             mock_response.raise_for_status = MagicMock()
 
             mock_ctx = AsyncMock()
@@ -448,7 +467,7 @@ class TestOpenAlexSearch:
         with patch("app.tools.openalex_search.httpx.AsyncClient") as mock_client:
             mock_response = AsyncMock()
             mock_response.status_code = 200
-            mock_response.json.return_value = mock_api_response
+            mock_response.json = MagicMock(return_value=mock_api_response)
             mock_response.raise_for_status = MagicMock()
 
             mock_ctx = AsyncMock()
@@ -464,7 +483,7 @@ class TestOpenAlexSearch:
 
         assert len(results) == 1
         assert results[0].title == "Climate Change Mitigation Strategies"
-        assert results[0].citation_count == 150
+        assert results[0].cited_by_count == 150
 
 
 class TestWebScraper:
@@ -547,6 +566,9 @@ class TestPDFDownload:
         """Test successful PDF download."""
         mock_pdf_content = b"%PDF-1.4\n%Mock PDF content"
 
+        async def mock_aiter_bytes():
+            yield mock_pdf_content
+
         with patch("app.tools.pdf_download.httpx.AsyncClient") as mock_client, \
                 patch("app.tools.pdf_download.aiofiles.open") as mock_open, \
                 patch("app.tools.pdf_download.Path.exists", return_value=False):
@@ -557,8 +579,7 @@ class TestPDFDownload:
             mock_response.headers = {
                 "content-type": "application/pdf", "content-length": "100"}
             mock_response.raise_for_status = MagicMock()
-            mock_response.aiter_bytes = AsyncMock(
-                return_value=iter([mock_pdf_content]))
+            mock_response.aiter_bytes = mock_aiter_bytes
 
             # Mock async context managers
             mock_stream_ctx = AsyncMock()
@@ -591,8 +612,9 @@ class TestPDFDownload:
 
     @pytest.mark.asyncio
     async def test_pdf_download_failure(self):
-        """Test handling of PDF download failure with retry logic."""
-        from tenacity import RetryError
+        """Test handling of PDF download failure."""
+        mock_error_response = MagicMock()
+        mock_error_response.status_code = 404
 
         with patch("app.tools.pdf_download.httpx.AsyncClient") as mock_client, \
                 patch("app.tools.pdf_download.Path.exists", return_value=False):
@@ -600,7 +622,7 @@ class TestPDFDownload:
             mock_response = AsyncMock()
             mock_response.raise_for_status = MagicMock(
                 side_effect=httpx.HTTPStatusError(
-                    "404", request=None, response=None)
+                    "404", request=MagicMock(), response=mock_error_response)
             )
 
             mock_stream_ctx = AsyncMock()
@@ -615,11 +637,13 @@ class TestPDFDownload:
 
             mock_client.return_value = mock_client_ctx
 
-            from app.tools.pdf_download import download_pdf
+            from app.tools.pdf_download import download_pdf, PDFDownloadResult
 
-            # With retry logic, it should raise RetryError after all attempts
-            with pytest.raises(RetryError):
-                await download_pdf("https://example.com/missing.pdf")
+            result = await download_pdf("https://example.com/missing.pdf")
+
+        assert isinstance(result, PDFDownloadResult)
+        assert result.success is False
+        assert "404" in result.error
 
 
 # Integration tests that make real API calls
@@ -671,7 +695,12 @@ class TestToolsIntegration:
         """Test Semantic Scholar with real API."""
         from app.tools.semantic_scholar import semantic_scholar_search
 
-        results = await semantic_scholar_search("transformer neural networks", max_results=2)
+        try:
+            results = await semantic_scholar_search("transformer neural networks", max_results=2)
+        except RuntimeError as e:
+            if "rate limit" in str(e).lower():
+                pytest.skip("Semantic Scholar rate limit exceeded")
+            raise
 
         assert isinstance(results, list)
         # API might return 0 results depending on rate limits
