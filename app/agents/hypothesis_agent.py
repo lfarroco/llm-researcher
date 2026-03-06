@@ -27,7 +27,6 @@ from app.memory.research_state import (
     Citation,
     ResearchState,
     SourceType,
-    SubQueryResult,
 )
 from app.tools.web_search import web_search
 from app.tools.arxiv_search import arxiv_search, is_academic_query
@@ -387,7 +386,7 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
         next_id += 1
 
     logger.info(
-        f"[HYPOTHESIS] ========== HYPOTHESIS PHASE COMPLETE =========="
+        "[HYPOTHESIS] ========== HYPOTHESIS PHASE COMPLETE =========="
     )
     logger.info(
         f"[HYPOTHESIS] Added {len(new_citations)} new citations "

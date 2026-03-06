@@ -7,7 +7,6 @@ extracts outbound references that may be worth following for deeper research.
 
 import logging
 import re
-from typing import Optional
 from urllib.parse import urljoin, urlparse
 
 import httpx
