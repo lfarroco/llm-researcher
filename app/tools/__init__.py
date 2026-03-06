@@ -11,6 +11,13 @@ from app.tools.web_search import web_search, WebSearchResult
 from app.tools.arxiv_search import arxiv_search, ArxivResult
 from app.tools.wikipedia import wikipedia_search, WikipediaResult
 from app.tools.web_scraper import scrape_url, ScrapedContent
+from app.tools.reference_extractor import (
+    extract_references_from_url,
+    extract_references_from_html,
+    extract_wikipedia_references,
+    extract_academic_references,
+    ExtractedReference,
+)
 from app.tools.pubmed_search import pubmed_search, PubMedResult
 from app.tools.semantic_scholar import (
     semantic_scholar_search,
@@ -48,4 +55,10 @@ __all__ = [
     "get_paper_details",
     "get_paper_citations",
     "get_paper_references",
+    # Reference extractor
+    "extract_references_from_url",
+    "extract_references_from_html",
+    "extract_wikipedia_references",
+    "extract_academic_references",
+    "ExtractedReference",
 ]

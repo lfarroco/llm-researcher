@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     research_enable_query_expansion: bool = True
     # Number of query variations to generate per sub-query
     research_query_variations: int = 2
+    # Enable/disable reference chasing (following citations from sources)
+    research_reference_chase_enabled: bool = True
+    # Max depth for reference chasing (1 = follow refs from initial sources,
+    # 2 = also follow refs from those refs, etc.)
+    research_reference_chase_depth: int = 2
 
 
 settings = Settings()

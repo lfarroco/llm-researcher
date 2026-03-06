@@ -13,6 +13,7 @@ from langgraph.graph import StateGraph, END
 from app.memory.research_state import ResearchState
 from app.agents.planner import plan_research
 from app.agents.search_agent import execute_searches
+from app.agents.reference_chaser import chase_references
 from app.agents.hypothesis_agent import generate_hypotheses
 from app.agents.synthesis_agent import synthesize_findings, format_final_document
 
@@ -96,6 +97,7 @@ def create_research_graph() -> StateGraph:
     # Add nodes
     workflow.add_node("plan", plan_research)
     workflow.add_node("search", execute_searches)
+    workflow.add_node("chase_references", chase_references)
     workflow.add_node("hypothesize", generate_hypotheses)
     workflow.add_node("synthesize", synthesize_findings)
     workflow.add_node("format", format_final_document)
@@ -105,15 +107,18 @@ def create_research_graph() -> StateGraph:
     workflow.set_entry_point("plan")
     workflow.add_edge("plan", "search")
 
-    # Conditional edge after search -> hypothesis investigation
+    # Conditional edge after search -> reference chasing
     workflow.add_conditional_edges(
         "search",
         should_continue_after_search,
         {
-            "hypothesize": "hypothesize",
+            "hypothesize": "chase_references",
             "fail": "fail",
         }
     )
+
+    # After reference chasing, proceed to hypothesis investigation
+    workflow.add_edge("chase_references", "hypothesize")
 
     # After hypothesis investigation, proceed to synthesis
     workflow.add_edge("hypothesize", "synthesize")
