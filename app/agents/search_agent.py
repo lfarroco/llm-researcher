@@ -360,9 +360,9 @@ async def search_for_subquery(
 
     return SubQueryResult(
         sub_query=sub_query,
-        citations=citations,
-        status="complete" if citations else "failed",
-        error="; ".join(errors) if errors and not citations else None,
+        citations=unique_citations,
+        status="complete" if unique_citations else "failed",
+        error="; ".join(errors) if errors and not unique_citations else None,
     )
 
 
