@@ -6,6 +6,7 @@ import ProgressMonitor from './ProgressMonitor';
 import ChatInterface from './ChatInterface';
 import EditableResearchHeader from './EditableResearchHeader';
 import AgentSteps from './AgentSteps';
+import KnowledgeBase from './KnowledgeBase';
 
 interface Props {
 	researchId: number;
@@ -13,7 +14,7 @@ interface Props {
 	onUpdate: () => void;
 }
 
-type Tab = 'overview' | 'sources' | 'findings' | 'result' | 'progress' | 'chat' | 'steps';
+type Tab = 'overview' | 'sources' | 'findings' | 'result' | 'knowledge' | 'progress' | 'chat' | 'steps';
 
 export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props) {
 	const [research, setResearch] = useState<Research | null>(null);
@@ -98,6 +99,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		{ id: 'sources', label: 'Sources', count: sources.length },
 		{ id: 'findings', label: 'Findings', count: findings.length },
 		{ id: 'result', label: 'Result' },
+		{ id: 'knowledge', label: 'Knowledge Base' },
 		{ id: 'steps', label: 'Agent Steps' },
 		{ id: 'progress', label: 'Progress' },
 		{ id: 'chat', label: 'Chat' },
@@ -278,6 +280,8 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 						)}
 					</div>
 				)}
+
+				{activeTab === 'knowledge' && <KnowledgeBase researchId={researchId} />}
 
 				{activeTab === 'steps' && <AgentSteps researchId={researchId} />}
 

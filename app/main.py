@@ -887,6 +887,111 @@ def get_research_steps(
 
 
 @app.get(
+    "/research/{research_id}/knowledge-base",
+    tags=["research"]
+)
+def get_knowledge_base(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get the full knowledge base for a research project.
+
+    Returns the query, sub-queries, all citations with their sub-query
+    associations, source type distribution, and hypothesis investigations.
+    Designed for visualization of the research knowledge graph.
+    """
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    state_data = research.state_json or {}
+
+    # Extract sub-queries
+    sub_queries = state_data.get("sub_queries", [])
+
+    # Extract all citations from state
+    citations_raw = state_data.get("citations", [])
+
+    # Extract sub-query results to map citations to sub-queries
+    sub_query_results = state_data.get("sub_query_results", [])
+
+    # Build sub-query groups with their associated citations
+    sub_query_groups = []
+    assigned_urls = set()
+
+    for sqr in sub_query_results:
+        sq_citations = sqr.get("citations", [])
+        group = {
+            "sub_query": sqr.get("sub_query", ""),
+            "status": sqr.get("status", "unknown"),
+            "error": sqr.get("error"),
+            "citation_count": len(sq_citations),
+            "citations": [],
+        }
+        for c in sq_citations:
+            url = c.get("url", "")
+            group["citations"].append({
+                "id": c.get("id", ""),
+                "title": c.get("title", ""),
+                "url": url,
+                "source_type": c.get("source_type", "web"),
+                "relevance_score": c.get("relevance_score", 0),
+                "author": c.get("author"),
+                "snippet": (c.get("snippet", "") or "")[:300],
+            })
+            assigned_urls.add(url)
+        sub_query_groups.append(group)
+
+    # Collect citations not assigned to any sub-query (e.g., from hypotheses)
+    unassigned = []
+    for c in citations_raw:
+        url = c.get("url", "")
+        if url not in assigned_urls:
+            unassigned.append({
+                "id": c.get("id", ""),
+                "title": c.get("title", ""),
+                "url": url,
+                "source_type": c.get("source_type", "web"),
+                "relevance_score": c.get("relevance_score", 0),
+                "author": c.get("author"),
+                "snippet": (c.get("snippet", "") or "")[:300],
+            })
+
+    # Source type distribution
+    type_counts: dict[str, int] = {}
+    for c in citations_raw:
+        st = c.get("source_type", "web")
+        type_counts[st] = type_counts.get(st, 0) + 1
+
+    # Extract hypotheses from agent steps
+    agent_steps = state_data.get("agent_steps", [])
+    hypotheses = [
+        {
+            "title": s.get("title", ""),
+            "description": s.get("description", ""),
+            "status": s.get("status", ""),
+            "metadata": s.get("metadata", {}),
+        }
+        for s in agent_steps
+        if s.get("step_type") == "hypothesis"
+    ]
+
+    return {
+        "research_id": research_id,
+        "query": research.query,
+        "status": research.status,
+        "sub_queries": sub_queries,
+        "sub_query_groups": sub_query_groups,
+        "unassigned_citations": unassigned,
+        "hypotheses": hypotheses,
+        "total_citations": len(citations_raw),
+        "source_type_distribution": type_counts,
+    }
+
+
+@app.get(
     "/research/{research_id}/plan",
     response_model=ResearchPlanResponse,
     tags=["research"]

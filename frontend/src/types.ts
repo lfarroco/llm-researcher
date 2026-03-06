@@ -70,3 +70,40 @@ export interface AgentStepsResponse {
 	steps: AgentStep[];
 	total_steps: number;
 }
+
+export interface KBCitation {
+	id: string;
+	title: string;
+	url: string;
+	source_type: string;
+	relevance_score: number;
+	author?: string;
+	snippet: string;
+}
+
+export interface SubQueryGroup {
+	sub_query: string;
+	status: string;
+	error?: string;
+	citation_count: number;
+	citations: KBCitation[];
+}
+
+export interface KBHypothesis {
+	title: string;
+	description: string;
+	status: string;
+	metadata: Record<string, unknown>;
+}
+
+export interface KnowledgeBaseResponse {
+	research_id: number;
+	query: string;
+	status: string;
+	sub_queries: string[];
+	sub_query_groups: SubQueryGroup[];
+	unassigned_citations: KBCitation[];
+	hypotheses: KBHypothesis[];
+	total_citations: number;
+	source_type_distribution: Record<string, number>;
+}

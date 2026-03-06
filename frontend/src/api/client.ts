@@ -1,4 +1,4 @@
-import type { Research, Source, Finding, ChatMessage, ResearchState, AgentStepsResponse } from '../types';
+import type { Research, Source, Finding, ChatMessage, ResearchState, AgentStepsResponse, KnowledgeBaseResponse } from '../types';
 
 const API_BASE = '/api';
 
@@ -93,6 +93,12 @@ export const api = {
 	// Agent steps endpoint
 	async getAgentSteps(researchId: number): Promise<AgentStepsResponse> {
 		const response = await fetch(`${API_BASE}/research/${researchId}/steps`);
+		return handleResponse(response);
+	},
+
+	// Knowledge base endpoint
+	async getKnowledgeBase(researchId: number): Promise<KnowledgeBaseResponse> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/knowledge-base`);
 		return handleResponse(response);
 	},
 };
