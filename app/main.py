@@ -38,7 +38,7 @@ from app.schemas import (
 )
 from app.agents.orchestrator import run_research_workflow
 from app.agents.intent_router import route_user_intent
-from app.memory.research_state import Citation
+from app.memory.research_state import Citation, SubQueryResult
 from app.websocket_manager import manager as ws_manager
 from app.rate_limiter import check_research_rate_limit
 from app.output.pdf_exporter import (
@@ -150,6 +150,59 @@ def _save_citations_to_db(
         db.add(source)
 
 
+def _save_findings_to_db(
+    db: Session,
+    research_id: int,
+    sub_query_results: list[SubQueryResult],
+    citations: list[Citation],
+):
+    """Save sub-query findings to the database as ResearchFinding records.
+
+    Each sub-query that completed successfully becomes a finding,
+    with references to the source IDs that support it.
+    """
+    if not sub_query_results:
+        return
+
+    # Build a URL -> source DB ID map for linking findings to sources
+    sources = db.query(models.ResearchSource).filter(
+        models.ResearchSource.research_id == research_id
+    ).all()
+    url_to_source_id = {s.url: s.id for s in sources}
+
+    for sqr in sub_query_results:
+        if sqr.status != "complete" or not sqr.citations:
+            continue
+
+        # Collect the DB source IDs for citations in this sub-query
+        source_ids = []
+        for c in sqr.citations:
+            sid = url_to_source_id.get(c.url)
+            if sid:
+                source_ids.append(sid)
+
+        # Build a content summary from the sub-query and its sources
+        source_titles = [c.title for c in sqr.citations[:5]]
+        content = (
+            f"{sqr.sub_query}\n\n"
+            f"Supported by {len(sqr.citations)} source(s): "
+            + ", ".join(source_titles)
+        )
+
+        finding = models.ResearchFinding(
+            research_id=research_id,
+            content=content,
+            source_ids=source_ids,
+            created_by="ai",
+        )
+        db.add(finding)
+
+    logger.debug(
+        f"Saved {len([s for s in sub_query_results if s.status == 'complete'])} "
+        f"findings for research id={research_id}"
+    )
+
+
 async def process_research_async(research_id: int, query: str):
     """
     Async background task to run the research workflow with progress streaming.
@@ -233,6 +286,13 @@ async def process_research_async(research_id: int, query: str):
 
         # Save citations as sources
         _save_citations_to_db(db, research_id, final_state.citations)
+
+        # Save sub-query results as findings
+        _save_findings_to_db(
+            db, research_id,
+            final_state.sub_query_results,
+            final_state.citations,
+        )
 
         db.commit()
 
