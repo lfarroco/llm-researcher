@@ -852,6 +852,41 @@ def get_research_state(
 
 
 @app.get(
+    "/research/{research_id}/steps",
+    tags=["research"]
+)
+def get_research_steps(
+    research_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get the agent steps for a research project.
+
+    Returns the list of steps taken by the agent during research,
+    useful for debugging and understanding the agent's process.
+    Each step includes type, title, description, status, and metadata.
+    """
+    # Verify research exists
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Parse state from JSON
+    state_data = research.state_json or {}
+
+    # Extract agent steps
+    agent_steps = state_data.get("agent_steps", [])
+
+    return {
+        "research_id": research_id,
+        "status": research.status,
+        "steps": agent_steps,
+        "total_steps": len(agent_steps),
+    }
+
+
+@app.get(
     "/research/{research_id}/plan",
     response_model=ResearchPlanResponse,
     tags=["research"]

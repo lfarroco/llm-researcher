@@ -54,3 +54,19 @@ export interface ResearchState {
 	sources_found?: number;
 	[key: string]: any;
 }
+
+export interface AgentStep {
+	timestamp: string;
+	step_type: 'planning' | 'searching' | 'relevance_filter' | 'thinking' | 'hypothesis' | 'synthesis' | 'formatting' | 'summary' | 'error';
+	title: string;
+	description: string;
+	status: 'running' | 'completed' | 'skipped' | 'error';
+	metadata: Record<string, any>;
+}
+
+export interface AgentStepsResponse {
+	research_id: number;
+	status: string;
+	steps: AgentStep[];
+	total_steps: number;
+}

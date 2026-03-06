@@ -2,7 +2,7 @@
 LangGraph orchestrator - coordinates the research workflow.
 
 This module defines the state machine that coordinates the research agents:
-Planner -> Search -> Synthesis -> Format
+Planner -> Search -> Hypothesis -> Synthesis -> Format
 """
 
 import logging
@@ -13,6 +13,7 @@ from langgraph.graph import StateGraph, END
 from app.memory.research_state import ResearchState
 from app.agents.planner import plan_research
 from app.agents.search_agent import execute_searches
+from app.agents.hypothesis_agent import generate_hypotheses
 from app.agents.synthesis_agent import synthesize_findings, format_final_document
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def should_continue_after_search(state: ResearchState) -> str:
     """
-    Conditional edge: decide whether to synthesize or fail.
+    Conditional edge: decide whether to run hypothesis investigation or fail.
     """
     logger.debug("[ORCHESTRATOR] Evaluating post-search condition")
     logger.debug(
@@ -30,16 +31,16 @@ def should_continue_after_search(state: ResearchState) -> str:
 
     if state.citations:
         logger.info(
-            f"[ORCHESTRATOR] Post-search decision: SYNTHESIZE (has {len(state.citations)} citations)")
-        return "synthesize"
+            f"[ORCHESTRATOR] Post-search decision: HYPOTHESIZE (has {len(state.citations)} citations)")
+        return "hypothesize"
     elif state.errors:
         logger.warning(
             "[ORCHESTRATOR] Post-search decision: FAIL (has errors, no citations)")
         return "fail"
     else:
         logger.info(
-            "[ORCHESTRATOR] Post-search decision: SYNTHESIZE (no citations but will try)")
-        return "synthesize"  # Try to synthesize even with no citations
+            "[ORCHESTRATOR] Post-search decision: HYPOTHESIZE (no citations but will try)")
+        return "hypothesize"  # Try hypothesis even with no citations
 
 
 def should_continue_after_synthesis(state: ResearchState) -> str:
@@ -82,9 +83,9 @@ def create_research_graph() -> StateGraph:
     Create the research workflow graph.
 
     Workflow:
-        plan -> search -> synthesize -> format -> END
-                    |                      |
-                    +-> fail <-------------+
+        plan -> search -> hypothesize -> synthesize -> format -> END
+                    |                                    |
+                    +-> fail <---------------------------+
 
     Returns:
         Compiled StateGraph
@@ -95,6 +96,7 @@ def create_research_graph() -> StateGraph:
     # Add nodes
     workflow.add_node("plan", plan_research)
     workflow.add_node("search", execute_searches)
+    workflow.add_node("hypothesize", generate_hypotheses)
     workflow.add_node("synthesize", synthesize_findings)
     workflow.add_node("format", format_final_document)
     workflow.add_node("fail", handle_failure)
@@ -103,15 +105,18 @@ def create_research_graph() -> StateGraph:
     workflow.set_entry_point("plan")
     workflow.add_edge("plan", "search")
 
-    # Conditional edge after search
+    # Conditional edge after search -> hypothesis investigation
     workflow.add_conditional_edges(
         "search",
         should_continue_after_search,
         {
-            "synthesize": "synthesize",
+            "hypothesize": "hypothesize",
             "fail": "fail",
         }
     )
+
+    # After hypothesis investigation, proceed to synthesis
+    workflow.add_edge("hypothesize", "synthesize")
 
     # Conditional edge after synthesis
     workflow.add_conditional_edges(

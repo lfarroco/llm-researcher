@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.llm_provider import LLMProviderFactory
 from app.memory.research_state import (
+    AgentStep,
     Citation,
     ResearchState,
     SourceType,
@@ -455,6 +456,38 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
         for err in errors:
             logger.warning(f"[SEARCH] Error: {err}")
 
+    # Build agent steps for each sub-query search
+    steps = []
+    for sqr in sub_query_results:
+        steps.append(AgentStep(
+            step_type="searching",
+            title=f"Searched: {sqr.sub_query[:40]}...",
+            description=(
+                f"Found {len(sqr.citations)} sources for: {sqr.sub_query}"
+            ),
+            status="completed" if sqr.status == "complete" else "error",
+            metadata={
+                "sub_query": sqr.sub_query,
+                "citations_found": len(sqr.citations),
+                "error": sqr.error,
+            },
+        ))
+
+    steps.append(AgentStep(
+        step_type="summary",
+        title="Search phase complete",
+        description=(
+            f"Collected {len(unique_citations)} unique sources "
+            f"from {len(state.sub_queries)} sub-queries. "
+            f"{len(errors)} errors encountered."
+        ),
+        status="completed",
+        metadata={
+            "total_citations": len(unique_citations),
+            "total_errors": len(errors),
+        },
+    ))
+
     return {
         "citations": unique_citations,
         "sub_query_results": sub_query_results,
@@ -464,5 +497,6 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
             f"Synthesizing findings."
         ),
         "errors": errors,
+        "agent_steps": steps,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }

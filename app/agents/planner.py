@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.llm_provider import LLMProviderFactory
-from app.memory.research_state import ResearchState
+from app.memory.research_state import AgentStep, ResearchState
 
 logger = logging.getLogger(__name__)
 
@@ -115,8 +115,25 @@ async def plan_research(state: ResearchState) -> dict[str, Any]:
     for i, sq in enumerate(sub_queries):
         logger.info(f"[PLANNER]   {i+1}. {sq}")
 
+    # Build agent step for transparency
+    step = AgentStep(
+        step_type="planning",
+        title="Research plan created",
+        description=(
+            f"Decomposed query into {len(sub_queries)} sub-questions. "
+            f"Strategy: {search_strategy}"
+        ),
+        status="completed",
+        metadata={
+            "sub_queries": sub_queries,
+            "search_strategy": search_strategy,
+            "include_academic": include_academic,
+        },
+    )
+
     return {
         "sub_queries": sub_queries,
         "status": "searching",
         "current_step": f"Planning complete. Searching {len(sub_queries)} sub-topics.",
+        "agent_steps": [step],
     }

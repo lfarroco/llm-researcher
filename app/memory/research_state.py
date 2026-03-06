@@ -91,6 +91,36 @@ class SubQueryResult(BaseModel):
         default=None, description="Error message if failed")
 
 
+class AgentStep(BaseModel):
+    """A step taken by the research agent, for debugging/transparency."""
+
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        description="ISO timestamp of this step"
+    )
+    step_type: str = Field(
+        description=(
+            "Type of step: planning|searching|relevance_filter|"
+            "thinking|hypothesis|synthesis|formatting|summary|error"
+        )
+    )
+    title: str = Field(
+        description="Short title of what happened"
+    )
+    description: str = Field(
+        default="",
+        description="Detailed description of the step"
+    )
+    status: str = Field(
+        default="completed",
+        description="Status: running|completed|skipped|error"
+    )
+    metadata: dict = Field(
+        default_factory=dict,
+        description="Additional data (e.g., counts, queries, scores)"
+    )
+
+
 def merge_lists(left: list, right: list) -> list:
     """Reducer function to merge lists in state updates."""
     return left + right
@@ -170,6 +200,10 @@ class ResearchState(BaseModel):
     ai_reasoning: Annotated[list[AIReasoning], merge_lists] = Field(
         default_factory=list,
         description="Log of AI decision-making for transparency"
+    )
+    agent_steps: Annotated[list[AgentStep], merge_lists] = Field(
+        default_factory=list,
+        description="Steps taken by the agent for debugging/transparency"
     )
     user_notes: Annotated[dict[str, str], merge_dicts] = Field(
         default_factory=dict,
