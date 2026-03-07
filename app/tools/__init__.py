@@ -26,6 +26,11 @@ from app.tools.semantic_scholar import (
     get_paper_citations,
     get_paper_references,
 )
+from app.tools.openalex_search import (
+    openalex_search,
+    OpenAlexResult,
+    openalex_lookup_doi,
+)
 
 __all__ = [
     # Base types
@@ -55,6 +60,10 @@ __all__ = [
     "get_paper_details",
     "get_paper_citations",
     "get_paper_references",
+    # OpenAlex
+    "openalex_search",
+    "OpenAlexResult",
+    "openalex_lookup_doi",
     # Reference extractor
     "extract_references_from_url",
     "extract_references_from_html",
