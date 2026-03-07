@@ -5,10 +5,15 @@ Uses the OpenAlex API to search for papers, authors, institutions,
 and other scholarly entities. OpenAlex is free, open-source, and
 does not require an API key.
 
+Requests are throttled to 1 per second and each request is retried
+up to 3 times (with exponential back-off) to handle transient failures.
+
 Documentation: https://docs.openalex.org/
 """
 
+import asyncio
 import logging
+import time
 from typing import Optional
 
 import httpx
@@ -17,6 +22,69 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 OPENALEX_API_BASE = "https://api.openalex.org"
+
+# ---------------------------------------------------------------------------
+# Rate-limiting (1 request per second, as requested by the OpenAlex API)
+# ---------------------------------------------------------------------------
+
+_request_lock = asyncio.Lock()
+_last_request: float = 0.0
+_MIN_INTERVAL: float = 1.0  # seconds
+
+# ---------------------------------------------------------------------------
+# Retry configuration
+# ---------------------------------------------------------------------------
+
+_MAX_RETRIES = 3
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+async def _throttle() -> None:
+    """Enforce at most 1 request per second."""
+    global _last_request
+    async with _request_lock:
+        now = time.monotonic()
+        elapsed = now - _last_request
+        if elapsed < _MIN_INTERVAL:
+            await asyncio.sleep(_MIN_INTERVAL - elapsed)
+        _last_request = time.monotonic()
+
+
+async def _get_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    params: dict,
+) -> httpx.Response:
+    """Make a GET request, retrying on transient errors."""
+    for attempt in range(_MAX_RETRIES):
+        try:
+            await _throttle()
+            response = await client.get(url, params=params, timeout=30.0)
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            if (
+                exc.response.status_code in _RETRYABLE_STATUS_CODES
+                and attempt < _MAX_RETRIES - 1
+            ):
+                wait = 2 ** attempt
+                logger.warning(
+                    f"[OpenAlex] HTTP {exc.response.status_code} on attempt "
+                    f"{attempt + 1}/{_MAX_RETRIES}, retrying in {wait}s…"
+                )
+                await asyncio.sleep(wait)
+                continue
+            raise
+        except httpx.TimeoutException as exc:
+            if attempt < _MAX_RETRIES - 1:
+                logger.warning(
+                    f"[OpenAlex] Timeout on attempt {attempt + 1}/{_MAX_RETRIES}, retrying…"
+                )
+                await asyncio.sleep(1)
+                continue
+            raise RuntimeError("OpenAlex request timed out") from exc
+    raise RuntimeError("OpenAlex request failed: maximum retry attempts exhausted")  # pragma: no cover
 
 
 class OpenAlexResult(BaseModel):
@@ -58,6 +126,20 @@ class OpenAlexResult(BaseModel):
     concepts: list[str] = Field(
         default_factory=list, description="Associated concepts"
     )
+
+
+def _reconstruct_abstract(inverted_index: dict) -> str:
+    """Reconstruct abstract text from OpenAlex inverted index format.
+
+    The inverted index maps each word to the list of positions it appears at.
+    We rebuild the original word order by sorting (position, word) pairs.
+    """
+    position_word: list[tuple[int, str]] = []
+    for word, positions in inverted_index.items():
+        for pos in positions:
+            position_word.append((pos, word))
+    position_word.sort(key=lambda x: x[0])
+    return " ".join(word for _, word in position_word)
 
 
 async def openalex_search(
@@ -115,9 +197,8 @@ async def openalex_search(
     params["mailto"] = "research@example.com"
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
+        async with httpx.AsyncClient() as client:
+            response = await _get_with_retry(client, url, params=params)
             data = response.json()
 
         results_list = data.get("results", [])
@@ -140,12 +221,7 @@ async def openalex_search(
             abstract = None
             abstract_index = item.get("abstract_inverted_index")
             if abstract_index:
-                # Reconstruct abstract from inverted index
-                # (simplified - just get first 500 chars worth of words)
-                words = []
-                for word, positions in list(abstract_index.items())[:100]:
-                    words.append(word)
-                abstract = " ".join(words)
+                abstract = _reconstruct_abstract(abstract_index)
 
             # Extract year
             year = item.get("publication_year")
@@ -198,8 +274,8 @@ async def openalex_search(
 
         return results
 
-    except httpx.HTTPError as e:
-        logger.error(f"[OpenAlex] HTTP error: {e}")
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[OpenAlex] HTTP error: {e.response.status_code} - {e}")
         return []
     except Exception as e:
         logger.error(f"[OpenAlex] Unexpected error: {e}")
@@ -228,9 +304,8 @@ async def openalex_lookup_doi(doi: str) -> Optional[OpenAlexResult]:
     params = {"mailto": "research@example.com"}
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
+        async with httpx.AsyncClient() as client:
+            response = await _get_with_retry(client, url, params=params)
             item = response.json()
 
         # Extract data (same logic as search)
@@ -246,10 +321,7 @@ async def openalex_lookup_doi(doi: str) -> Optional[OpenAlexResult]:
         abstract = None
         abstract_index = item.get("abstract_inverted_index")
         if abstract_index:
-            words = []
-            for word in list(abstract_index.keys())[:100]:
-                words.append(word)
-            abstract = " ".join(words)
+            abstract = _reconstruct_abstract(abstract_index)
 
         year = item.get("publication_year")
 
