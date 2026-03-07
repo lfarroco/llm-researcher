@@ -380,6 +380,159 @@ class TestSemanticScholarSearch:
         assert results[0].citation_count == 50000
         assert "Vaswani" in results[0].authors[0]
 
+    @pytest.mark.asyncio
+    async def test_unauthenticated_api_used_when_no_key(self):
+        """Test that requests are made without an API key header when no key is set."""
+        mock_api_response = {"data": []}
+
+        with patch("app.tools.semantic_scholar.httpx.AsyncClient") as mock_client, \
+             patch("app.tools.semantic_scholar._unauth_throttle", new_callable=AsyncMock) as mock_throttle:
+
+            mock_response = AsyncMock()
+            mock_response.status_code = 200
+            mock_response.json = MagicMock(return_value=mock_api_response)
+            mock_response.raise_for_status = MagicMock()
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.semantic_scholar import semantic_scholar_search
+
+            # Call without an explicit API key; settings returns None for the key too
+            with patch("app.tools.semantic_scholar.get_setting", return_value=None):
+                await semantic_scholar_search("machine learning", max_results=2)
+
+        # Rate-limiter must have been invoked for unauthenticated requests
+        mock_throttle.assert_called_once()
+
+        # The outgoing request must NOT carry an x-api-key header
+        _, call_kwargs = mock_ctx.get.call_args
+        assert "x-api-key" not in call_kwargs.get("headers", {})
+
+    @pytest.mark.asyncio
+    async def test_api_key_header_sent_when_key_provided(self):
+        """Test that the x-api-key header is sent when a key is available."""
+        mock_api_response = {"data": []}
+
+        with patch("app.tools.semantic_scholar.httpx.AsyncClient") as mock_client, \
+             patch("app.tools.semantic_scholar._unauth_throttle", new_callable=AsyncMock) as mock_throttle:
+
+            mock_response = AsyncMock()
+            mock_response.status_code = 200
+            mock_response.json = MagicMock(return_value=mock_api_response)
+            mock_response.raise_for_status = MagicMock()
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = AsyncMock(return_value=mock_response)
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.semantic_scholar import semantic_scholar_search
+
+            with patch("app.tools.semantic_scholar.get_setting", return_value="my-test-key"):
+                await semantic_scholar_search("machine learning", max_results=2)
+
+        # Throttle should NOT be called when an API key is present
+        mock_throttle.assert_not_called()
+
+        _, call_kwargs = mock_ctx.get.call_args
+        assert call_kwargs.get("headers", {}).get("x-api-key") == "my-test-key"
+
+    @pytest.mark.asyncio
+    async def test_retry_on_transient_http_error(self):
+        """Test that transient HTTP errors (e.g. 503) are retried."""
+        import httpx as _httpx
+
+        mock_api_response = {"data": [{"paperId": "x1", "title": "T", "authors": [],
+                                        "abstract": "", "year": 2020, "citationCount": 0,
+                                        "influentialCitationCount": 0, "venue": None,
+                                        "openAccessPdf": None, "externalIds": {},
+                                        "fieldsOfStudy": [], "tldr": None}]}
+
+        error_response = MagicMock()
+        error_response.status_code = 503
+        error_response.text = "Service Unavailable"
+
+        success_response = AsyncMock()
+        success_response.status_code = 200
+        success_response.json = MagicMock(return_value=mock_api_response)
+        success_response.raise_for_status = MagicMock()
+
+        call_count = 0
+
+        async def fake_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise _httpx.HTTPStatusError(
+                    "503", request=MagicMock(), response=error_response
+                )
+            return success_response
+
+        with patch("app.tools.semantic_scholar.httpx.AsyncClient") as mock_client, \
+             patch("app.tools.semantic_scholar._unauth_throttle", new_callable=AsyncMock), \
+             patch("app.tools.semantic_scholar.asyncio.sleep", new_callable=AsyncMock):
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = fake_get
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.semantic_scholar import semantic_scholar_search
+
+            with patch("app.tools.semantic_scholar.get_setting", return_value=None):
+                results = await semantic_scholar_search("deep learning")
+
+        # Two calls: one failure + one success
+        assert call_count == 2
+        assert results[0].title == "T"
+
+    @pytest.mark.asyncio
+    async def test_non_retryable_http_error_is_raised_immediately(self):
+        """Test that non-retryable errors (e.g. 400) are raised without retrying."""
+        import httpx as _httpx
+
+        error_response = MagicMock()
+        error_response.status_code = 400
+        error_response.text = "Bad Request"
+
+        call_count = 0
+
+        async def fake_get(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise _httpx.HTTPStatusError(
+                "400", request=MagicMock(), response=error_response
+            )
+
+        with patch("app.tools.semantic_scholar.httpx.AsyncClient") as mock_client, \
+             patch("app.tools.semantic_scholar._unauth_throttle", new_callable=AsyncMock), \
+             patch("app.tools.semantic_scholar.asyncio.sleep", new_callable=AsyncMock):
+
+            mock_ctx = AsyncMock()
+            mock_ctx.__aenter__ = AsyncMock(return_value=mock_ctx)
+            mock_ctx.__aexit__ = AsyncMock(return_value=None)
+            mock_ctx.get = fake_get
+
+            mock_client.return_value = mock_ctx
+
+            from app.tools.semantic_scholar import semantic_scholar_search
+
+            with patch("app.tools.semantic_scholar.get_setting", return_value=None):
+                with pytest.raises(_httpx.HTTPStatusError):
+                    await semantic_scholar_search("deep learning")
+
+        # Must have been called only once – no retries for 400
+        assert call_count == 1
+
 
 class TestCrossrefSearch:
     """Tests for Crossref search tool."""

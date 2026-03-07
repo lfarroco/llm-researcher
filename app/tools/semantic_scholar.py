@@ -5,10 +5,18 @@ Uses the Semantic Scholar API to search papers and retrieve
 citation data. Free tier allows 100 requests/5 minutes, or use
 an API key for higher limits.
 
+When no API key is provided the public unauthenticated endpoint is
+used automatically. In that mode requests are throttled to 1 per
+second and each request is retried up to 3 times (with exponential
+back-off) to cope with the occasional failures that the public API
+can return under heavy load.
+
 This module can be tested in isolation by passing api_key explicitly.
 """
 
+import asyncio
 import logging
+import time
 from typing import Optional
 
 import httpx
@@ -19,6 +27,68 @@ from app.tools.base import get_setting
 logger = logging.getLogger(__name__)
 
 SEMANTIC_SCHOLAR_API_BASE = "https://api.semanticscholar.org/graph/v1"
+
+# ---------------------------------------------------------------------------
+# Rate-limiting for the unauthenticated public API (1 request per second)
+# ---------------------------------------------------------------------------
+
+_unauth_lock = asyncio.Lock()
+_last_unauth_request: float = 0.0
+_UNAUTH_MIN_INTERVAL: float = 1.0  # seconds
+
+# ---------------------------------------------------------------------------
+# Retry configuration
+# ---------------------------------------------------------------------------
+
+_MAX_RETRIES = 3
+_RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
+
+async def _unauth_throttle() -> None:
+    """Enforce at most 1 request per second for the unauthenticated API."""
+    global _last_unauth_request
+    async with _unauth_lock:
+        now = time.monotonic()
+        elapsed = now - _last_unauth_request
+        if elapsed < _UNAUTH_MIN_INTERVAL:
+            await asyncio.sleep(_UNAUTH_MIN_INTERVAL - elapsed)
+        _last_unauth_request = time.monotonic()
+
+
+async def _get_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    params: dict,
+    headers: dict,
+) -> httpx.Response:
+    """Make a GET request, retrying on transient errors."""
+    for attempt in range(_MAX_RETRIES):
+        try:
+            response = await client.get(
+                url, params=params, headers=headers, timeout=30.0
+            )
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_RETRIES - 1:
+                wait = 2 ** attempt
+                logger.warning(
+                    f"[S2] HTTP {exc.response.status_code} on attempt "
+                    f"{attempt + 1}/{_MAX_RETRIES}, retrying in {wait}s…"
+                )
+                await asyncio.sleep(wait)
+                continue
+            raise
+        except httpx.TimeoutException as exc:
+            if attempt < _MAX_RETRIES - 1:
+                logger.warning(
+                    f"[S2] Timeout on attempt {attempt + 1}/{_MAX_RETRIES}, retrying…"
+                )
+                await asyncio.sleep(1)
+                continue
+            raise RuntimeError("Semantic Scholar request timed out") from exc
+    raise RuntimeError("Unexpected retry loop exit")  # pragma: no cover
 
 
 class SemanticScholarResult(BaseModel):
@@ -105,18 +175,20 @@ async def semantic_scholar_search(
     if resolved_api_key:
         headers["x-api-key"] = resolved_api_key
         logger.debug("[S2] Using Semantic Scholar API key")
+    else:
+        logger.debug("[S2] No API key – using unauthenticated public API")
+        await _unauth_throttle()
 
     try:
         async with httpx.AsyncClient() as client:
             logger.debug(
                 f"[S2] Making request to {SEMANTIC_SCHOLAR_API_BASE}/paper/search")
-            response = await client.get(
+            response = await _get_with_retry(
+                client,
                 f"{SEMANTIC_SCHOLAR_API_BASE}/paper/search",
                 params=params,
                 headers=headers,
-                timeout=30.0,
             )
-            response.raise_for_status()
             data = response.json()
 
     except httpx.HTTPStatusError as e:
@@ -128,9 +200,6 @@ async def semantic_scholar_search(
                 "Consider using an API key or waiting."
             ) from e
         raise
-    except httpx.TimeoutException:
-        logger.error("[S2] Request timed out")
-        raise RuntimeError("Semantic Scholar request timed out") from None
 
     papers = data.get("data", [])
     logger.debug(f"[S2] Received {len(papers)} papers from API")
@@ -175,16 +244,17 @@ async def get_paper_details(
     headers = {}
     if resolved_api_key:
         headers["x-api-key"] = resolved_api_key
+    else:
+        await _unauth_throttle()
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await _get_with_retry(
+                client,
                 f"{SEMANTIC_SCHOLAR_API_BASE}/paper/{paper_id}",
                 params={"fields": fields},
                 headers=headers,
-                timeout=30.0,
             )
-            response.raise_for_status()
             paper = response.json()
             return _parse_paper(paper)
 
@@ -220,16 +290,17 @@ async def get_paper_citations(
     headers = {}
     if resolved_api_key:
         headers["x-api-key"] = resolved_api_key
+    else:
+        await _unauth_throttle()
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await _get_with_retry(
+                client,
                 f"{SEMANTIC_SCHOLAR_API_BASE}/paper/{paper_id}/citations",
                 params={"fields": fields, "limit": max_results},
                 headers=headers,
-                timeout=30.0,
             )
-            response.raise_for_status()
             data = response.json()
 
     except httpx.HTTPStatusError as e:
@@ -274,16 +345,17 @@ async def get_paper_references(
     headers = {}
     if resolved_api_key:
         headers["x-api-key"] = resolved_api_key
+    else:
+        await _unauth_throttle()
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await _get_with_retry(
+                client,
                 f"{SEMANTIC_SCHOLAR_API_BASE}/paper/{paper_id}/references",
                 params={"fields": fields, "limit": max_results},
                 headers=headers,
-                timeout=30.0,
             )
-            response.raise_for_status()
             data = response.json()
 
     except httpx.HTTPStatusError as e:
