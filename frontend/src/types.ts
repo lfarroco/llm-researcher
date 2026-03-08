@@ -43,7 +43,7 @@ export interface ChatMessage {
 }
 
 export interface WebSocketEvent {
-	event_type: 'connected' | 'status_change' | 'source_added' | 'finding_created' | 'progress' | 'error' | 'completed';
+	event_type: 'connected' | 'status_change' | 'source_added' | 'finding_created' | 'error' | 'completed';
 	data: any;
 	timestamp: string;
 }

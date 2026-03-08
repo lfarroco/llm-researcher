@@ -144,7 +144,6 @@ async def websocket_research_progress(
     - status_change: Research status updates
     - source_added: New source collected
     - finding_created: New finding synthesized
-    - progress: Progress percentage updates
     - error: Error messages
     - completed: Research completed
     """

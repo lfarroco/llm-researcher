@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../api/client';
 import type { Research, Source, Finding } from '../types';
-import ProgressMonitor from './ProgressMonitor';
 import ChatInterface from './ChatInterface';
 import EditableResearchHeader from './EditableResearchHeader';
 import AgentSteps from './AgentSteps';
@@ -14,7 +13,7 @@ interface Props {
 	onUpdate: () => void;
 }
 
-type Tab = 'overview' | 'sources' | 'findings' | 'result' | 'knowledge' | 'progress' | 'chat' | 'steps';
+type Tab = 'overview' | 'sources' | 'findings' | 'result' | 'knowledge' | 'chat' | 'steps';
 
 export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props) {
 	const [research, setResearch] = useState<Research | null>(null);
@@ -101,7 +100,6 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		{ id: 'result', label: 'Result' },
 		{ id: 'knowledge', label: 'Knowledge Base' },
 		{ id: 'steps', label: 'Agent Steps' },
-		{ id: 'progress', label: 'Progress' },
 		{ id: 'chat', label: 'Chat' },
 	];
 
@@ -284,8 +282,6 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				{activeTab === 'knowledge' && <KnowledgeBase researchId={researchId} />}
 
 				{activeTab === 'steps' && <AgentSteps researchId={researchId} />}
-
-				{activeTab === 'progress' && <ProgressMonitor researchId={researchId} />}
 
 				{activeTab === 'chat' && <ChatInterface researchId={researchId} />}
 			</div>

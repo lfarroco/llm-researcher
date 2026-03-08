@@ -116,25 +116,6 @@ class ConnectionManager:
             {"finding": finding}
         )
 
-    async def broadcast_progress(
-        self,
-        research_id: int,
-        current: int,
-        total: int,
-        message: str = None
-    ):
-        """Send a progress update."""
-        await self.send_event(
-            research_id,
-            "progress",
-            {
-                "current": current,
-                "total": total,
-                "percentage": (current / total * 100) if total > 0 else 0,
-                "message": message
-            }
-        )
-
     async def broadcast_error(
         self, research_id: int, error: str
     ):
