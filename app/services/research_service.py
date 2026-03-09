@@ -156,9 +156,27 @@ async def process_research_async(research_id: int, query: str):
             research_id, "researching", "Running research workflow"
         )
 
+        # Callback to persist intermediate state during workflow execution
+        async def save_intermediate_state(state_dict: dict):
+            try:
+                db.query(models.Research).filter(
+                    models.Research.id == research_id
+                ).update(
+                    {"state_json": state_dict},
+                    synchronize_session=False,
+                )
+                db.commit()
+            except Exception as e:
+                logger.warning(
+                    f"Failed to save intermediate state for {research_id}: {e}"
+                )
+                db.rollback()
+
         # Run the async workflow
         logger.debug(f"Running research workflow for id={research_id}")
-        final_state = await run_research_workflow(research_id, query)
+        final_state = await run_research_workflow(
+            research_id, query, on_state_update=save_intermediate_state
+        )
 
         # Check for cancellation after workflow
         if research_id in cancelled_research_ids:

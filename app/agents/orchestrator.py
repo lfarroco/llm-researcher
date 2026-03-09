@@ -144,6 +144,7 @@ async def run_research_workflow(
     research_id: int,
     query: str,
     config: Optional[dict] = None,
+    on_state_update=None,
 ) -> ResearchState:
     """
     Execute the complete research workflow.
@@ -152,6 +153,8 @@ async def run_research_workflow(
         research_id: Database ID for the research task
         query: The research query
         config: Optional LangGraph config (for checkpointing, callbacks, etc.)
+        on_state_update: Optional async callable(state_dict) called after
+            each graph node completes, for intermediate persistence.
 
     Returns:
         Final ResearchState with results
@@ -178,16 +181,30 @@ async def run_research_workflow(
     graph = create_research_graph()
     logger.debug("[ORCHESTRATOR] Graph compiled, starting execution")
 
-    # Run the workflow
+    # Run the workflow, streaming state after each node
     logger.info("[ORCHESTRATOR] Invoking graph workflow...")
-    final_state = await graph.ainvoke(
+    final_state = None
+    async for state in graph.astream(
         initial_state,
         config=config or {},
-    )
+        stream_mode="values",
+    ):
+        final_state = state
+        if on_state_update:
+            try:
+                state_dict = (
+                    state if isinstance(state, dict)
+                    else state.model_dump()
+                )
+                await on_state_update(state_dict)
+            except Exception as cb_err:
+                logger.warning(
+                    f"[ORCHESTRATOR] on_state_update callback failed: {cb_err}"
+                )
     logger.debug("[ORCHESTRATOR] Graph execution completed")
 
     final_status = final_state.get('status', 'unknown') if isinstance(
-        final_state, dict) else final_state.status
+        final_state, dict) else (final_state.status if final_state else 'unknown')
 
     logger.info("[ORCHESTRATOR] ========================================")
     logger.info("[ORCHESTRATOR] RESEARCH WORKFLOW COMPLETE")
@@ -203,6 +220,10 @@ async def run_research_workflow(
             f"[ORCHESTRATOR] Final doc length: {len(final_state.get('final_document', '') or '')}")
 
     # Convert back to ResearchState if needed
+    if final_state is None:
+        logger.error("[ORCHESTRATOR] No state produced by workflow")
+        return ResearchState(research_id=research_id, query=query, status="failed")
+
     if isinstance(final_state, dict):
         logger.debug("[ORCHESTRATOR] Converting dict to ResearchState")
         return ResearchState.model_validate(final_state)

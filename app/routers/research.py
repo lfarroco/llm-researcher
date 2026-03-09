@@ -252,3 +252,25 @@ async def resume_research(
         "message": "Research resumption queued",
         "status": "pending",
     }
+
+
+@router.delete("/research/{research_id}", status_code=204)
+def delete_research(
+    research_id: int,
+    db: Session = Depends(get_db),
+):
+    """Delete a research task and all associated data."""
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    # Cancel any active task before deleting
+    cancelled_research_ids.add(research_id)
+    if research_id in active_research_tasks:
+        active_research_tasks[research_id].cancel()
+
+    db.delete(research)
+    db.commit()
+    logger.info(f"Research {research_id} deleted")
