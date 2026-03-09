@@ -14,7 +14,9 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from app.config import settings
 from app.llm_provider import LLMProviderFactory
-from app.memory.research_state import AgentStep, ResearchState, Citation
+from app.memory.research_state import (
+    AgentStep, ResearchNote, ResearchState, Citation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +43,8 @@ Sub-questions investigated:
 
 Sources and findings:
 {sources}
+
+{notes_context}
 
 Write a comprehensive research document that answers the query. Present your findings authoritatively without referring to the research process or the sources as a collection.""")
 ])
@@ -110,6 +114,21 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
     sub_queries_text = "\n".join(f"- {sq}" for sq in state.sub_queries)
     sources_text = format_sources_for_prompt(state.citations)
 
+    # Build notes context so synthesis can leverage agent observations
+    notes_context = ""
+    if state.research_notes:
+        notes_lines = []
+        for note in state.research_notes:
+            notes_lines.append(
+                f"[{note.agent}/{note.category}] {note.content}"
+            )
+        notes_context = (
+            "Research notes and observations from the investigation:\n"
+            + "\n".join(notes_lines)
+            + "\n\nUse these notes to guide emphasis, structure, "
+            "and which gaps to acknowledge."
+        )
+
     logger.debug(
         f"[SYNTHESIS] Sub-queries text length: {len(sub_queries_text)} chars")
     logger.debug(
@@ -121,6 +140,7 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         "query": state.query,
         "sub_queries": sub_queries_text,
         "sources": sources_text,
+        "notes_context": notes_context,
     })
 
     draft = response.content if hasattr(
@@ -144,11 +164,21 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         },
     )
 
+    synthesis_note = ResearchNote(
+        agent="synthesis",
+        category="summary",
+        content=(
+            f"Synthesized {len(state.citations)} sources into a "
+            f"{len(draft)}-character draft document."
+        ),
+    )
+
     return {
         "draft": draft,
         "status": "formatting",
         "current_step": "Draft complete. Formatting citations.",
         "agent_steps": [step],
+        "research_notes": [synthesis_note],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 

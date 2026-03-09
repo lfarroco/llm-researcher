@@ -19,6 +19,7 @@ from app.llm_provider import LLMProviderFactory
 from app.memory.research_state import (
     AgentStep,
     Citation,
+    ResearchNote,
     ResearchState,
     SourceType,
     SubQueryResult,
@@ -488,6 +489,36 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
         },
     ))
 
+    # Write research notes about search outcomes
+    notes = [
+        ResearchNote(
+            agent="search",
+            category="observation",
+            content=(
+                f"Search phase collected "
+                f"{len(unique_citations)} unique sources "
+                f"across {len(state.sub_queries)} sub-queries. "
+                f"{len(errors)} errors encountered."
+            ),
+        ),
+    ]
+    for sqr in sub_query_results:
+        if sqr.status == "failed":
+            notes.append(ResearchNote(
+                agent="search",
+                category="gap",
+                content=(
+                    f"Search failed for: {sqr.sub_query}. "
+                    f"Error: {sqr.error}"
+                ),
+            ))
+        elif not sqr.citations:
+            notes.append(ResearchNote(
+                agent="search",
+                category="gap",
+                content=f"No sources found for: {sqr.sub_query}",
+            ))
+
     return {
         "citations": unique_citations,
         "sub_query_results": sub_query_results,
@@ -498,5 +529,6 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
         ),
         "errors": errors,
         "agent_steps": steps,
+        "research_notes": notes,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -275,3 +275,47 @@ class BatchResearchResponse(BaseModel):
     research_items: list[ResearchResponse] = Field(
         description="Full details of created research tasks"
     )
+
+
+# --- Research Notes ---
+
+class ResearchNoteCreate(BaseModel):
+    """Request to create a new research note."""
+    agent: str = Field(
+        default="user",
+        description="Who is writing: planner|search|hypothesis|synthesis|user"
+    )
+    category: str = Field(
+        description=(
+            "Note type: observation|gap|pattern|"
+            "contradiction|instruction|summary"
+        )
+    )
+    content: str = Field(
+        description="The note content"
+    )
+
+
+class ResearchNoteUpdate(BaseModel):
+    """Request to update a research note."""
+    content: Optional[str] = Field(
+        default=None,
+        description="Updated note content"
+    )
+    category: Optional[str] = Field(
+        default=None,
+        description="Updated category"
+    )
+
+
+class ResearchNoteResponse(BaseModel):
+    """Response for a research note."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    research_id: int
+    agent: str
+    category: str
+    content: str
+    created_at: datetime
+    updated_at: datetime

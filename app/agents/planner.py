@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.llm_provider import LLMProviderFactory
-from app.memory.research_state import AgentStep, ResearchState
+from app.memory.research_state import AgentStep, ResearchNote, ResearchState
 
 logger = logging.getLogger(__name__)
 
@@ -131,9 +131,29 @@ async def plan_research(state: ResearchState) -> dict[str, Any]:
         },
     )
 
+    # Write research notes capturing the plan and strategy
+    notes = [
+        ResearchNote(
+            agent="planner",
+            category="instruction",
+            content=(
+                f"Research strategy: {search_strategy}. "
+                f"Decomposed into {len(sub_queries)} sub-questions. "
+                f"Academic sources: {'yes' if include_academic else 'no'}."
+            ),
+        ),
+    ]
+    for sq in sub_queries:
+        notes.append(ResearchNote(
+            agent="planner",
+            category="instruction",
+            content=f"Investigate: {sq}",
+        ))
+
     return {
         "sub_queries": sub_queries,
         "status": "searching",
         "current_step": f"Planning complete. Searching {len(sub_queries)} sub-topics.",
         "agent_steps": [step],
+        "research_notes": notes,
     }

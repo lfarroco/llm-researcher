@@ -107,3 +107,13 @@ export interface KnowledgeBaseResponse {
 	total_citations: number;
 	source_type_distribution: Record<string, number>;
 }
+
+export interface ResearchNote {
+	id: number;
+	research_id: number;
+	agent: string;
+	category: string;
+	content: string;
+	created_at: string;
+	updated_at: string;
+}

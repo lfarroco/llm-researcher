@@ -1,4 +1,4 @@
-import type { Research, Source, Finding, ChatMessage, ResearchState, AgentStepsResponse, KnowledgeBaseResponse } from '../types';
+import type { Research, Source, Finding, ChatMessage, ResearchState, AgentStepsResponse, KnowledgeBaseResponse, ResearchNote } from '../types';
 
 const API_BASE = '/api';
 
@@ -100,6 +100,37 @@ export const api = {
 	async getKnowledgeBase(researchId: number): Promise<KnowledgeBaseResponse> {
 		const response = await fetch(`${API_BASE}/research/${researchId}/knowledge-base`);
 		return handleResponse(response);
+	},
+
+	// Research notes endpoints
+	async getNotes(researchId: number): Promise<ResearchNote[]> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/notes`);
+		return handleResponse(response);
+	},
+
+	async createNote(researchId: number, note: { category: string; content: string }): Promise<ResearchNote> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/notes`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ ...note, agent: 'user' }),
+		});
+		return handleResponse(response);
+	},
+
+	async updateNote(researchId: number, noteId: number, update: { content?: string; category?: string }): Promise<ResearchNote> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/notes/${noteId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(update),
+		});
+		return handleResponse(response);
+	},
+
+	async deleteNote(researchId: number, noteId: number): Promise<void> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/notes/${noteId}`, {
+			method: 'DELETE',
+		});
+		if (!response.ok) throw new Error('Failed to delete note');
 	},
 };
 

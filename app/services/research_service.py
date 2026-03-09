@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
 from app.agents.orchestrator import run_research_workflow
-from app.memory.research_state import Citation, SubQueryResult
+from app.memory.research_state import Citation, ResearchNote, SubQueryResult
 from app.websocket_manager import manager as ws_manager
 
 logger = logging.getLogger(__name__)
@@ -95,6 +95,25 @@ def save_findings_to_db(
     logger.debug(
         f"Saved {len([s for s in sub_query_results if s.status == 'complete'])} "
         f"findings for research id={research_id}"
+    )
+
+
+def save_notes_to_db(
+    db: Session,
+    research_id: int,
+    notes: list[ResearchNote],
+):
+    """Save research notes to the database."""
+    for note in notes:
+        db_note = models.ResearchNote(
+            research_id=research_id,
+            agent=note.agent,
+            category=note.category,
+            content=note.content,
+        )
+        db.add(db_note)
+    logger.debug(
+        f"Saved {len(notes)} research notes for research id={research_id}"
     )
 
 
@@ -206,6 +225,10 @@ async def process_research_async(research_id: int, query: str):
             final_state.sub_query_results,
             final_state.citations,
         )
+
+        # Save research notes
+        if final_state.research_notes:
+            save_notes_to_db(db, research_id, final_state.research_notes)
 
         db.commit()
 

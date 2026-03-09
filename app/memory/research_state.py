@@ -121,6 +121,35 @@ class AgentStep(BaseModel):
     )
 
 
+class ResearchNote(BaseModel):
+    """A note written by an agent or user during research.
+
+    Notes serve as the research's evolving memory — a shared cognitive
+    workspace where agents record observations, gaps, patterns, and
+    instructions for downstream agents.
+    """
+
+    agent: str = Field(
+        description=(
+            "Who wrote this note: "
+            "planner|search|hypothesis|synthesis|user"
+        )
+    )
+    category: str = Field(
+        description=(
+            "Note type: observation|gap|pattern|"
+            "contradiction|instruction|summary"
+        )
+    )
+    content: str = Field(
+        description="The note content"
+    )
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        description="ISO timestamp when the note was created"
+    )
+
+
 def merge_lists(left: list, right: list) -> list:
     """Reducer function to merge lists in state updates."""
     return left + right
@@ -210,6 +239,15 @@ class ResearchState(BaseModel):
         description=(
             "User annotations on sources/findings "
             "(key: item_id, value: note)"
+        )
+    )
+
+    # Research notes — the research's evolving brain
+    research_notes: Annotated[list[ResearchNote], merge_lists] = Field(
+        default_factory=list,
+        description=(
+            "Notes written by agents and users during research, "
+            "serving as shared cognitive memory across workflow stages"
         )
     )
 

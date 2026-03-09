@@ -38,6 +38,12 @@ class Research(Base):
         back_populates="research",
         cascade="all, delete-orphan"
     )
+    notes = relationship(
+        "ResearchNote",
+        back_populates="research",
+        cascade="all, delete-orphan",
+        order_by="ResearchNote.created_at",
+    )
 
 
 class ConversationMessage(Base):
@@ -94,3 +100,30 @@ class ResearchFinding(Base):
 
     # Relationships
     research = relationship("Research", back_populates="findings")
+
+
+class ResearchNote(Base):
+    """Agent/user notes that serve as the research's evolving memory.
+
+    Notes are read and written by agents throughout the workflow,
+    acting as a shared cognitive workspace ("the notes are the
+    research brain" — Feynman).
+    """
+    __tablename__ = "research_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    research_id = Column(Integer, ForeignKey("research.id"), nullable=False)
+    agent = Column(
+        String(50), nullable=False
+    )  # planner|search|hypothesis|synthesis|user
+    category = Column(
+        String(50), nullable=False
+    )  # observation|gap|pattern|contradiction|instruction|summary
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    # Relationships
+    research = relationship("Research", back_populates="notes")

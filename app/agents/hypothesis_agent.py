@@ -25,6 +25,7 @@ from app.llm_provider import LLMProviderFactory
 from app.memory.research_state import (
     AgentStep,
     Citation,
+    ResearchNote,
     ResearchState,
     SourceType,
 )
@@ -96,7 +97,9 @@ Sub-questions investigated:
 Sources found so far ({num_sources} total):
 {sources_summary}
 
-Generate hypotheses to deepen this research.""")
+Generate hypotheses to deepen this research.
+
+{notes_context}""")
 ])
 
 
@@ -268,12 +271,26 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
     sub_queries_text = "\n".join(f"- {sq}" for sq in state.sub_queries)
     sources_summary = format_sources_summary(state.citations)
 
+    # Build notes context for the hypothesis agent
+    notes_context = ""
+    if state.research_notes:
+        notes_lines = []
+        for note in state.research_notes:
+            notes_lines.append(
+                f"[{note.agent}/{note.category}] {note.content}"
+            )
+        notes_context = (
+            "Research notes from prior stages:\n"
+            + "\n".join(notes_lines)
+        )
+
     try:
         result = await chain.ainvoke({
             "query": state.query,
             "sub_queries": sub_queries_text,
             "num_sources": len(state.citations),
             "sources_summary": sources_summary,
+            "notes_context": notes_context,
         })
     except Exception as e:
         logger.error(f"[HYPOTHESIS] Failed to generate hypotheses: {e}")
@@ -408,6 +425,34 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
         },
     ))
 
+    # Write research notes capturing hypothesis insights
+    notes = []
+    if observations:
+        notes.append(ResearchNote(
+            agent="hypothesis",
+            category="pattern",
+            content=f"Hypothesis analysis observations: {observations}",
+        ))
+    for hyp in hypotheses:
+        if new_citations:
+            notes.append(ResearchNote(
+                agent="hypothesis",
+                category="observation",
+                content=(
+                    f"Investigated hypothesis on '{hyp.aspect}': "
+                    f"{hyp.statement}. Reasoning: {hyp.reasoning}"
+                ),
+            ))
+        else:
+            notes.append(ResearchNote(
+                agent="hypothesis",
+                category="gap",
+                content=(
+                    f"Could not find evidence for hypothesis on "
+                    f"'{hyp.aspect}': {hyp.statement}"
+                ),
+            ))
+
     return {
         "citations": new_citations,
         "status": "synthesizing",
@@ -417,5 +462,6 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
             f"Synthesizing all findings."
         ),
         "agent_steps": steps,
+        "research_notes": notes,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
