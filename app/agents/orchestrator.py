@@ -192,10 +192,15 @@ async def run_research_workflow(
         final_state = state
         if on_state_update:
             try:
-                state_dict = (
-                    state if isinstance(state, dict)
-                    else state.model_dump()
-                )
+                # Convert to ResearchState then to_dict() to ensure all
+                # nested Pydantic objects (AgentStep, Citation, etc.) are
+                # recursively serialized to plain dicts/JSON-safe types.
+                if isinstance(state, dict):
+                    state_dict = ResearchState.model_validate(
+                        state
+                    ).to_dict()
+                else:
+                    state_dict = state.to_dict()
                 await on_state_update(state_dict)
             except Exception as cb_err:
                 logger.warning(
