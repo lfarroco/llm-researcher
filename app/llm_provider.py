@@ -4,6 +4,7 @@ from typing import Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+from openai import RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +40,14 @@ class OpenAIProvider(LLMProvider):
             model=self.model,
             api_key=self.api_key,
             temperature=self.temperature,
+            max_retries=6,
         )
         logger.debug("ChatOpenAI instance created successfully")
-        return llm
+        return llm.with_retry(
+            retry_if_exception_type=(RateLimitError,),
+            wait_exponential_jitter=True,
+            stop_after_attempt=6,
+        )
 
 
 class OllamaProvider(LLMProvider):
