@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../api/client';
-import type { Research, Source, Finding } from '../types';
+import type { Research, Source, Finding, AgentStep } from '../types';
 import ChatInterface from './ChatInterface';
 import EditableResearchHeader from './EditableResearchHeader';
 import AgentSteps from './AgentSteps';
@@ -22,12 +22,9 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const [activeTab, setActiveTab] = useState<Tab>('overview');
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [latestStep, setLatestStep] = useState<AgentStep | null>(null);
 
-	useEffect(() => {
-		loadData();
-	}, [researchId]);
-
-	const loadData = async () => {
+	const loadData = useCallback(async () => {
 		try {
 			setLoading(true);
 			setError(null);
@@ -44,7 +41,38 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [researchId]);
+
+	useEffect(() => {
+		loadData();
+	}, [loadData]);
+
+	useEffect(() => {
+		if (!research || research.status !== 'researching') return;
+
+		const pollProgress = async () => {
+			try {
+				const [researchData, stepsData] = await Promise.all([
+					api.getResearch(researchId),
+					api.getAgentSteps(researchId),
+				]);
+				if (stepsData.steps.length > 0) {
+					setLatestStep(stepsData.steps[stepsData.steps.length - 1]);
+				}
+				if (researchData.status !== 'researching') {
+					setLatestStep(null);
+					loadData();
+				} else {
+					setResearch(researchData);
+				}
+			} catch {
+				// silent fail — polling will retry
+			}
+		};
+
+		const interval = setInterval(pollProgress, 1000);
+		return () => clearInterval(interval);
+	}, [research, researchId, loadData]);
 
 	const handleDelete = async () => {
 		if (!confirm('Are you sure you want to delete this research?')) return;
@@ -164,6 +192,27 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			<div className="p-6">
 				{activeTab === 'overview' && (
 					<div className="space-y-4">
+						{research.status === 'researching' && (
+							<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+								<div className="flex items-center gap-2">
+									<span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
+									<h3 className="text-sm font-semibold text-blue-800">Research in progress</h3>
+								</div>
+								{latestStep ? (
+									<div className="mt-3 pl-5">
+										<p className="text-xs font-medium text-blue-600 uppercase tracking-wider">
+											{latestStep.step_type.replace(/_/g, ' ')}
+										</p>
+										<p className="text-sm font-medium text-blue-900 mt-0.5">{latestStep.title}</p>
+										{latestStep.description && (
+											<p className="text-sm text-blue-700 mt-1">{latestStep.description}</p>
+										)}
+									</div>
+								) : (
+									<p className="mt-2 pl-5 text-sm text-blue-700">Starting…</p>
+								)}
+							</div>
+						)}
 						<div className="grid grid-cols-3 gap-4">
 							<div className="bg-blue-50 p-4 rounded-lg">
 								<p className="text-sm text-blue-600 font-medium">Sources</p>
