@@ -2,7 +2,7 @@ export interface Research {
 	id: number;
 	query: string;
 	result?: string;
-	status: 'pending' | 'researching' | 'completed' | 'failed';
+	status: 'pending' | 'researching' | 'completed' | 'failed' | 'error' | 'cancelled';
 	user_notes?: string;
 	tags?: string[];
 	created_at: string;

@@ -232,7 +232,7 @@ async def resume_research(
     if not research:
         raise HTTPException(status_code=404, detail="Research not found")
 
-    if research.status not in ["cancelled", "error"]:
+    if research.status not in ["cancelled", "error", "failed"]:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot resume research with status: {research.status}"
@@ -243,7 +243,9 @@ async def resume_research(
 
     cancelled_research_ids.discard(research_id)
 
-    background_tasks.add_task(process_research, research_id, research.query)
+    background_tasks.add_task(
+        process_research, research_id, research.query, resume=True,
+    )
 
     logger.info(f"Research {research_id} queued for resumption")
 

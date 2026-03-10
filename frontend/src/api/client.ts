@@ -50,6 +50,13 @@ export const api = {
 		return handleResponse(response);
 	},
 
+	async resumeResearch(id: number): Promise<{ message: string }> {
+		const response = await fetch(`${API_BASE}/research/${id}/resume`, {
+			method: 'POST',
+		});
+		return handleResponse(response);
+	},
+
 	async deleteResearch(id: number): Promise<void> {
 		const response = await fetch(`${API_BASE}/research/${id}`, {
 			method: 'DELETE',

@@ -7,18 +7,22 @@ interface Props {
 	loading: boolean;
 }
 
-const statusColors = {
+const statusColors: Record<string, string> = {
 	pending: 'bg-gray-100 text-gray-700',
 	researching: 'bg-blue-100 text-blue-700',
 	completed: 'bg-green-100 text-green-700',
 	failed: 'bg-red-100 text-red-700',
+	error: 'bg-red-100 text-red-700',
+	cancelled: 'bg-orange-100 text-orange-700',
 };
 
-const statusIcons = {
+const statusIcons: Record<string, string> = {
 	pending: '⏳',
 	researching: '🔍',
 	completed: '✅',
 	failed: '❌',
+	error: '❌',
+	cancelled: '⚠️',
 };
 
 export default function ResearchList({ researches, selectedId, onSelect, loading }: Props) {

@@ -96,6 +96,16 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		}
 	};
 
+	const handleResume = async () => {
+		try {
+			await api.resumeResearch(researchId);
+			onUpdate();
+			loadData();
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to resume research');
+		}
+	};
+
 	const handleUpdateQuery = async (query: string) => {
 		try {
 			const updatedResearch = await api.updateResearch(researchId, { query });
@@ -145,6 +155,14 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 					/>
 
 					<div className="flex gap-2">
+						{['error', 'failed', 'cancelled'].includes(research.status) && (
+							<button
+								onClick={handleResume}
+								className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors"
+							>
+								Resume
+							</button>
+						)}
 						{research.status === 'researching' && (
 							<button
 								onClick={handleCancel}
@@ -213,6 +231,27 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								) : (
 									<p className="mt-2 pl-5 text-sm text-blue-700">Starting…</p>
 								)}
+							</div>
+						)}
+						{['error', 'failed', 'cancelled'].includes(research.status) && (
+							<div className="bg-red-50 border border-red-200 rounded-lg p-4">
+								<div className="flex items-center justify-between">
+									<div className="flex items-center gap-2">
+										<span className="text-red-500 flex-shrink-0">✕</span>
+										<h3 className="text-sm font-semibold text-red-800">
+											{research.status === 'cancelled' ? 'Research was cancelled' : 'Research encountered an error'}
+										</h3>
+									</div>
+									<button
+										onClick={handleResume}
+										className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+									>
+										Resume
+									</button>
+								</div>
+								<p className="mt-2 pl-6 text-sm text-red-700">
+									Progress has been saved. Click Resume to continue from where it left off.
+								</p>
 							</div>
 						)}
 						<div className="grid grid-cols-3 gap-4">

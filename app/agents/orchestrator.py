@@ -79,9 +79,39 @@ async def handle_failure(state: ResearchState) -> dict:
     }
 
 
-def create_research_graph() -> StateGraph:
+# Ordered list of workflow nodes for determining resume points
+WORKFLOW_STEPS = [
+    "plan", "search", "chase_references",
+    "hypothesize", "synthesize", "format",
+]
+
+
+def determine_resume_point(state: ResearchState) -> str:
+    """
+    Determine which workflow node to resume from based on existing state data.
+
+    Inspects what data the state already has to figure out the last
+    successfully completed step, then returns the next step to run.
+    """
+    if state.final_document:
+        return "complete"
+    if state.draft:
+        return "format"
+    if state.citations:
+        return "hypothesize"
+    if state.sub_queries:
+        return "search"
+    return "plan"
+
+
+def create_research_graph(start_from: str = "plan") -> StateGraph:
     """
     Create the research workflow graph.
+
+    Args:
+        start_from: Which node to use as the entry point.
+            Defaults to "plan" for a fresh run. When resuming,
+            pass a later node to skip already-completed steps.
 
     Workflow:
         plan -> search -> hypothesize -> synthesize -> format -> END
@@ -103,8 +133,10 @@ def create_research_graph() -> StateGraph:
     workflow.add_node("format", format_final_document)
     workflow.add_node("fail", handle_failure)
 
+    # Set entry point (supports resuming from any node)
+    workflow.set_entry_point(start_from)
+
     # Add edges
-    workflow.set_entry_point("plan")
     workflow.add_edge("plan", "search")
 
     # Conditional edge after search -> reference chasing
@@ -145,6 +177,7 @@ async def run_research_workflow(
     query: str,
     config: Optional[dict] = None,
     on_state_update=None,
+    resume_state: Optional[ResearchState] = None,
 ) -> ResearchState:
     """
     Execute the complete research workflow.
@@ -155,6 +188,9 @@ async def run_research_workflow(
         config: Optional LangGraph config (for checkpointing, callbacks, etc.)
         on_state_update: Optional async callable(state_dict) called after
             each graph node completes, for intermediate persistence.
+        resume_state: Optional saved ResearchState to resume from.
+            When provided, the workflow starts from the appropriate step
+            based on what data the state already contains.
 
     Returns:
         Final ResearchState with results
@@ -167,18 +203,37 @@ async def run_research_workflow(
     logger.debug(f"[ORCHESTRATOR] Full query: {query}")
     logger.debug(f"[ORCHESTRATOR] Config: {config}")
 
-    # Create initial state
-    logger.debug("[ORCHESTRATOR] Creating initial state")
-    initial_state = ResearchState(
-        research_id=research_id,
-        query=query,
-    )
+    # Determine start point and initial state
+    if resume_state:
+        start_from = determine_resume_point(resume_state)
+        if start_from == "complete":
+            logger.info(
+                "[ORCHESTRATOR] State is already complete, "
+                "nothing to resume"
+            )
+            return resume_state
+        # Clear errors from previous run so they don't accumulate
+        resume_state.errors = []
+        initial_state = resume_state
+        logger.info(f"[ORCHESTRATOR] RESUMING from '{start_from}'")
+    else:
+        start_from = "plan"
+        initial_state = ResearchState(
+            research_id=research_id,
+            query=query,
+        )
+
     logger.debug(
-        f"[ORCHESTRATOR] Initial state created with status='{initial_state.status}'")
+        "[ORCHESTRATOR] Initial state created "
+        f"with status='{initial_state.status}'"
+    )
 
     # Create and run the graph
-    logger.debug("[ORCHESTRATOR] Creating research graph")
-    graph = create_research_graph()
+    logger.debug(
+        "[ORCHESTRATOR] Creating research graph "
+        f"(start_from='{start_from}')"
+    )
+    graph = create_research_graph(start_from=start_from)
     logger.debug("[ORCHESTRATOR] Graph compiled, starting execution")
 
     # Run the workflow, streaming state after each node

@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
 from app.agents.orchestrator import run_research_workflow
-from app.memory.research_state import Citation, ResearchNote, SubQueryResult
+from app.memory.research_state import (
+    Citation, ResearchNote, ResearchState, SubQueryResult,
+)
 from app.websocket_manager import manager as ws_manager
 
 logger = logging.getLogger(__name__)
@@ -117,19 +119,29 @@ def save_notes_to_db(
     )
 
 
-async def process_research_async(research_id: int, query: str):
+async def process_research_async(
+    research_id: int, query: str, resume: bool = False,
+):
     """
     Async background task to run the research workflow with progress streaming.
 
     Runs the LangGraph workflow and saves results to the database.
     Emits WebSocket events for progress tracking.
+
+    Args:
+        research_id: Database ID for the research task
+        query: The research query
+        resume: If True, load saved state and resume from last checkpoint
     """
-    logger.info(f"Starting research task: id={research_id}")
+    logger.info(f"Starting research task: id={research_id} (resume={resume})")
 
     try:
         # Broadcast status change
         await ws_manager.broadcast_status_change(
-            research_id, "planning", "Initializing research workflow"
+            research_id, "planning",
+            "Resuming research workflow"
+            if resume
+            else "Initializing research workflow",
         )
 
         db = next(get_db())
@@ -168,11 +180,44 @@ async def process_research_async(research_id: int, query: str):
             cancelled_research_ids.discard(research_id)
             return
 
+        # Load saved state for resumption
+        resume_state = None
+        if resume and research.state_json:
+            try:
+                resume_state = ResearchState.from_dict(research.state_json)
+                logger.info(
+                    f"Loaded saved state for research {research_id}: "
+                    f"sub_queries={len(resume_state.sub_queries)}, "
+                    f"citations={len(resume_state.citations)}, "
+                    f"has_draft={bool(resume_state.draft)}"
+                )
+                # Clear old DB records to avoid duplicates when results
+                # are re-saved after the resumed workflow completes
+                db.query(models.ResearchSource).filter(
+                    models.ResearchSource.research_id == research_id
+                ).delete(synchronize_session=False)
+                db.query(models.ResearchFinding).filter(
+                    models.ResearchFinding.research_id == research_id
+                ).delete(synchronize_session=False)
+                db.query(models.ResearchNote).filter(
+                    models.ResearchNote.research_id == research_id
+                ).delete(synchronize_session=False)
+                db.commit()
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load saved state for {research_id}, "
+                    f"starting fresh: {e}"
+                )
+                resume_state = None
+
         # Update status to researching
         research.status = "researching"
         db.commit()
         await ws_manager.broadcast_status_change(
-            research_id, "researching", "Running research workflow"
+            research_id, "researching",
+            "Resuming research workflow"
+            if resume_state
+            else "Running research workflow",
         )
 
         # Callback to persist intermediate state during workflow execution
@@ -194,7 +239,9 @@ async def process_research_async(research_id: int, query: str):
         # Run the async workflow
         logger.debug(f"Running research workflow for id={research_id}")
         final_state = await run_research_workflow(
-            research_id, query, on_state_update=save_intermediate_state
+            research_id, query,
+            on_state_update=save_intermediate_state,
+            resume_state=resume_state,
         )
 
         # Check for cancellation after workflow
@@ -265,9 +312,9 @@ async def process_research_async(research_id: int, query: str):
             del active_research_tasks[research_id]
 
 
-def process_research(research_id: int, query: str):
+def process_research(research_id: int, query: str, resume: bool = False):
     """
     Synchronous wrapper for process_research_async.
     Used by background task worker.
     """
-    asyncio.run(process_research_async(research_id, query))
+    asyncio.run(process_research_async(research_id, query, resume=resume))
