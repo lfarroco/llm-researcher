@@ -138,7 +138,7 @@ def route_user_intent(message: str) -> IntentRouterOutput:
         provider_type=settings.llm_provider,
         model=settings.llm_model,
         temperature=0.1,  # Low temperature for consistent classification
-        api_key=settings.openai_api_key,
+        api_key=settings.llm_api_key,
         base_url=settings.ollama_base_url,
     )
 

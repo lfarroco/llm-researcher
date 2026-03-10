@@ -4,6 +4,7 @@ from typing import Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from openai import RateLimitError
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,33 @@ class OllamaProvider(LLMProvider):
         return llm
 
 
+class GroqProvider(LLMProvider):
+    """Provider for Groq models."""
+
+    def __init__(
+        self,
+        model: str = "llama-3.3-70b-versatile",
+        api_key: Optional[str] = None,
+        temperature: float = 0.2,
+    ):
+        self.model = model
+        self.api_key = api_key
+        self.temperature = temperature
+        logger.debug(
+            f"Initialized Groq provider with model={model}, temperature={temperature}"
+        )
+
+    def get_llm(self) -> BaseChatModel:
+        logger.debug(f"Creating ChatGroq instance with model={self.model}")
+        llm = ChatGroq(
+            model=self.model,
+            api_key=self.api_key,
+            temperature=self.temperature,
+        )
+        logger.debug("ChatGroq instance created successfully")
+        return llm
+
+
 class LLMProviderFactory:
     """Factory class to create LLM providers based on configuration."""
 
@@ -123,9 +151,15 @@ class LLMProviderFactory:
                 base_url=base_url or "http://localhost:11434",
                 temperature=temperature,
             )
+        elif provider_type == "groq":
+            return GroqProvider(
+                model=model,
+                api_key=api_key,
+                temperature=temperature,
+            )
         else:
             logger.error(f"Unsupported provider type: {provider_type}")
             raise ValueError(
                 f"Unsupported provider type: {provider_type}. "
-                f"Supported types are: openai, ollama"
+                f"Supported types are: openai, ollama, groq"
             )

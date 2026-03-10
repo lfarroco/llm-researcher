@@ -60,7 +60,7 @@ def get_planner_chain():
         provider_type=settings.llm_provider,
         model=settings.llm_model,
         temperature=0.3,  # Slightly higher for creative decomposition
-        api_key=settings.openai_api_key,
+        api_key=settings.llm_api_key,
         base_url=settings.ollama_base_url,
     )
 

@@ -90,7 +90,7 @@ async def expand_query(query: str, num_variations: int = 2) -> list[str]:
             provider_type=settings.llm_provider,
             model=settings.llm_model,
             temperature=0.7,  # Higher temperature for creative variations
-            api_key=settings.openai_api_key,
+            api_key=settings.llm_api_key,
             base_url=settings.ollama_base_url,
         )
 

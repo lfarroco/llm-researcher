@@ -132,7 +132,7 @@ async def _assess_reference_relevance(
             provider_type=settings.llm_provider,
             model=settings.llm_model,
             temperature=0.1,
-            api_key=settings.openai_api_key,
+            api_key=settings.llm_api_key,
             base_url=settings.ollama_base_url,
         )
 

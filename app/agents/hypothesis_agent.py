@@ -109,7 +109,7 @@ def get_hypothesis_chain():
         provider_type=settings.llm_provider,
         model=settings.llm_model,
         temperature=0.5,  # Higher for creative hypothesis generation
-        api_key=settings.openai_api_key,
+        api_key=settings.llm_api_key,
         base_url=settings.ollama_base_url,
     )
     llm = provider.get_llm()
