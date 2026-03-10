@@ -40,7 +40,7 @@ router = APIRouter()
     response_model=ChatMessageResponse,
     tags=["conversation"],
 )
-def chat_with_research(
+async def chat_with_research(
     research_id: int,
     payload: ChatMessageRequest,
     background_tasks: BackgroundTasks,
@@ -70,10 +70,10 @@ def chat_with_research(
 
     # Route intent
     logger.info(f"Processing chat message for research {research_id}")
-    intent_result = route_user_intent(payload.message)
+    intent_result = await route_user_intent(payload.message)
 
     # Dispatch to focused handler
-    result = dispatch_intent(
+    result = await dispatch_intent(
         intent=intent_result.intent,
         research=research,
         research_id=research_id,

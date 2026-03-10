@@ -19,10 +19,8 @@ from app.agents.search_agent import (
     search_for_subquery,
     execute_searches,
 )
-from app.agents.intent_router import (
-    IntentRouterOutput,
-    route_user_intent,
-)
+from app.agents import intent_router
+from app.agents.intent_router import IntentRouterOutput
 from app.agents.query_expander import (
     QueryVariations,
     expand_query,
@@ -363,7 +361,8 @@ class TestIntentRouterOutput:
 class TestIntentRouter:
     """Tests for intent classification."""
 
-    def test_route_intent_research(self):
+    @pytest.mark.asyncio
+    async def test_route_intent_research(self):
         """Test classifying research intent."""
         message = "Research quantum computing"
 
@@ -374,14 +373,18 @@ class TestIntentRouter:
             reasoning="User explicitly asked to research a topic",
         )
 
-        with patch("app.agents.intent_router.route_user_intent", return_value=mock_result):
-            result = route_user_intent(message)
+        with patch.object(
+            intent_router, 'route_user_intent',
+            new_callable=AsyncMock, return_value=mock_result,
+        ):
+            result = await intent_router.route_user_intent(message)
 
         assert result.intent == "research"
         assert result.confidence > 0.9
         assert "quantum computing" in result.entities.get("topic", "")
 
-    def test_route_intent_question(self):
+    @pytest.mark.asyncio
+    async def test_route_intent_question(self):
         """Test classifying question intent."""
         message = "What does my research say about climate change?"
 
@@ -393,12 +396,16 @@ class TestIntentRouter:
             reasoning="User is asking about existing research",
         )
 
-        with patch("app.agents.intent_router.route_user_intent", return_value=mock_result):
-            result = route_user_intent(message)
+        with patch.object(
+            intent_router, 'route_user_intent',
+            new_callable=AsyncMock, return_value=mock_result,
+        ):
+            result = await intent_router.route_user_intent(message)
 
         assert result.intent == "question"
 
-    def test_route_intent_add_source(self):
+    @pytest.mark.asyncio
+    async def test_route_intent_add_source(self):
         """Test classifying add source intent."""
         message = "Add this paper: https://arxiv.org/abs/2024.12345"
 
@@ -409,13 +416,17 @@ class TestIntentRouter:
             reasoning="User provided a URL to add",
         )
 
-        with patch("app.agents.intent_router.route_user_intent", return_value=mock_result):
-            result = route_user_intent(message)
+        with patch.object(
+            intent_router, 'route_user_intent',
+            new_callable=AsyncMock, return_value=mock_result,
+        ):
+            result = await intent_router.route_user_intent(message)
 
         assert result.intent == "add"
         assert "arxiv.org" in result.entities.get("source_url", "")
 
-    def test_route_intent_general(self):
+    @pytest.mark.asyncio
+    async def test_route_intent_general(self):
         """Test classifying general conversation."""
         message = "Thanks for your help!"
 
@@ -426,8 +437,11 @@ class TestIntentRouter:
             reasoning="Conversational pleasantry",
         )
 
-        with patch("app.agents.intent_router.route_user_intent", return_value=mock_result):
-            result = route_user_intent(message)
+        with patch.object(
+            intent_router, 'route_user_intent',
+            new_callable=AsyncMock, return_value=mock_result,
+        ):
+            result = await intent_router.route_user_intent(message)
 
         assert result.intent == "general"
 
@@ -534,7 +548,8 @@ async def test_planner_with_real_llm():
 
 
 @pytest.mark.integration
-def test_intent_router_with_real_llm():
+@pytest.mark.asyncio
+async def test_intent_router_with_real_llm():
     """
     Integration test for intent router with real LLM.
 
@@ -555,7 +570,7 @@ def test_intent_router_with_real_llm():
     ]
 
     for message, expected_intent in test_cases:
-        result = route_user_intent(message)
+        result = await intent_router.route_user_intent(message)
 
         assert result.intent == expected_intent or result.confidence > 0.7
         assert isinstance(result.reasoning, str)

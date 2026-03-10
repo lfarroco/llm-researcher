@@ -66,10 +66,12 @@ assistant system. Analyze the user's message and determine their intent.
      findings on Y", "Are there conflicting views?"
    - Extract: question_text (the question)
 
-3. **add** - User wants to manually add a source
+3. **add** - User wants to add a source or a note
    - Examples: "Add this paper", "Include https://...",
-     "Add this URL to my research"
-   - Extract: source_url or source_reference
+     "Add this URL to my research", "Add a note about X",
+     "Note: climate change is accelerating"
+   - Extract: source_url (if URL provided), note_content (if note),
+     item_type ("source" or "note")
 
 4. **remove** - User wants to remove a source
    - Examples: "Remove source #3", "Delete this URL",
@@ -78,18 +80,22 @@ assistant system. Analyze the user's message and determine their intent.
 
 5. **edit** - User wants to modify knowledge base items
    - Examples: "Update notes for X", "Tag this as important",
-     "Mark source Y as irrelevant"
-   - Extract: item_identifier, modification_type
+     "Mark source Y as irrelevant", "Edit note on source #2"
+   - Extract: item_identifier, modification_type (note|tag|relevance),
+     note_content (if modifying notes), tag (if tagging)
 
 6. **browse** - User wants to see/filter knowledge base items
    - Examples: "Show all sources", "List papers about X",
      "What sources do I have?"
    - Extract: filter_criteria (optional)
 
-7. **generate** - User wants to create a document
+7. **generate** - User wants to create or regenerate a document
    - Examples: "Write a blog post", "Generate a summary",
-     "Create an academic paper"
-   - Extract: format (blog|paper|summary|custom), sections (optional)
+     "Create an academic paper", "Regenerate the report",
+     "Rewrite the report focusing on X",
+     "Regenerate with more technical detail"
+   - Extract: format (blog|paper|summary|custom),
+     instructions (custom instructions for how to generate)
 
 8. **status** - User wants to see research state
    - Examples: "What's the current state?", "Show me the plan",
@@ -109,6 +115,9 @@ assistant system. Analyze the user's message and determine their intent.
 - Provide clear reasoning for your classification
 - Confidence should be high (>0.8) for clear intents,
   lower for ambiguous ones
+- For "add" with a URL, always extract the full URL into source_url
+- For "generate", extract any stylistic or content instructions into
+  the instructions field
 
 Respond with JSON in this exact format:
 {{
@@ -121,7 +130,7 @@ Respond with JSON in this exact format:
 ])
 
 
-def route_user_intent(message: str) -> IntentRouterOutput:
+async def route_user_intent(message: str) -> IntentRouterOutput:
     """
     Analyze user message and determine intent.
 
@@ -151,7 +160,7 @@ def route_user_intent(message: str) -> IntentRouterOutput:
     chain = INTENT_ROUTER_PROMPT | llm | parser
 
     try:
-        result = chain.invoke({"message": message})
+        result = await chain.ainvoke({"message": message})
         output = IntentRouterOutput(**result)
         logger.info(
             f"Intent classified as '{output.intent}' "
