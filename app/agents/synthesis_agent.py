@@ -13,7 +13,7 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.config import settings
-from app.llm_provider import LLMProviderFactory
+from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 from app.memory.research_state import (
     AgentStep, ResearchNote, ResearchState, Citation,
 )
@@ -136,7 +136,7 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
     logger.debug("[SYNTHESIS] Invoking LLM for document synthesis...")
 
     # Generate the document
-    response = await chain.ainvoke({
+    response = await rate_limited_llm_call(chain, {
         "query": state.query,
         "sub_queries": sub_queries_text,
         "sources": sources_text,

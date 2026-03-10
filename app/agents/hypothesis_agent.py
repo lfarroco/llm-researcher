@@ -21,7 +21,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.llm_provider import LLMProviderFactory
+from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 from app.memory.research_state import (
     AgentStep,
     Citation,
@@ -285,7 +285,7 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
         )
 
     try:
-        result = await chain.ainvoke({
+        result = await rate_limited_llm_call(chain, {
             "query": state.query,
             "sub_queries": sub_queries_text,
             "num_sources": len(state.citations),

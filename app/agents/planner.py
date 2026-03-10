@@ -13,7 +13,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.llm_provider import LLMProviderFactory
+from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 from app.memory.research_state import AgentStep, ResearchNote, ResearchState
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ async def plan_research(state: ResearchState) -> dict[str, Any]:
     chain = get_planner_chain()
 
     logger.debug("[PLANNER] Invoking LLM for query decomposition")
-    result = await chain.ainvoke({"query": state.query})
+    result = await rate_limited_llm_call(chain, {"query": state.query})
     logger.debug(f"[PLANNER] LLM response received: {result}")
 
     sub_queries = result.get("sub_queries", [])

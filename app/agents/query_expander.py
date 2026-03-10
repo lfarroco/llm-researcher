@@ -12,7 +12,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.llm_provider import LLMProviderFactory
+from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ async def expand_query(query: str, num_variations: int = 2) -> list[str]:
         parser = JsonOutputParser(pydantic_object=QueryVariations)
         chain = QUERY_EXPANSION_PROMPT | llm | parser
 
-        result = await chain.ainvoke({"query": query})
+        result = await rate_limited_llm_call(chain, {"query": query})
         logger.debug(f"[QUERY_EXPANSION] LLM response: {result}")
 
         variations = result.get("variations", [])

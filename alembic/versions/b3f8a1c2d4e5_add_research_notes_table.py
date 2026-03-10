@@ -1,7 +1,7 @@
 """add research_notes table
 
 Revision ID: b3f8a1c2d4e5
-Revises: 2ebd621972ef
+Revises: ee998c69556d
 Create Date: 2026-03-09 12:00:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'b3f8a1c2d4e5'
-down_revision: Union[str, None] = '2ebd621972ef'
+down_revision: Union[str, None] = 'ee998c69556d'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

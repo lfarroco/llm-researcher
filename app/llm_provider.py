@@ -1,13 +1,68 @@
 import logging
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 from langchain_groq import ChatGroq
-from openai import RateLimitError
 
 logger = logging.getLogger(__name__)
+
+# Global semaphore to limit concurrent LLM requests
+# This prevents overwhelming API rate limits
+_llm_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def get_llm_semaphore(max_concurrent: int = 3) -> asyncio.Semaphore:
+    """Get or create the global LLM semaphore for rate limiting."""
+    global _llm_semaphore
+    if _llm_semaphore is None:
+        _llm_semaphore = asyncio.Semaphore(max_concurrent)
+        logger.info(
+            f"Initialized LLM semaphore with max_concurrent={max_concurrent}"
+        )
+    return _llm_semaphore
+
+
+async def rate_limited_llm_call(chain, input_data: dict):
+    """
+    Execute an LLM chain call with rate limiting via semaphore.
+
+    This prevents overwhelming API rate limits by ensuring only N
+    concurrent LLM requests are active at once, and adds a base delay
+    between all calls.
+
+    Args:
+        chain: LangChain runnable chain
+        input_data: Input dictionary for the chain
+
+    Returns:
+        Chain output
+    """
+    from app.config import settings
+    semaphore = get_llm_semaphore(settings.llm_max_concurrent_requests)
+
+    async with semaphore:
+        active = settings.llm_max_concurrent_requests - semaphore._value
+        logger.debug(
+            f"[LLM_RATE_LIMIT] Acquired semaphore "
+            f"(active: {active}/{settings.llm_max_concurrent_requests})"
+        )
+        try:
+            # Add base delay to space out requests proactively
+            if settings.llm_base_delay > 0:
+                await asyncio.sleep(settings.llm_base_delay)
+
+            result = await chain.ainvoke(input_data)
+            return result
+        except Exception as e:
+            logger.warning(
+                f"[LLM_RATE_LIMIT] Call failed: {e.__class__.__name__}: {e}"
+            )
+            raise
+        finally:
+            logger.debug("[LLM_RATE_LIMIT] Released semaphore")
 
 
 class LLMProvider(ABC):
@@ -37,18 +92,22 @@ class OpenAIProvider(LLMProvider):
 
     def get_llm(self) -> BaseChatModel:
         logger.debug(f"Creating ChatOpenAI instance with model={self.model}")
+        from app.config import settings
+
+        # ChatOpenAI has built-in retry with exponential backoff
         llm = ChatOpenAI(
             model=self.model,
             api_key=self.api_key,
             temperature=self.temperature,
-            max_retries=6,
+            max_retries=settings.llm_max_retries,
+            timeout=180,  # 3 minute timeout
+            request_timeout=180,
         )
-        logger.debug("ChatOpenAI instance created successfully")
-        return llm.with_retry(
-            retry_if_exception_type=(RateLimitError,),
-            wait_exponential_jitter=True,
-            stop_after_attempt=6,
+        logger.debug(
+            f"ChatOpenAI configured with {settings.llm_max_retries} retries, "
+            f"exponential backoff enabled"
         )
+        return llm
 
 
 class OllamaProvider(LLMProvider):
@@ -97,12 +156,20 @@ class GroqProvider(LLMProvider):
 
     def get_llm(self) -> BaseChatModel:
         logger.debug(f"Creating ChatGroq instance with model={self.model}")
+        from app.config import settings
+
+        # ChatGroq has built-in retry with exponential backoff
         llm = ChatGroq(
             model=self.model,
             api_key=self.api_key,
             temperature=self.temperature,
+            max_retries=settings.llm_max_retries,
+            timeout=180,  # 3 minute timeout
         )
-        logger.debug("ChatGroq instance created successfully")
+        logger.debug(
+            f"ChatGroq configured with {settings.llm_max_retries} retries, "
+            f"exponential backoff enabled"
+        )
         return llm
 
 

@@ -15,7 +15,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.llm_provider import LLMProviderFactory
+from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 from app.memory.research_state import (
     AgentStep,
     Citation,
@@ -94,7 +94,7 @@ async def assess_relevance(
         parser = JsonOutputParser(pydantic_object=RelevanceScore)
         chain = RELEVANCE_PROMPT | llm | parser
 
-        result = await chain.ainvoke({
+        result = await rate_limited_llm_call(chain, {
             "sub_query": sub_query,
             "title": citation.title,
             "snippet": citation.snippet[:500]  # Limit snippet size

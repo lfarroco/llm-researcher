@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     # 2 = also follow refs from those refs, etc.)
     research_reference_chase_depth: int = 2
 
+    # LLM Rate Limiting & Backoff
+    llm_max_retries: int = 10  # Max retry attempts for LLM API calls
+    llm_max_concurrent_requests: int = 2  # Max concurrent LLM requests
+    llm_retry_min_wait: float = 4.0  # Min seconds between retries
+    llm_retry_max_wait: float = 120.0  # Max seconds between retries
+    llm_base_delay: float = 0.5  # Base delay between all LLM calls
+
     @computed_field
     @property
     def llm_api_key(self) -> str:

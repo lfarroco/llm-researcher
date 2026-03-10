@@ -17,7 +17,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
 from app.config import settings
-from app.llm_provider import LLMProviderFactory
+from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 from app.memory.research_state import (
     AgentStep,
     Citation,
@@ -140,7 +140,7 @@ async def _assess_reference_relevance(
         parser = JsonOutputParser(pydantic_object=ReferenceBatchRelevance)
         chain = REFERENCE_RELEVANCE_PROMPT | llm | parser
 
-        result = await chain.ainvoke({
+        result = await rate_limited_llm_call(chain, {
             "query": query,
             "source_url": source_url,
             "references": ref_text,
