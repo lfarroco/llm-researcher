@@ -273,14 +273,15 @@ def export_sources_as_bibtex(
         # Determine entry type based on source type
         entry_type = "misc"
         extra_fields = {}
-        
+
         if source.source_type == "arxiv":
             entry_type = "article"
             # ArXiv papers often have an eprint field
             if "arxiv.org" in source.url.lower():
                 # Extract arxiv ID from URL
                 import re
-                match = re.search(r'arxiv\.org/(?:abs|pdf)/(\d+\.\d+)', source.url)
+                match = re.search(
+                    r'arxiv\.org/(?:abs|pdf)/(\d+\.\d+)', source.url)
                 if match:
                     extra_fields["eprint"] = match.group(1)
                     extra_fields["archiveprefix"] = "arXiv"

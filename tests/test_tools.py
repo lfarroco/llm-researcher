@@ -1131,8 +1131,8 @@ class TestPDFParser:
         try:
             # Mock GROBID and pdfplumber to fail
             with patch("app.tools.pdf_parser._parse_with_grobid", return_value=None), \
-                 patch("app.tools.pdf_parser._parse_with_pdfplumber", side_effect=Exception("pdfplumber failed")):
-                
+                    patch("app.tools.pdf_parser._parse_with_pdfplumber", side_effect=Exception("pdfplumber failed")):
+
                 result = await parse_pdf_from_file(temp_path)
 
             # PyPDF2 should succeed as fallback
@@ -1289,7 +1289,7 @@ class TestBibTeXParser:
         assert result.success is True
         assert result.data is not None
         assert len(result.data) == 1
-        
+
         entry = result.data[0]
         assert entry.entry_type == "article"
         assert entry.cite_key == "Smith2020"
@@ -1669,7 +1669,8 @@ More result content."""
         assert len(chunks) >= 1
 
         # Check that section metadata is preserved
-        section_names = [c.metadata.get("section") for c in chunks if c.metadata.get("section")]
+        section_names = [c.metadata.get("section")
+                         for c in chunks if c.metadata.get("section")]
         assert len(section_names) > 0
 
     def test_token_count_estimation(self):
@@ -1782,6 +1783,3 @@ This is the results."""
         # Check that some headings were detected
         headings = [b[1] for b in boundaries]
         assert any("INTRODUCTION" in h for h in headings)
-
-
-
