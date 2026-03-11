@@ -115,7 +115,6 @@ See [frontend/README.md](frontend/README.md) for more details.
 |--------------|-------------------------------------------|
 | `make shell` | Open a shell in the app container         |
 | `make test`  | Run the test suite inside the container   |
-| `make e2e`   | Run end-to-end integration test           |
 | `make ws`    | Run WebSocket and real-time features test |
 | `make lint`  | Run the linter inside the container       |
 

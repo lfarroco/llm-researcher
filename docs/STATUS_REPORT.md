@@ -190,15 +190,14 @@ None currently. All started phases are complete.
 - API endpoint tests
 - Database integration tests
 
-### End-to-End Tests
-**File**: `tests/e2e_test.py`
-**Coverage**: 20 comprehensive test steps
+**File**: `tests/test_integration.py`
+**Coverage**: 19 comprehensive integration tests
 - Research lifecycle (create → search → complete)
-- Source management
-- Findings CRUD
-- State transparency
-- Chat interface
-- Filtering and pagination
+- Source management (add, update, filter, search)
+- Findings CRUD operations
+- State transparency and plan management
+- Chat interface with mocked LLM
+- All external dependencies mocked
 
 **File**: `test_websocket.py`
 **Coverage**: Phase 16 real-time features
@@ -210,8 +209,7 @@ None currently. All started phases are complete.
 
 **Run Commands**:
 ```bash
-make test    # Unit/integration tests
-make e2e     # End-to-end test
+make test    # All tests (unit/integration)
 make ws      # WebSocket test
 make lint    # Code quality
 ```

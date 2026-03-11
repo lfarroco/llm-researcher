@@ -1,4 +1,4 @@
-.PHONY: up down build restart logs shell db-shell test e2e lint help
+.PHONY: up down build restart logs shell db-shell test lint help
 
 ## Show this help message
 help:
@@ -39,10 +39,6 @@ db-shell:
 ## Run tests inside the app container
 test:
 	docker compose exec app pytest tests/ -v
-
-## Run end-to-end test
-e2e:
-	docker compose exec app python tests/e2e_test.py
 
 ## Run WebSocket and real-time features test
 ws:
