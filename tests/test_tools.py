@@ -1546,3 +1546,242 @@ class TestBibTeXParser:
         assert "note" in entry.extra_fields
 
 
+class TestDocumentChunker:
+    """Tests for document chunker tool."""
+
+    def test_chunk_empty_text(self):
+        """Test that empty text returns empty list."""
+        from app.tools.document_chunker import chunk_document
+
+        result = chunk_document("")
+
+        assert isinstance(result, list)
+        assert len(result) == 0
+
+    def test_chunk_short_text_fixed_size(self):
+        """Test chunking short text with fixed size strategy."""
+        from app.tools.document_chunker import chunk_document, ChunkingStrategy
+
+        text = "This is a short test document. It has only a few sentences."
+
+        chunks = chunk_document(
+            text,
+            strategy=ChunkingStrategy.FIXED_SIZE,
+            max_chunk_size=100
+        )
+
+        assert len(chunks) >= 1
+        assert all(chunk.text for chunk in chunks)
+        assert all(chunk.chunk_index >= 0 for chunk in chunks)
+
+    def test_chunk_text_by_paragraphs(self):
+        """Test paragraph-based chunking."""
+        from app.tools.document_chunker import chunk_document, ChunkingStrategy
+
+        text = """First paragraph with some content.
+This is still the first paragraph.
+
+Second paragraph starts here.
+It continues on this line.
+
+Third paragraph is the last one.
+It also has multiple lines."""
+
+        chunks = chunk_document(
+            text,
+            strategy=ChunkingStrategy.PARAGRAPH,
+            max_chunk_size=50  # Small size to force multiple chunks
+        )
+
+        assert len(chunks) > 1
+        # Check that chunks contain paragraph content
+        all_text = " ".join(chunk.text for chunk in chunks)
+        assert "First paragraph" in all_text
+        assert "Third paragraph" in all_text
+
+    def test_chunk_preserves_order(self):
+        """Test that chunks are in correct order."""
+        from app.tools.document_chunker import chunk_document, ChunkingStrategy
+
+        text = "One. Two. Three. Four. Five. Six. Seven. Eight. Nine. Ten."
+
+        chunks = chunk_document(
+            text,
+            strategy=ChunkingStrategy.FIXED_SIZE,
+            max_chunk_size=20
+        )
+
+        # Check chunk indices are sequential
+        for i, chunk in enumerate(chunks):
+            assert chunk.chunk_index == i
+
+        # Check character offsets increase
+        for i in range(len(chunks) - 1):
+            assert chunks[i].start_char < chunks[i + 1].start_char
+
+    def test_chunk_with_overlap(self):
+        """Test that overlapping chunks share content."""
+        from app.tools.document_chunker import chunk_document, ChunkingStrategy
+
+        text = " ".join([f"Word{i}" for i in range(100)])
+
+        chunks = chunk_document(
+            text,
+            strategy=ChunkingStrategy.FIXED_SIZE,
+            max_chunk_size=50,
+            chunk_overlap=20
+        )
+
+        # With overlap, should have more chunks than without
+        assert len(chunks) >= 2
+
+        # Check that consecutive chunks overlap
+        if len(chunks) >= 2:
+            # Some words from chunk 0 should appear in chunk 1
+            chunk0_words = set(chunks[0].text.split())
+            chunk1_words = set(chunks[1].text.split())
+            overlap = chunk0_words & chunk1_words
+            assert len(overlap) > 0  # Should have some overlap
+
+    def test_chunk_by_sections(self):
+        """Test section-based chunking."""
+        from app.tools.document_chunker import chunk_document, ChunkingStrategy
+
+        text = """INTRODUCTION
+This is the introduction section.
+It has some content.
+
+METHODS
+This section describes the methods.
+It also has content.
+
+RESULTS
+Here are the results.
+More result content."""
+
+        chunks = chunk_document(
+            text,
+            strategy=ChunkingStrategy.SECTION,
+            max_chunk_size=200
+        )
+
+        # Should create chunks for each section
+        assert len(chunks) >= 1
+
+        # Check that section metadata is preserved
+        section_names = [c.metadata.get("section") for c in chunks if c.metadata.get("section")]
+        assert len(section_names) > 0
+
+    def test_token_count_estimation(self):
+        """Test token count estimation."""
+        from app.tools.document_chunker import _estimate_token_count
+
+        text = "This is a test sentence with ten words in it."
+        tokens = _estimate_token_count(text)
+
+        # Should be roughly 1.3 tokens per word
+        # 10 words ~= 13 tokens
+        assert 10 <= tokens <= 15
+
+    def test_split_into_paragraphs(self):
+        """Test paragraph splitting."""
+        from app.tools.document_chunker import _split_into_paragraphs
+
+        text = """First paragraph.
+
+Second paragraph.
+
+Third paragraph."""
+
+        paragraphs = _split_into_paragraphs(text)
+
+        assert len(paragraphs) == 3
+        assert paragraphs[0] == "First paragraph."
+        assert paragraphs[1] == "Second paragraph."
+        assert paragraphs[2] == "Third paragraph."
+
+    def test_large_paragraph_gets_split(self):
+        """Test that very large paragraphs are split."""
+        from app.tools.document_chunker import chunk_document, ChunkingStrategy
+
+        # Create one very long paragraph
+        long_para = " ".join([f"Word{i}" for i in range(500)])
+
+        chunks = chunk_document(
+            long_para,
+            strategy=ChunkingStrategy.PARAGRAPH,
+            max_chunk_size=100
+        )
+
+        # Should split the large paragraph into multiple chunks
+        assert len(chunks) > 1
+
+    def test_min_chunk_size_respected(self):
+        """Test that minimum chunk size is respected."""
+        from app.tools.document_chunker import chunk_document, ChunkingStrategy
+
+        text = "Short. Text. With. Periods."
+
+        chunks = chunk_document(
+            text,
+            strategy=ChunkingStrategy.FIXED_SIZE,
+            max_chunk_size=20,
+            min_chunk_size=5
+        )
+
+        # All chunks should meet minimum size (except possibly the last)
+        for i, chunk in enumerate(chunks[:-1]):
+            assert chunk.token_count >= 5
+
+    def test_document_chunk_model(self):
+        """Test DocumentChunk model."""
+        from app.tools.document_chunker import DocumentChunk
+
+        chunk = DocumentChunk(
+            text="This is a test chunk.",
+            chunk_index=0,
+            start_char=0,
+            end_char=21,
+            token_count=6,
+            metadata={"section": "Introduction"}
+        )
+
+        assert chunk.text == "This is a test chunk."
+        assert chunk.chunk_index == 0
+        assert chunk.token_count == 6
+        assert chunk.metadata["section"] == "Introduction"
+
+    def test_chunking_strategy_enum(self):
+        """Test ChunkingStrategy enum."""
+        from app.tools.document_chunker import ChunkingStrategy
+
+        assert ChunkingStrategy.FIXED_SIZE == "fixed_size"
+        assert ChunkingStrategy.PARAGRAPH == "paragraph"
+        assert ChunkingStrategy.SECTION == "section"
+        assert ChunkingStrategy.SENTENCE == "sentence"
+
+    def test_find_section_boundaries(self):
+        """Test section boundary detection."""
+        from app.tools.document_chunker import _find_section_boundaries
+
+        text = """Some intro text.
+
+INTRODUCTION
+This is the introduction.
+
+1. METHODS
+This is the methods section.
+
+Results:
+This is the results."""
+
+        boundaries = _find_section_boundaries(text)
+
+        # Should find section headings
+        assert len(boundaries) >= 2
+        # Check that some headings were detected
+        headings = [b[1] for b in boundaries]
+        assert any("INTRODUCTION" in h for h in headings)
+
+
+
