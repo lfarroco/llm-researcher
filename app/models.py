@@ -19,6 +19,8 @@ class Research(Base):
     status = Column(String(50), default="pending")
     # User's notes about this research
     user_notes = Column(Text, nullable=True)
+    # Tags for categorizing the research
+    tags = Column(JSON, nullable=True)
     state_json = Column(JSON, nullable=True)  # Serialized ResearchState
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True),

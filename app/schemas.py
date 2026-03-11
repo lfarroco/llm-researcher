@@ -10,6 +10,10 @@ class ResearchCreate(BaseModel):
         default=None,
         description="Optional user notes about this research"
     )
+    tags: Optional[list[str]] = Field(
+        default=None,
+        description="Tags for organizing research"
+    )
 
 
 class ResearchResponse(BaseModel):
@@ -21,6 +25,7 @@ class ResearchResponse(BaseModel):
     result: Optional[str] = None
     status: str
     user_notes: Optional[str] = None
+    tags: Optional[list[str]] = None
     created_at: datetime
     updated_at: datetime
 
