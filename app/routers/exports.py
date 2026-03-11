@@ -225,21 +225,21 @@ def export_sources_as_bibtex(
 ):
     """
     Export all sources as BibTeX format.
-    
+
     Useful for bibliography management and academic writing.
     """
     research = _get_research_or_404(research_id, db)
-    
+
     sources = db.query(models.ResearchSource).filter(
         models.ResearchSource.research_id == research_id
     ).all()
-    
+
     if not sources:
         raise HTTPException(
             status_code=404,
             detail="No sources found for this research"
         )
-    
+
     # Generate BibTeX entries
     bibtex_entries = []
     for idx, source in enumerate(sources, 1):
@@ -249,7 +249,7 @@ def export_sources_as_bibtex(
             if c.isalnum()
         ).lower()
         cite_key = f"{title_key}{idx}"
-        
+
         # Determine entry type based on source type
         entry_type = "misc"
         if source.source_type == "arxiv":
@@ -258,7 +258,7 @@ def export_sources_as_bibtex(
             entry_type = "article"
         elif source.source_type == "wikipedia":
             entry_type = "online"
-        
+
         # Build BibTeX entry
         entry = f"@{entry_type}{{{cite_key},\n"
         if source.title:
@@ -271,10 +271,10 @@ def export_sources_as_bibtex(
             entry += f'  howpublished = {{{source.source_type}}},\n'
         entry += "}\n"
         bibtex_entries.append(entry)
-    
+
     bibtex_content = "\n".join(bibtex_entries)
     filename = _safe_filename(research.query, research_id, "bib")
-    
+
     return Response(
         content=bibtex_content.encode('utf-8'),
         media_type="application/x-bibtex",
@@ -291,21 +291,21 @@ def export_findings_as_csv(
 ):
     """
     Export all findings as CSV format.
-    
+
     Includes finding content, source IDs, creator, and timestamps.
     """
     research = _get_research_or_404(research_id, db)
-    
+
     findings = db.query(models.ResearchFinding).filter(
         models.ResearchFinding.research_id == research_id
     ).all()
-    
+
     if not findings:
         raise HTTPException(
             status_code=404,
             detail="No findings found for this research"
         )
-    
+
     # Create CSV in memory
     output = io.StringIO()
     writer = csv.DictWriter(
@@ -320,7 +320,7 @@ def export_findings_as_csv(
         ]
     )
     writer.writeheader()
-    
+
     for finding in findings:
         writer.writerow({
             'id': finding.id,
@@ -330,10 +330,10 @@ def export_findings_as_csv(
             'created_at': finding.created_at.isoformat(),
             'updated_at': finding.updated_at.isoformat(),
         })
-    
+
     csv_content = output.getvalue()
     filename = _safe_filename(research.query, research_id, "csv")
-    
+
     return Response(
         content=csv_content.encode('utf-8'),
         media_type="text/csv",
@@ -350,21 +350,21 @@ def export_findings_as_json(
 ):
     """
     Export all findings as JSON format.
-    
+
     Includes all finding data in structured JSON format.
     """
     research = _get_research_or_404(research_id, db)
-    
+
     findings = db.query(models.ResearchFinding).filter(
         models.ResearchFinding.research_id == research_id
     ).all()
-    
+
     if not findings:
         raise HTTPException(
             status_code=404,
             detail="No findings found for this research"
         )
-    
+
     # Convert to JSON-serializable format
     findings_data = [
         {
@@ -377,10 +377,10 @@ def export_findings_as_json(
         }
         for f in findings
     ]
-    
+
     json_content = json.dumps(findings_data, indent=2)
     filename = _safe_filename(research.query, research_id, "json")
-    
+
     return Response(
         content=json_content.encode('utf-8'),
         media_type="application/json",
@@ -397,25 +397,25 @@ def export_research_data(
 ):
     """
     Export full research data as JSON.
-    
+
     Includes research metadata, all sources, findings, and notes.
     Useful for backup, migration, or data analysis.
     """
     research = _get_research_or_404(research_id, db)
-    
+
     # Fetch all related data
     sources = db.query(models.ResearchSource).filter(
         models.ResearchSource.research_id == research_id
     ).all()
-    
+
     findings = db.query(models.ResearchFinding).filter(
         models.ResearchFinding.research_id == research_id
     ).all()
-    
+
     notes = db.query(models.ResearchNote).filter(
         models.ResearchNote.research_id == research_id
     ).all()
-    
+
     # Build complete data structure
     research_data = {
         'research': {
@@ -470,14 +470,14 @@ def export_research_data(
             'version': '1.0',
         }
     }
-    
+
     json_content = json.dumps(research_data, indent=2)
     filename = _safe_filename(
         research.query,
         research_id,
         "full_data.json"
     )
-    
+
     return Response(
         content=json_content.encode('utf-8'),
         media_type="application/json",

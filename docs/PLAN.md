@@ -504,6 +504,7 @@ Implementation is organized in phases, building progressively from foundation to
 - ✅ Phase 19: Web UI v1.0 (COMPLETE)
 
 **Partially Complete**:
+- 🟡 **Phase 9: PDF & Document Parsing** - GROBID service setup, pdf_parser.py with GROBID, pdfplumber, and PyPDF2 fallbacks implemented
 - 🟡 **Phase 12: Hypothesis Generation** - hypothesis_agent.py implemented and integrated into orchestrator
 
 **HIGH Priority In Progress**:
@@ -516,7 +517,7 @@ Implementation is organized in phases, building progressively from foundation to
   - Sprint 5: UX polish & quality of life improvements
 
 **HIGH Priority Remaining (Backend)**:
-- ⏳ Phase 9: PDF & Document Parsing
+- 🟡 Phase 9: PDF & Document Parsing (Partial - GROBID setup done, BibTeX parsing and chunking TODO)
 - ⏳ Phase 10: NLP & Knowledge Extraction
 - ⏳ Phase 11: Knowledge Graph & Storage
 
@@ -687,10 +688,10 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 ### Phase 9: PDF & Document Parsing | Priority: HIGH
 *Extract structured content from academic PDFs*
 
-- [ ] Set up GROBID service (Docker container)
-- [ ] Implement `app/tools/pdf_parser.py` using GROBID
-- [ ] Add fallback parsing with `pdfplumber`/`PyPDF2`
-- [ ] Extract figures, tables, and equations
+- [x] Set up GROBID service (Docker container)
+- [x] Implement `app/tools/pdf_parser.py` using GROBID
+- [x] Add fallback parsing with `pdfplumber`/`PyPDF2`
+- [x] Extract figures, tables, and equations metadata
 - [ ] Implement BibTeX parsing with `bibtexparser`
 - [ ] Create document chunking for large papers
 

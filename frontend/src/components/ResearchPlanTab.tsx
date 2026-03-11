@@ -151,11 +151,10 @@ export default function ResearchPlanTab({ researchId, researchQuery }: Props) {
 										<div className="flex items-center gap-2">
 											<span className="text-xs font-semibold text-gray-500">#{index + 1}</span>
 											<span
-												className={`px-2 py-0.5 rounded text-xs font-medium ${
-													isDone
+												className={`px-2 py-0.5 rounded text-xs font-medium ${isDone
 														? 'bg-green-100 text-green-700'
 														: 'bg-yellow-100 text-yellow-700'
-												}`}
+													}`}
 											>
 												{isDone ? 'Completed' : 'Pending'}
 											</span>

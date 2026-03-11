@@ -44,6 +44,12 @@ citeproc-py>=0.6.0
 # PDF export
 pypandoc>=1.12
 
+# PDF parsing (Phase 9)
+grobid-client-python>=0.0.7
+pdfplumber>=0.10.0
+PyPDF2>=3.0.0
+bibtexparser>=1.4.0
+
 # HTTP retries and resilience
 tenacity>=8.2.0
 

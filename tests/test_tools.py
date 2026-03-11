@@ -1080,3 +1080,188 @@ class TestToolsWithMockedAPIs:
         if len(results) > 0:
             assert hasattr(results[0], "title")
             assert hasattr(results[0], "citation_count")
+
+
+class TestPDFParser:
+    """Tests for PDF parser tool."""
+
+    @pytest.mark.asyncio
+    async def test_parse_pdf_missing_file(self):
+        """Test parsing a non-existent file returns error."""
+        from app.tools.pdf_parser import parse_pdf_from_file
+
+        result = await parse_pdf_from_file("/nonexistent/file.pdf")
+
+        assert result.success is False
+        assert result.error is not None
+        assert result.error.error_type == ToolErrorType.NOT_FOUND
+
+    @pytest.mark.asyncio
+    async def test_parse_pdf_from_url_download_fails(self):
+        """Test that parse_pdf_from_url handles download failures."""
+        from app.tools.pdf_parser import parse_pdf_from_url
+
+        # Mock download_pdf to return failure
+        mock_download_result = MagicMock()
+        mock_download_result.success = False
+        mock_download_result.file_path = None
+        mock_download_result.error = "Network error"
+
+        with patch("app.tools.pdf_parser.download_pdf", return_value=mock_download_result):
+            result = await parse_pdf_from_url("http://example.com/paper.pdf")
+
+        assert result.success is False
+        assert result.error is not None
+        assert result.error.error_type == ToolErrorType.NETWORK_ERROR
+
+    @pytest.mark.asyncio
+    async def test_parse_pdf_with_pypdf2_fallback(self):
+        """Test PDF parsing falls back to PyPDF2 when GROBID and pdfplumber fail."""
+        from app.tools.pdf_parser import parse_pdf_from_file, ParsedPDF
+        import tempfile
+        from PyPDF2 import PdfWriter
+
+        # Create a minimal valid PDF
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
+            writer = PdfWriter()
+            writer.add_blank_page(width=200, height=200)
+            writer.write(f)
+            temp_path = f.name
+
+        try:
+            # Mock GROBID and pdfplumber to fail
+            with patch("app.tools.pdf_parser._parse_with_grobid", return_value=None), \
+                 patch("app.tools.pdf_parser._parse_with_pdfplumber", side_effect=Exception("pdfplumber failed")):
+                
+                result = await parse_pdf_from_file(temp_path)
+
+            # PyPDF2 should succeed as fallback
+            assert result.success is True
+            assert result.data is not None
+            assert len(result.data) == 1
+            assert result.data[0].parser_used == "pypdf2"
+        finally:
+            # Clean up
+            import os
+            os.unlink(temp_path)
+
+    @pytest.mark.asyncio
+    async def test_parse_pdf_grobid_success(self):
+        """Test successful PDF parsing with GROBID."""
+        from app.tools.pdf_parser import parse_pdf_from_file, ParsedPDF
+
+        # Mock a successful GROBID parse
+        mock_parsed_pdf = ParsedPDF(
+            title="Test Paper",
+            authors=["John Doe", "Jane Smith"],
+            abstract="This is a test abstract.",
+            sections=[],
+            references=[],
+            figures=[],
+            tables=[],
+            keywords=["test", "paper"],
+            full_text="This is a test abstract. Full content here.",
+            metadata={},
+            parser_used="grobid"
+        )
+
+        with patch("app.tools.pdf_parser._parse_with_grobid", return_value=mock_parsed_pdf):
+            result = await parse_pdf_from_file("/tmp/test.pdf")
+
+        assert result.success is True
+        assert result.data is not None
+        assert len(result.data) == 1
+        assert result.data[0].title == "Test Paper"
+        assert len(result.data[0].authors) == 2
+        assert result.data[0].parser_used == "grobid"
+
+    @pytest.mark.asyncio
+    async def test_parse_pdf_empty_text_error(self):
+        """Test that PDFs with no extractable text return an error."""
+        from app.tools.pdf_parser import parse_pdf_from_file, ParsedPDF
+
+        # Mock a parse that returns empty text
+        mock_parsed_pdf = ParsedPDF(
+            title=None,
+            authors=[],
+            abstract=None,
+            sections=[],
+            references=[],
+            figures=[],
+            tables=[],
+            keywords=[],
+            full_text="",  # Empty text
+            metadata={},
+            parser_used="grobid"
+        )
+
+        with patch("app.tools.pdf_parser._parse_with_grobid", return_value=mock_parsed_pdf):
+            result = await parse_pdf_from_file("/tmp/test.pdf")
+
+        assert result.success is False
+        assert result.error is not None
+        assert result.error.error_type == ToolErrorType.PARSE_ERROR
+        assert "No text content" in result.error.message
+
+    def test_pdf_section_model(self):
+        """Test PDFSection model validation."""
+        from app.tools.pdf_parser import PDFSection
+
+        section = PDFSection(
+            heading="Introduction",
+            content="This is the introduction section.",
+            level=1
+        )
+
+        assert section.heading == "Introduction"
+        assert section.level == 1
+        assert len(section.content) > 0
+
+    def test_pdf_reference_model(self):
+        """Test PDFReference model validation."""
+        from app.tools.pdf_parser import PDFReference
+
+        ref = PDFReference(
+            raw_text="Doe, J. (2020). Test Paper. Nature.",
+            title="Test Paper",
+            authors=["Doe, J."],
+            year=2020,
+            doi="10.1234/test"
+        )
+
+        assert ref.title == "Test Paper"
+        assert ref.year == 2020
+        assert ref.doi == "10.1234/test"
+
+    def test_parsed_pdf_model(self):
+        """Test ParsedPDF model validation."""
+        from app.tools.pdf_parser import ParsedPDF, PDFSection, PDFReference
+
+        section = PDFSection(heading="Methods", content="Methodology", level=1)
+        reference = PDFReference(
+            raw_text="Smith, A. (2019). Related Work.",
+            title="Related Work",
+            authors=["Smith, A."],
+            year=2019
+        )
+
+        pdf = ParsedPDF(
+            title="Research Paper",
+            authors=["Author One", "Author Two"],
+            abstract="Abstract text",
+            sections=[section],
+            references=[reference],
+            figures=[],
+            tables=[],
+            keywords=["research", "test"],
+            full_text="Abstract text Methodology",
+            metadata={"pages": 10},
+            parser_used="grobid"
+        )
+
+        assert pdf.title == "Research Paper"
+        assert len(pdf.authors) == 2
+        assert len(pdf.sections) == 1
+        assert len(pdf.references) == 1
+        assert pdf.parser_used == "grobid"
+
