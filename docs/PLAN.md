@@ -13,40 +13,13 @@ An interactive AI research assistant that helps users build and explore a persis
 
 ## General Workflow
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    INTERACTIVE RESEARCH WORKFLOW                     │
-└─────────────────────────────────────────────────────────────────────┘
+1. User provides an initial topic and the assistant helps refine scope.
+2. The planner decomposes the topic into sub-questions.
+3. Search agents gather sources from web and academic providers.
+4. Findings, citations, and notes are persisted to the knowledge base.
+5. Users iteratively explore, edit, and extend the research.
+6. Optional document generation produces blog/paper/summary outputs.
 
-1. USER INPUT & REFINEMENT
-   ├── User provides initial research topic or question
-   ├── AI suggests clarifications and scope refinements
-   └── User confirms or adjusts direction
-
-2. AI PLANNING & RESEARCH
-   ├── AI decomposes query into sub-questions
-   ├── AI searches multiple sources (web, academic, etc.)
-   ├── AI extracts entities, relationships, key findings
-   └── Everything is added to the knowledge base
-
-3. KNOWLEDGE BASE MANAGEMENT
-   ├── All sources, citations, and findings are persisted
-   ├── Users can browse, search, filter the knowledge base
-   ├── Users can add/remove/edit items manually
-   └── AI state (reasoning, hypotheses) is saved
-
-4. INTERACTIVE EXPLORATION
-   ├── User asks questions about the collected knowledge
-   ├── User requests deeper research on specific topics
-   ├── User makes suggestions or corrections
-   └── AI updates state and knowledge base accordingly
-
-5. DOCUMENT GENERATION (Optional)
-   ├── User chooses output format (blog post, paper, summary)
-   ├── AI synthesizes knowledge base into document
-   ├── User can iterate on draft with feedback
-   └── Final output with proper citations
-```
 
 ## Goals
 
@@ -67,38 +40,11 @@ An interactive AI research assistant that helps users build and explore a persis
 
 The system operates through a conversational API where users can perform various operations:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    USER INTERACTION CAPABILITIES                     │
-└─────────────────────────────────────────────────────────────────────┘
+- Knowledge base operations: add, remove, edit, browse, search, and export items.
+- Research operations: expand scope, ask questions, summarize progress, and identify gaps.
+- AI state operations: inspect current plan/status/reasoning and reset direction.
+- Document generation operations: produce or revise blog posts, papers, and summaries.
 
-KNOWLEDGE BASE OPERATIONS
-├── Add: "Add this paper/URL/concept to my research"
-├── Remove: "Remove this source, it's not relevant"
-├── Edit: "Update the notes for this finding"
-├── Browse: "Show me all sources about topic X"
-├── Search: "Find items related to machine learning"
-└── Export: "Export this subset as BibTeX"
-
-RESEARCH OPERATIONS
-├── Expand: "Research more about sub-topic Y"
-├── Question: "What does my research say about Z?"
-├── Summarize: "Summarize the key findings so far"
-├── Gaps: "What topics need more research?"
-└── Contradict: "Are there conflicting views on X?"
-
-AI STATE OPERATIONS
-├── Plan: "Show me the current research plan"
-├── Status: "What has been completed? What's pending?"
-├── Reasoning: "Why did you conclude X?"
-└── Reset: "Start fresh with a new direction"
-
-DOCUMENT GENERATION (Optional)
-├── Blog: "Generate a blog post from this research"
-├── Paper: "Create an academic paper outline"
-├── Summary: "Write an executive summary"
-└── Custom: "Generate a document with these sections..."
-```
 
 ---
 
@@ -106,44 +52,12 @@ DOCUMENT GENERATION (Optional)
 
 When conducting research, the AI follows a structured approach (but always pausable/resumable):
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     RESEARCH METHODOLOGY                            │
-└─────────────────────────────────────────────────────────────────────┘
+1. Topic understanding: clarify scope and define sub-questions.
+2. Literature collection: retrieve relevant sources and extract key content.
+3. Knowledge synthesis: identify themes, contradictions, and coverage gaps.
+4. Optional hypothesis generation: propose and prioritize testable hypotheses.
+5. Optional document generation: draft outputs with citations and iterate with feedback.
 
-Step 1: TOPIC UNDERSTANDING
-├── Input: User's research topic or question
-├── Action: Clarify scope, identify key concepts
-├── User Interaction: Confirm or refine direction
-└── Output: Well-defined research question, sub-questions
-
-Step 2: LITERATURE COLLECTION
-├── Search: Query academic APIs (arXiv, PubMed, Semantic Scholar)
-├── Retrieve: Download papers, parse PDFs with GROBID
-├── Extract: NLP to extract abstracts, methods, results, citations
-├── Store: Add all sources to knowledge base
-└── User Interaction: User can pause, add sources, remove irrelevant items
-
-Step 3: KNOWLEDGE SYNTHESIS
-├── Analyze: Topic modeling, relation extraction for patterns
-├── Build: Create knowledge graph of concepts and relationships
-├── Identify: Find gaps, contradictions, key themes
-├── Store: Persist synthesis in AI state
-└── User Interaction: User can query, challenge, or redirect
-
-Step 4: OPTIONAL - HYPOTHESIS GENERATION
-├── Generate: LLM/rule-based reasoning to propose hypotheses
-├── Prioritize: Rank by novelty, plausibility, feasibility
-├── Store: Add hypotheses to knowledge base
-└── User Interaction: User can accept, reject, or modify hypotheses
-
-Step 5: OPTIONAL - DOCUMENT GENERATION
-├── Select: User chooses output format and scope
-├── Draft: AI synthesizes knowledge into document
-├── Cite: Insert citations from knowledge base
-├── Iterate: User provides feedback, AI revises
-└── Output: Final document in chosen format
-```
 
 ---
 
@@ -151,208 +65,36 @@ Step 5: OPTIONAL - DOCUMENT GENERATION
 
 ### Directory Structure
 
-```
-app/
-├── agents/
-│   ├── __init__.py
-│   ├── orchestrator.py       # Main coordinator (LangGraph state machine)
-│   ├── planner.py            # Decomposes query into sub-questions
-│   ├── search_agent.py       # Web search subagent
-│   ├── synthesis_agent.py    # Combines findings into document
-│   ├── hypothesis_agent.py   # Generates and ranks hypotheses
-│   ├── intent_router.py      # Classifies user intent for chat
-│   ├── query_expander.py     # Generates query variations for better coverage
-│   └── reference_chaser.py   # Follows references recursively
-├── tools/
-│   ├── __init__.py
-│   ├── base.py               # Standardized tool response types
-│   ├── web_search.py         # Tavily/DuckDuckGo search
-│   ├── web_scraper.py        # Extract content from URLs
-│   ├── arxiv_search.py       # Academic paper search
-│   ├── wikipedia.py          # Wikipedia lookup
-│   ├── pubmed_search.py      # PubMed medical literature
-│   ├── semantic_scholar.py   # Semantic Scholar API
-│   ├── crossref_search.py    # Crossref DOI/metadata
-│   ├── openalex_search.py    # OpenAlex open scholarly data
-│   ├── pdf_download.py       # PDF download and caching
-│   └── reference_extractor.py # Extract references from pages
-├── memory/
-│   ├── __init__.py
-│   └── research_state.py     # Pydantic state models
-├── output/
-│   ├── __init__.py
-│   ├── citation_formatter.py # APA, MLA, Chicago styles
-│   └── pdf_exporter.py       # PDF/HTML/DOCX export with Pandoc
-├── routers/
-│   ├── __init__.py
-│   ├── research.py           # Research CRUD endpoints
-│   ├── chat.py               # Chat & WebSocket endpoints
-│   ├── sources.py            # Source CRUD endpoints
-│   ├── findings.py           # Finding CRUD endpoints
-│   ├── notes.py              # Note CRUD endpoints
-│   ├── state.py              # AI state & plan endpoints
-│   └── exports.py            # Document export endpoints
-├── services/
-│   ├── __init__.py
-│   ├── research_service.py   # Background task processing
-│   └── chat_handlers.py      # Intent-specific chat handlers
-├── __init__.py
-├── config.py                 # Application settings
-├── database.py               # SQLAlchemy setup
-├── llm_provider.py           # LLM provider factory with rate limiting
-├── main.py                   # FastAPI application
-├── models.py                 # SQLAlchemy ORM models
-├── rate_limiter.py           # Token bucket rate limiting middleware
-├── researcher.py             # Basic LLM research chain
-├── schemas.py                # Pydantic request/response schemas
-└── websocket_manager.py      # WebSocket connection manager
-```
+High-level project directories:
+
+- `app`: backend services, agents, routers, models, tools, and state.
+- `frontend`: React UI for research management and visualization.
+- `tests`: backend and integration test suites.
+- `docs`: plans, status reports, and implementation notes.
+- `alembic`: database migration scripts.
+- `deploy`: deployment configuration assets.
+
 
 **Planned directories (not yet implemented):**
-```
-app/
-├── nlp/                      # Phase 10: NLP & Knowledge Extraction
-│   ├── entity_extractor.py   # Named entity recognition
-│   ├── relation_extractor.py # Relationship extraction
-│   ├── summarizer.py         # Document summarization
-│   └── topic_modeler.py      # Topic modeling (LDA)
-├── knowledge/                # Phase 11: Knowledge Graph & Storage
-│   ├── graph_builder.py      # Knowledge graph construction
-│   ├── graph_store.py        # Neo4j/RDFlib interface
-│   └── vector_store.py       # Chroma/FAISS for RAG
-├── tools/
-│   └── pdf_parser.py         # Phase 9: GROBID/pdfplumber parsing
-└── analysis/                 # Phases 13-14: Experiment & Analysis
-    ├── statistics.py         # Statistical tests (scipy)
-    ├── ml_models.py          # sklearn/torch models
-    └── visualization.py      # Matplotlib/Plotly charts
-```
+
+- `app/nlp`: NLP extraction and summarization components.
+- `app/knowledge`: graph and vector storage components.
+- `app/analysis`: experiment, statistics, and visualization components.
 
 ### Core Components
 
 #### 1. Research State (Memory)
 
-```python
-class Citation(BaseModel):
-    id: str                    # e.g., "[1]"
-    url: str
-    title: str
-    author: Optional[str]
-    date_accessed: str
-    snippet: str               # Relevant excerpt
-    source_type: SourceType    # web|arxiv|wikipedia|pubmed|semantic_scholar
+Research state is tracked in typed models and persisted as checkpointable JSON, including query decomposition, citations, findings, notes, reasoning logs, hypotheses, and workflow status.
 
-class Entity(BaseModel):
-    name: str
-    type: str                  # concept|method|result|author|institution
-    mentions: List[str]        # Citation IDs where mentioned
-
-class Relationship(BaseModel):
-    source: str                # Entity name
-    target: str                # Entity name
-    relation_type: str         # e.g., "causes", "correlates_with", "contradicts"
-    evidence: List[str]        # Citation IDs supporting this relationship
-
-class Hypothesis(BaseModel):
-    id: str
-    statement: str             # The hypothesis text
-    supporting_evidence: List[str]  # Citation IDs
-    contradicting_evidence: List[str]
-    novelty_score: float       # 0-1, based on literature gap
-    testability_score: float   # 0-1, based on data availability
-    status: str                # proposed|testing|supported|refuted
-
-class ExperimentResult(BaseModel):
-    hypothesis_id: str
-    method: str                # Statistical test or ML model used
-    result_summary: str
-    p_value: Optional[float]
-    effect_size: Optional[float]
-    figures: List[str]         # Paths to generated visualizations
-    interpretation: str
-
-class ResearchState(BaseModel):
-    research_id: int
-    query: str
-    refined_question: Optional[str] = None  # Clarified research question
-    sub_queries: List[str] = []             # Decomposed questions
-    citations: List[Citation] = []          # Collected sources (knowledge base)
-    entities: List[Entity] = []             # Extracted entities
-    relationships: List[Relationship] = []  # Knowledge graph edges
-    findings: dict[str, str] = {}           # sub_query -> finding
-    hypotheses: List[Hypothesis] = []       # Generated hypotheses
-    experiment_results: List[ExperimentResult] = []
-    outline: Optional[str] = None           # Document structure
-    draft: Optional[str] = None             # Current document
-    conversation_history: List[dict] = []   # User-AI interaction history
-    ai_reasoning: List[dict] = []           # AI decision log for transparency
-    user_notes: dict[str, str] = {}         # User annotations on items
-    status: str = "idle"                    # idle|researching|awaiting_input|generating
-    errors: List[str] = []
-
-class ConversationMessage(BaseModel):
-    role: str                  # user|assistant|system
-    content: str
-    timestamp: str
-    action_taken: Optional[str] = None  # What action resulted from this message
-```
 
 #### 2. LangGraph Orchestrator (Interactive State Machine)
 
 The orchestrator is designed as an interactive state machine that responds to user commands
 rather than running as a linear pipeline. The AI can pause at any point and wait for user input.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    INTERACTIVE STATE MACHINE                        │
-└─────────────────────────────────────────────────────────────────────┘
+Core flow: route user intent, execute the appropriate research or management action, persist state updates, and respond with actionable results.
 
-                              ┌───────────┐
-                              │   IDLE    │◄───────────────────────┐
-                              │ (waiting) │                        │
-                              └─────┬─────┘                        │
-                                    │ User input                   │
-                                    ▼                              │
-                        ┌───────────────────────┐                  │
-                        │   ROUTE USER INTENT   │                  │
-                        │   (classify action)   │                  │
-                        └───────────┬───────────┘                  │
-                                    │                              │
-       ┌────────────────────────────┼────────────────────────────┐ │
-       │                            │                            │ │
-       ▼                            ▼                            ▼ │
-┌──────────────┐          ┌─────────────────┐          ┌────────────────┐
-│   RESEARCH   │          │  KNOWLEDGE BASE │          │   GENERATE     │
-│   COMMANDS   │          │    COMMANDS     │          │   DOCUMENT     │
-└──────┬───────┘          └────────┬────────┘          └───────┬────────┘
-       │                           │                           │
-       ▼                           ▼                           ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                         EXECUTION LAYER                              │
-├──────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  RESEARCH:              KB MANAGEMENT:           DOC GENERATION:     │
-│  ├─ plan_research       ├─ add_item              ├─ generate_blog    │
-│  ├─ search_sources      ├─ remove_item           ├─ generate_paper   │
-│  ├─ expand_topic        ├─ edit_item             ├─ generate_summary │
-│  ├─ answer_question     ├─ browse_items          └─ iterate_draft    │
-│  └─ find_gaps           ├─ search_kb                                 │
-│                         └─ export_citations                          │
-│                                                                      │
-└──────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-                         ┌────────────────────┐
-                         │   UPDATE STATE     │
-                         │   & PERSIST        │
-                         └─────────┬──────────┘
-                                   │
-                                   ▼
-                         ┌────────────────────┐
-                         │  RESPOND TO USER   │───────────────────────┘
-                         └────────────────────┘
-
-```
 
 **User Intent Categories:**
 
@@ -396,92 +138,8 @@ rather than running as a linear pipeline. The AI can pause at any point and wait
 
 #### 4. Database Schema
 
-```sql
--- Existing table (extended)
-ALTER TABLE research ADD COLUMN state_json JSONB;
+The schema extends the base research table with persisted state and related tables for sources, findings, notes, entities, relationships, hypotheses, experiments, and embeddings.
 
--- Sources and citations
-CREATE TABLE research_sources (
-    id SERIAL PRIMARY KEY,
-    research_id INTEGER REFERENCES research(id),
-    url VARCHAR(2000),
-    title VARCHAR(500),
-    author VARCHAR(200),
-    content_snippet TEXT,
-    source_type VARCHAR(50),
-    accessed_at TIMESTAMP WITH TIME ZONE
-);
-
--- Checkpoints for LangGraph
-CREATE TABLE research_checkpoints (
-    id SERIAL PRIMARY KEY,
-    research_id INTEGER REFERENCES research(id),
-    thread_id VARCHAR(100),
-    checkpoint_data JSONB,
-    created_at TIMESTAMP WITH TIME ZONE
-);
-
--- Knowledge graph entities
-CREATE TABLE research_entities (
-    id SERIAL PRIMARY KEY,
-    research_id INTEGER REFERENCES research(id),
-    name VARCHAR(500),
-    entity_type VARCHAR(100),
-    metadata JSONB,
-    created_at TIMESTAMP WITH TIME ZONE
-);
-
--- Knowledge graph relationships
-CREATE TABLE research_relationships (
-    id SERIAL PRIMARY KEY,
-    research_id INTEGER REFERENCES research(id),
-    source_entity_id INTEGER REFERENCES research_entities(id),
-    target_entity_id INTEGER REFERENCES research_entities(id),
-    relation_type VARCHAR(100),
-    confidence FLOAT,
-    evidence_source_ids INTEGER[],
-    created_at TIMESTAMP WITH TIME ZONE
-);
-
--- Hypotheses
-CREATE TABLE research_hypotheses (
-    id SERIAL PRIMARY KEY,
-    research_id INTEGER REFERENCES research(id),
-    statement TEXT,
-    supporting_evidence JSONB,
-    contradicting_evidence JSONB,
-    novelty_score FLOAT,
-    testability_score FLOAT,
-    status VARCHAR(50),
-    created_at TIMESTAMP WITH TIME ZONE,
-    updated_at TIMESTAMP WITH TIME ZONE
-);
-
--- Experiment results
-CREATE TABLE research_experiments (
-    id SERIAL PRIMARY KEY,
-    research_id INTEGER REFERENCES research(id),
-    hypothesis_id INTEGER REFERENCES research_hypotheses(id),
-    method VARCHAR(200),
-    parameters JSONB,
-    result_summary TEXT,
-    p_value FLOAT,
-    effect_size FLOAT,
-    figures JSONB,
-    interpretation TEXT,
-    created_at TIMESTAMP WITH TIME ZONE
-);
-
--- Vector embeddings for RAG
-CREATE TABLE research_embeddings (
-    id SERIAL PRIMARY KEY,
-    research_id INTEGER REFERENCES research(id),
-    source_id INTEGER REFERENCES research_sources(id),
-    chunk_text TEXT,
-    embedding vector(1536),
-    created_at TIMESTAMP WITH TIME ZONE
-);
-```
 
 ---
 
@@ -556,18 +214,9 @@ To add a new search source, implement `SearchPlugin` and call `get_registry().re
 
 **Proposed interface**:
 
-```python
-class ExportPlugin(Protocol):
-    format: ExportFormat          # "pdf", "html", "docx", "epub", …
-    mime_type: str                # for the HTTP response Content-Type
-    file_extension: str
-
-    def is_available(self) -> bool:  # e.g. check pandoc is installed
-        ...
-
-    def export(self, markdown: str, options: dict) -> bytes:
-        ...
-```
+- Each export plugin declares format, MIME type, and file extension.
+- Plugins expose availability checks (for example, dependency/tooling checks).
+- Plugins implement a single export operation from markdown + options to bytes.
 
 Built-in plugins would wrap the existing pandoc-based exporter. The `/exports` router iterates the registry instead of hard-coding formats.
 
@@ -581,14 +230,9 @@ Built-in plugins would wrap the existing pandoc-based exporter. The `/exports` r
 
 **Proposed interface**:
 
-```python
-class CitationStylePlugin(Protocol):
-    style: CitationStyle          # "apa", "mla", "chicago", "ieee", …
-    csl_xml: str                  # Full CSL stylesheet content
-
-    def format_reference(self, citation: Citation) -> str:
-        ...
-```
+- Each style plugin declares the style identifier and CSL content source.
+- Plugins provide a formatting method for a normalized citation object.
+- The formatter resolves style plugins from a registry instead of a fixed dict.
 
 Plugins can load their CSL from a bundled file, a URL, or a string literal, keeping `citation_formatter.py` free of style-specific knowledge.
 
@@ -602,12 +246,7 @@ Plugins can load their CSL from a bundled file, a URL, or a string literal, keep
 
 **Proposed change**: replace the factory's `if/elif` with a registry lookup, so new providers (Anthropic, Mistral, Bedrock, etc.) can be registered without editing `llm_provider.py`.
 
-```python
-class LLMProviderPlugin(Protocol):
-    provider_type: str            # "openai", "anthropic", …
-    def is_available(self) -> bool: ...
-    def get_llm(self, model: str, temperature: float, **kwargs) -> BaseChatModel: ...
-```
+Provider plugins should declare provider type, availability checks, and a standard model-construction method.
 
 This is a lower-priority change because the ABC already gives reasonable isolation, but it becomes worthwhile once a third or fourth provider is added.
 
@@ -1233,76 +872,20 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 ## Dependencies
 
 ### Currently Installed (Phases 1-6)
-```
-langgraph>=0.2.0
-tavily-python>=0.3.0
-duckduckgo-search>=5.0
-arxiv>=2.1.0
-wikipedia>=1.4.0
-beautifulsoup4>=4.12.0
-trafilatura>=1.6.0
-```
 
 ### Phase 7: Extended Search
-```
-biopython>=1.83            # PubMed/NCBI access
-semanticscholar>=0.7.0     # Semantic Scholar API
-crossrefapi>=1.5.0         # Crossref metadata
-pyalex>=0.13               # OpenAlex API
-```
 
 ### Phase 8: PDF Parsing
-```
-grobid-client-python>=0.0.7  # GROBID integration
-pdfplumber>=0.10.0           # PDF text extraction
-PyPDF2>=3.0.0                # PDF manipulation
-bibtexparser>=1.4.0          # BibTeX parsing
-```
 
 ### Phase 9: NLP & Knowledge Extraction
-```
-spacy>=3.7.0                 # NLP pipeline
-en_core_sci_lg               # Scientific NER model (scispaCy)
-transformers>=4.35.0         # Summarization models
-torch>=2.1.0                 # PyTorch backend
-gensim>=4.3.0                # Topic modeling
-bertopic>=0.15.0             # Neural topic modeling (optional)
-```
 
 ### Phase 10: Knowledge Graph & Storage
-```
-neo4j>=5.14.0                # Neo4j driver
-rdflib>=7.0.0                # RDF/knowledge graphs
-chromadb>=0.4.0              # Vector store
-sentence-transformers>=2.2.0 # Embeddings
-faiss-cpu>=1.7.4             # Fast similarity search (optional)
-elasticsearch>=8.11.0        # Full-text search (optional)
-```
 
 ### Phase 12-13: Analysis
-```
-scipy>=1.11.0                # Statistical tests
-statsmodels>=0.14.0          # Regression analysis
-scikit-learn>=1.3.0          # ML algorithms
-dowhy>=0.11.0                # Causal inference
-matplotlib>=3.8.0            # Static visualization
-plotly>=5.18.0               # Interactive charts
-seaborn>=0.13.0              # Statistical visualization
-```
 
 ### Phase 14: Report Generation
-```
-pandoc                       # System package (not pip)
-pypandoc>=1.12               # Python Pandoc wrapper
-jinja2>=3.1.0                # Template rendering
-weasyprint>=60.0             # HTML to PDF (alternative)
-```
 
 ### Phase 16: Workflow (Optional)
-```
-prefect>=2.14.0              # Workflow orchestration
-apache-airflow>=2.8.0        # Alternative orchestration
-```
 
 ---
 
@@ -1318,208 +901,29 @@ The API is designed around the interactive research assistant model:
 
 ### Research Session Endpoints
 
-```
-# Session Management
-POST /research
-  - Accepts: { topic: string, description?: string }
-  - Returns: { id, status: "idle", created_at }
-  - Creates a new research session (knowledge base)
-
-GET /research
-  - Returns: list of all research sessions
-  - Supports pagination and filtering
-
-GET /research/{id}
-  - Returns: full research state including KB stats, AI state
-
-DELETE /research/{id}
-  - Deletes research session and all associated data
-```
 
 ### Conversation / Chat Endpoint (Primary Interface)
 
-```
-POST /research/{id}/chat
-  - Accepts: { message: string }
-  - Returns: { 
-      response: string,           # AI's response
-      action_taken: string,       # add|remove|search|generate|etc
-      state_changes: object,      # What changed in the KB/state
-      suggestions?: string[]      # Optional follow-up suggestions
-    }
-  - This is the main interaction point - handles all user intents
-  - AI routes to appropriate action based on intent classification
-
-GET /research/{id}/chat/history
-  - Returns: list of conversation messages with timestamps
-  - Supports pagination
-```
 
 ### Knowledge Base Endpoints
 
-```
-# Sources / Citations
-GET /research/{id}/sources
-  - Returns: list of all sources in KB
-  - Supports filtering: ?type=arxiv&search=keyword
-
-POST /research/{id}/sources
-  - Accepts: { url?: string, doi?: string, manual?: object }
-  - Returns: { source_id, parsed_data }
-  - Manually add a source to the KB
-
-GET /research/{id}/sources/{source_id}
-  - Returns: full source details including extracted content
-
-PATCH /research/{id}/sources/{source_id}
-  - Accepts: { notes?: string, tags?: string[], relevant?: boolean }
-  - Updates user annotations on a source
-
-DELETE /research/{id}/sources/{source_id}
-  - Removes source from KB
-
-# Findings
-GET /research/{id}/findings
-  - Returns: list of synthesized findings
-  - Each finding links to supporting sources
-
-POST /research/{id}/findings
-  - Accepts: { content: string, source_ids?: string[] }
-  - Manually add a finding
-
-PATCH /research/{id}/findings/{finding_id}
-  - Update finding content or linked sources
-
-DELETE /research/{id}/findings/{finding_id}
-  - Remove finding
-
-# Entities & Relationships (Knowledge Graph)
-GET /research/{id}/entities
-  - Returns: list of extracted entities with metadata
-
-GET /research/{id}/relationships
-  - Returns: list of relationships between entities
-
-GET /research/{id}/graph
-  - Returns: { nodes: [], edges: [] } for visualization
-```
 
 ### AI State Endpoints
 
-```
-GET /research/{id}/state
-  - Returns: {
-      status: "idle"|"researching"|"awaiting_input"|"generating",
-      current_plan: object,       # Research plan breakdown
-      pending_queries: string[],  # Queries not yet researched
-      reasoning_log: object[],    # AI decision history
-      last_activity: timestamp
-    }
-
-GET /research/{id}/plan
-  - Returns: current research plan with sub-queries and progress
-
-PATCH /research/{id}/plan
-  - Accepts: { add_queries?: string[], remove_queries?: string[] }
-  - Modify the research plan
-
-POST /research/{id}/reset
-  - Resets AI state while preserving KB (start fresh direction)
-```
 
 ### Document Generation Endpoints
 
-```
-POST /research/{id}/generate
-  - Accepts: { 
-      format: "blog"|"paper"|"summary"|"custom",
-      options?: {
-        sections?: string[],       # For custom format
-        citation_style?: "apa"|"mla"|"chicago",
-        include_sources?: string[] # Subset of KB to use
-      }
-    }
-  - Returns: { draft_id, status: "generating" }
-  - Triggers async document generation
-
-GET /research/{id}/drafts
-  - Returns: list of generated drafts
-
-GET /research/{id}/drafts/{draft_id}
-  - Returns: { content, format, citations, created_at }
-
-POST /research/{id}/drafts/{draft_id}/iterate
-  - Accepts: { feedback: string }
-  - Returns: { updated_content }
-  - Iterate on draft with user feedback
-
-GET /research/{id}/drafts/{draft_id}/export
-  - Query: ?format=md|pdf|html|docx
-  - Returns: file download
-```
 
 ### Export Endpoints
 
-```
-GET /research/{id}/export/bibtex
-  - Returns: BibTeX file of all sources
-
-GET /research/{id}/export/json
-  - Returns: full KB as JSON (for backup/migration)
-
-POST /research/{id}/import
-  - Accepts: JSON or BibTeX file
-  - Imports sources into KB
-```
 
 ### (Future) Real-time Endpoints
 
-```
-WS /research/{id}/stream
-  - Streams: { event_type, data, timestamp }
-  - Events: 
-    - source_added, source_removed
-    - finding_created
-    - research_progress
-    - generation_progress
-  - Low priority - for future UI integration
-```
 
 ---
 
 ## Environment Variables
 
-```bash
-# LLM Configuration
-OPENAI_API_KEY=              # OpenAI API key
-LLM_PROVIDER=openai          # openai|ollama
-LLM_MODEL=gpt-4o             # Model to use
-
-# Search APIs
-TAVILY_API_KEY=              # Required for web search
-SEMANTIC_SCHOLAR_API_KEY=    # Optional, higher rate limits
-NCBI_API_KEY=                # Optional, for PubMed
-
-# Database
-DATABASE_URL=                # PostgreSQL connection string
-NEO4J_URI=                   # Neo4j connection (Phase 10)
-NEO4J_USER=                  # Neo4j username
-NEO4J_PASSWORD=              # Neo4j password
-ELASTICSEARCH_URL=           # Elasticsearch (optional)
-
-# Vector Store
-CHROMA_PERSIST_DIR=          # Chroma persistence directory
-EMBEDDING_MODEL=             # text-embedding-ada-002 or local model
-
-# Research Limits
-RESEARCH_MAX_SOURCES=20      # Max citations per research
-RESEARCH_TIMEOUT=300         # Max seconds per research
-MAX_PDF_SIZE_MB=50           # Max PDF file size to parse
-MAX_CONCURRENT_SEARCHES=5    # Rate limiting
-
-# Services (Docker)
-GROBID_URL=                  # GROBID service URL
-```
 
 ---
 
@@ -1571,19 +975,3 @@ GROBID_URL=                  # GROBID service URL
 8. **Phases 16-18** - Future enhancements, UI support
 
 ### External Services (Docker Compose)
-```yaml
-services:
-  grobid:
-    image: lfoppiano/grobid:0.8.0
-    ports:
-      - "8070:8070"
-  neo4j:
-    image: neo4j:5.15
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-  elasticsearch:
-    image: elasticsearch:8.11.3
-    ports:
-      - "9200:9200"
-```
