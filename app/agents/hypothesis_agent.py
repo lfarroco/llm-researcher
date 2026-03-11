@@ -13,6 +13,7 @@ simple query-based search.
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -133,6 +134,70 @@ def format_sources_summary(citations: list[Citation]) -> str:
         lines.append(f"... and {len(citations) - 15} more sources")
 
     return "\n".join(lines)
+
+
+def rank_hypotheses_by_evidence(
+    hypothesis_results: list[tuple[Hypothesis, list[Citation]]]
+) -> list[dict[str, Any]]:
+    """Rank hypotheses using evidence quality and query specificity.
+
+    Scoring combines:
+    - evidence volume (how many relevant sources were found)
+    - source diversity (different source types)
+    - reasoning specificity (signal from reasoning detail)
+    - query specificity (search query detail and operators)
+    """
+    ranked: list[dict[str, Any]] = []
+
+    for hypothesis, citations in hypothesis_results:
+        evidence_count = len(citations)
+        diversity_count = len({c.source_type for c in citations})
+
+        # Cap to keep scoring stable and bounded.
+        evidence_score = min(evidence_count / 3.0, 1.0)
+        diversity_score = min(diversity_count / 3.0, 1.0)
+
+        reasoning_words = len(hypothesis.reasoning.split())
+        reasoning_score = min(reasoning_words / 25.0, 1.0)
+
+        query_words = len(hypothesis.search_query.split())
+        has_operators = bool(
+            re.search(r"\b(AND|OR|NOT|site:|filetype:)\b",
+                      hypothesis.search_query, re.IGNORECASE)
+        )
+        query_score = min(query_words / 10.0, 1.0)
+        if has_operators:
+            query_score = min(query_score + 0.1, 1.0)
+
+        score = (
+            (0.5 * evidence_score)
+            + (0.2 * diversity_score)
+            + (0.15 * reasoning_score)
+            + (0.15 * query_score)
+        )
+
+        if score >= 0.75:
+            confidence = "high"
+        elif score >= 0.45:
+            confidence = "medium"
+        else:
+            confidence = "low"
+
+        ranked.append({
+            "hypothesis": hypothesis,
+            "citations": citations,
+            "score": round(score, 3),
+            "confidence": confidence,
+            "evidence_count": evidence_count,
+            "source_diversity": diversity_count,
+        })
+
+    ranked.sort(key=lambda item: item["score"], reverse=True)
+
+    for idx, item in enumerate(ranked, start=1):
+        item["rank"] = idx
+
+    return ranked
 
 
 async def search_for_hypothesis(
@@ -358,6 +423,7 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
 
     # Process results
     new_citations = []
+    hypothesis_results: list[tuple[Hypothesis, list[Citation]]] = []
     for i, result in enumerate(results):
         step_idx = i + 1  # +1 because first step is the analysis step
 
@@ -373,6 +439,7 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
             continue
 
         hypothesis, citations = result
+        hypothesis_results.append((hypothesis, citations))
 
         if step_idx < len(steps):
             steps[step_idx].status = "completed"
@@ -395,6 +462,24 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
             )
             if step_idx < len(steps):
                 steps[step_idx].description += " | No new evidence found."
+
+    ranked_hypotheses = rank_hypotheses_by_evidence(hypothesis_results)
+
+    # Attach ranking metadata to each per-hypothesis step.
+    for ranked in ranked_hypotheses:
+        hypothesis = ranked["hypothesis"]
+        for step in steps:
+            if (
+                step.step_type == "hypothesis"
+                and step.description == hypothesis.statement
+            ):
+                step.metadata.update({
+                    "rank": ranked["rank"],
+                    "score": ranked["score"],
+                    "confidence": ranked["confidence"],
+                    "source_diversity": ranked["source_diversity"],
+                })
+                break
 
     # Reassign citation IDs for the new citations
     next_id = len(state.citations) + 1
@@ -422,6 +507,17 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
         metadata={
             "hypotheses_investigated": len(hypotheses),
             "new_sources_found": len(new_citations),
+            "rankings": [
+                {
+                    "rank": ranked["rank"],
+                    "aspect": ranked["hypothesis"].aspect,
+                    "statement": ranked["hypothesis"].statement,
+                    "score": ranked["score"],
+                    "confidence": ranked["confidence"],
+                    "evidence_count": ranked["evidence_count"],
+                }
+                for ranked in ranked_hypotheses
+            ],
         },
     ))
 
@@ -434,13 +530,20 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
             content=f"Hypothesis analysis observations: {observations}",
         ))
     for hyp in hypotheses:
-        if new_citations:
+        evidence_count = 0
+        for ranked in ranked_hypotheses:
+            if ranked["hypothesis"].statement == hyp.statement:
+                evidence_count = ranked["evidence_count"]
+                break
+
+        if evidence_count > 0:
             notes.append(ResearchNote(
                 agent="hypothesis",
                 category="observation",
                 content=(
                     f"Investigated hypothesis on '{hyp.aspect}': "
-                    f"{hyp.statement}. Reasoning: {hyp.reasoning}"
+                    f"{hyp.statement}. Reasoning: {hyp.reasoning}. "
+                    f"Evidence sources found: {evidence_count}."
                 ),
             ))
         else:

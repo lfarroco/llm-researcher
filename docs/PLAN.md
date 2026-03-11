@@ -736,7 +736,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - ~~Analyze knowledge graph for gaps (missing relationships)~~ (requires Phase 11)
   - [x] Identify contradictions in literature
   - [x] Propose testable hypotheses using LLM reasoning
-- [ ] Add hypothesis ranking system
+- [x] Add hypothesis ranking system
   - Novelty score (inverse of existing evidence)
   - Plausibility score (consistency with known relationships)
   - Testability score (data availability)

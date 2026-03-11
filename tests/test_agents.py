@@ -25,6 +25,11 @@ from app.agents.query_expander import (
     QueryVariations,
     expand_query,
 )
+from app.agents.hypothesis_agent import (
+    Hypothesis,
+    generate_hypotheses,
+    rank_hypotheses_by_evidence,
+)
 from app.memory.research_state import (
     ResearchState,
     Citation,
@@ -703,3 +708,169 @@ class TestQueryExpander:
 
                 # Should fallback to original query only
                 assert result == ["test query"]
+
+
+class TestHypothesisRanking:
+    """Tests for hypothesis ranking behavior."""
+
+    def test_rank_hypotheses_prioritizes_evidence(self):
+        """Higher-evidence hypotheses should rank first."""
+        hyp_low = Hypothesis(
+            statement="Hypothesis A",
+            search_query="impact of AI on education",
+            reasoning="General trend worth exploring",
+            aspect="education",
+        )
+        hyp_high = Hypothesis(
+            statement="Hypothesis B",
+            search_query=(
+                "AI tutor effectiveness AND randomized trial site:edu"
+            ),
+            reasoning=(
+                "Multiple studies suggest gains but evidence quality differs "
+                "by population and evaluation design."
+            ),
+            aspect="effectiveness",
+        )
+
+        ranked = rank_hypotheses_by_evidence([
+            (
+                hyp_low,
+                [
+                    Citation(
+                        id="[1]",
+                        url="https://example.com/1",
+                        title="A",
+                        snippet="A",
+                        source_type=SourceType.WEB,
+                    )
+                ],
+            ),
+            (
+                hyp_high,
+                [
+                    Citation(
+                        id="[2]",
+                        url="https://example.com/2",
+                        title="B",
+                        snippet="B",
+                        source_type=SourceType.WEB,
+                    ),
+                    Citation(
+                        id="[3]",
+                        url="https://example.com/3",
+                        title="C",
+                        snippet="C",
+                        source_type=SourceType.ARXIV,
+                    ),
+                    Citation(
+                        id="[4]",
+                        url="https://example.com/4",
+                        title="D",
+                        snippet="D",
+                        source_type=SourceType.WIKIPEDIA,
+                    ),
+                ],
+            ),
+        ])
+
+        assert len(ranked) == 2
+        assert ranked[0]["hypothesis"].statement == "Hypothesis B"
+        assert ranked[0]["rank"] == 1
+        assert ranked[0]["score"] >= ranked[1]["score"]
+        assert ranked[0]["confidence"] in {"high", "medium"}
+
+    @pytest.mark.asyncio
+    async def test_generate_hypotheses_includes_ranking_metadata(self):
+        """Summary and hypothesis steps should include ranking details."""
+        state = ResearchState(
+            research_id=42,
+            query="How effective are AI tutors?",
+            sub_queries=["What outcomes improve?"],
+            citations=[
+                Citation(
+                    id="[1]",
+                    url="https://seed.example",
+                    title="Seed source",
+                    snippet="Initial evidence",
+                    source_type=SourceType.WEB,
+                )
+            ],
+        )
+
+        llm_result = {
+            "observations": "Need stronger causal evidence across cohorts.",
+            "hypotheses": [
+                {
+                    "statement": "AI tutors improve exam performance in STEM.",
+                    "search_query": "AI tutor exam performance randomized trial",
+                    "reasoning": "A recurring claim that needs stronger validation.",
+                    "aspect": "STEM outcomes",
+                },
+                {
+                    "statement": "Benefits are larger for novice learners.",
+                    "search_query": "AI tutor novice learners effect size meta analysis",
+                    "reasoning": "Prior studies indicate heterogeneity by baseline skill.",
+                    "aspect": "learner segment",
+                },
+            ],
+        }
+
+        first_hypothesis = Hypothesis(**llm_result["hypotheses"][0])
+        second_hypothesis = Hypothesis(**llm_result["hypotheses"][1])
+
+        first_citations = [
+            Citation(
+                id="[0]",
+                url="https://example.com/a",
+                title="A",
+                snippet="A",
+                source_type=SourceType.WEB,
+            )
+        ]
+        second_citations = [
+            Citation(
+                id="[0]",
+                url="https://example.com/b",
+                title="B",
+                snippet="B",
+                source_type=SourceType.WEB,
+            ),
+            Citation(
+                id="[0]",
+                url="https://example.com/c",
+                title="C",
+                snippet="C",
+                source_type=SourceType.ARXIV,
+            ),
+        ]
+
+        with patch("app.agents.hypothesis_agent.rate_limited_llm_call", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = llm_result
+
+            with patch("app.agents.hypothesis_agent.search_for_hypothesis", new_callable=AsyncMock) as mock_search:
+                mock_search.side_effect = [
+                    (first_hypothesis, first_citations),
+                    (second_hypothesis, second_citations),
+                ]
+
+                result = await generate_hypotheses(state)
+
+        assert result["status"] == "synthesizing"
+        summary_steps = [
+            step for step in result["agent_steps"]
+            if step.step_type == "summary"
+        ]
+        assert len(summary_steps) == 1
+        rankings = summary_steps[0].metadata.get("rankings", [])
+        assert len(rankings) == 2
+        assert rankings[0]["rank"] == 1
+        assert rankings[0]["score"] >= rankings[1]["score"]
+
+        hypothesis_steps = [
+            step for step in result["agent_steps"]
+            if step.step_type == "hypothesis"
+        ]
+        assert len(hypothesis_steps) == 2
+        assert all("rank" in step.metadata for step in hypothesis_steps)
+        assert all("score" in step.metadata for step in hypothesis_steps)
