@@ -8,6 +8,7 @@ import AgentSteps from './AgentSteps';
 import KnowledgeBase from './KnowledgeBase';
 import ResearchNotes from './ResearchNotes';
 import SourceFormModal from './SourceFormModal';
+import FindingFormModal from './FindingFormModal';
 import ConfirmDialog from './ConfirmDialog';
 
 interface Props {
@@ -33,6 +34,13 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 	const [sourceToDelete, setSourceToDelete] = useState<number | null>(null);
 	const [editingNotes, setEditingNotes] = useState<{ [key: number]: string }>({});
+
+	// Finding CRUD state
+	const [findingModalOpen, setFindingModalOpen] = useState(false);
+	const [editingFinding, setEditingFinding] = useState<Finding | null>(null);
+	const [findingDeleteConfirmOpen, setFindingDeleteConfirmOpen] = useState(false);
+	const [findingToDelete, setFindingToDelete] = useState<number | null>(null);
+	const [editingFindingContent, setEditingFindingContent] = useState<{ [key: number]: string }>({});
 
 	const loadData = useCallback(async () => {
 		try {
@@ -204,6 +212,88 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			handleCancelEditNotes(sourceId);
 		} catch (err) {
 			alert(err instanceof Error ? err.message : 'Failed to update notes');
+		}
+	};
+
+	// Finding CRUD handlers
+	const handleAddFinding = () => {
+		setEditingFinding(null);
+		setFindingModalOpen(true);
+	};
+
+	const handleEditFinding = (finding: Finding) => {
+		setEditingFinding(finding);
+		setFindingModalOpen(true);
+	};
+
+	const handleFindingModalSubmit = async (findingData: { content: string; source_ids?: number[] }) => {
+		try {
+			if (editingFinding) {
+				// Update existing finding
+				const updated = await api.updateFinding(researchId, editingFinding.id, findingData);
+				setFindings((prev) =>
+					prev.map((f) => (f.id === updated.id ? updated : f))
+				);
+			} else {
+				// Create new finding
+				const newFinding = await api.createFinding(researchId, findingData);
+				setFindings((prev) => [newFinding, ...prev]);
+			}
+			setFindingModalOpen(false);
+			setEditingFinding(null);
+		} catch (err) {
+			throw err;
+		}
+	};
+
+	const handleDeleteFinding = (findingId: number) => {
+		setFindingToDelete(findingId);
+		setFindingDeleteConfirmOpen(true);
+	};
+
+	const handleConfirmDeleteFinding = async () => {
+		if (findingToDelete === null) return;
+
+		try {
+			await api.deleteFinding(researchId, findingToDelete);
+			setFindings((prev) => prev.filter((f) => f.id !== findingToDelete));
+			setFindingDeleteConfirmOpen(false);
+			setFindingToDelete(null);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to delete finding');
+			setFindingDeleteConfirmOpen(false);
+			setFindingToDelete(null);
+		}
+	};
+
+	const handleStartEditFindingContent = (findingId: number, currentContent: string) => {
+		setEditingFindingContent((prev) => ({ ...prev, [findingId]: currentContent }));
+	};
+
+	const handleCancelEditFindingContent = (findingId: number) => {
+		setEditingFindingContent((prev) => {
+			const updated = { ...prev };
+			delete updated[findingId];
+			return updated;
+		});
+	};
+
+	const handleSaveFindingContent = async (findingId: number) => {
+		const content = editingFindingContent[findingId];
+		if (!content.trim()) {
+			alert('Content cannot be empty');
+			return;
+		}
+		try {
+			const updated = await api.updateFinding(researchId, findingId, {
+				content: content.trim(),
+			});
+			setFindings((prev) =>
+				prev.map((f) => (f.id === updated.id ? updated : f))
+			);
+			handleCancelEditFindingContent(findingId);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to update finding');
 		}
 	};
 
@@ -572,26 +662,172 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				)}
 
 				{activeTab === 'findings' && (
-					<div className="space-y-3">
-						{findings.length === 0 ? (
-							<p className="text-center text-gray-500 py-8">No findings yet</p>
-						) : (
-							findings.map((finding) => (
-								<div key={finding.id} className="border rounded-lg p-4">
-									<p className="text-sm text-gray-900">{finding.content}</p>
-									{finding.category && (
-										<span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
-											{finding.category}
-										</span>
-									)}
-									{finding.user_notes && (
-										<p className="mt-2 text-xs text-gray-600 italic">
-											Note: {finding.user_notes}
-										</p>
-									)}
+					<div>
+						<div className="flex justify-between items-center mb-4">
+							<h3 className="text-lg font-semibold text-gray-900">
+								Findings ({findings.length})
+							</h3>
+							<button
+								onClick={handleAddFinding}
+								className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+							>
+								+ Add Finding
+							</button>
+						</div>
+
+						<div className="space-y-3">
+							{findings.length === 0 ? (
+								<div className="text-center py-12">
+									<p className="text-gray-500 mb-4">No findings yet</p>
+									<button
+										onClick={handleAddFinding}
+										className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+									>
+										Add your first finding
+									</button>
 								</div>
-							))
-						)}
+							) : (
+								findings.map((finding) => {
+									const isEditingContent = editingFindingContent[finding.id] !== undefined;
+									return (
+										<div key={finding.id} className="border rounded-lg p-4 hover:bg-gray-50">
+											<div className="flex items-start justify-between">
+												<div className="flex-1 min-w-0">
+													{isEditingContent ? (
+														<div className="space-y-2">
+															<textarea
+																value={editingFindingContent[finding.id]}
+																onChange={(e) =>
+																	setEditingFindingContent((prev) => ({
+																		...prev,
+																		[finding.id]: e.target.value,
+																	}))
+																}
+																className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+																rows={4}
+																placeholder="Finding content..."
+															/>
+															<div className="flex gap-2">
+																<button
+																	onClick={() => handleSaveFindingContent(finding.id)}
+																	className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+																>
+																	Save
+																</button>
+																<button
+																	onClick={() => handleCancelEditFindingContent(finding.id)}
+																	className="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors"
+																>
+																	Cancel
+																</button>
+															</div>
+														</div>
+													) : (
+														<>
+															<p className="text-sm text-gray-900 whitespace-pre-wrap">
+																{finding.content}
+															</p>
+															{finding.category && (
+																<span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
+																	{finding.category}
+																</span>
+															)}
+															{finding.user_notes && (
+																<p className="mt-2 text-xs text-gray-600 italic bg-yellow-50 border border-yellow-200 rounded p-2">
+																	Note: {finding.user_notes}
+																</p>
+															)}
+															{finding.source_ids && finding.source_ids.length > 0 && (
+																<div className="mt-2">
+																	<p className="text-xs text-gray-500">
+																		Linked to {finding.source_ids.length} source
+																		{finding.source_ids.length !== 1 ? 's' : ''}
+																	</p>
+																</div>
+															)}
+															<div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+																{finding.created_by && (
+																	<span className="px-2 py-0.5 bg-gray-100 rounded">
+																		by {finding.created_by}
+																	</span>
+																)}
+																<span>{new Date(finding.created_at).toLocaleString()}</span>
+															</div>
+														</>
+													)}
+												</div>
+
+												<div className="ml-3 flex gap-1 flex-shrink-0">
+													{!isEditingContent && (
+														<>
+															<button
+																onClick={() =>
+																	handleStartEditFindingContent(finding.id, finding.content)
+																}
+																className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+																title="Edit content"
+															>
+																<svg
+																	className="w-4 h-4"
+																	fill="none"
+																	stroke="currentColor"
+																	viewBox="0 0 24 24"
+																>
+																	<path
+																		strokeLinecap="round"
+																		strokeLinejoin="round"
+																		strokeWidth={2}
+																		d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+																	/>
+																</svg>
+															</button>
+															<button
+																onClick={() => handleEditFinding(finding)}
+																className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+																title="Edit finding and sources"
+															>
+																<svg
+																	className="w-4 h-4"
+																	fill="none"
+																	stroke="currentColor"
+																	viewBox="0 0 24 24"
+																>
+																	<path
+																		strokeLinecap="round"
+																		strokeLinejoin="round"
+																		strokeWidth={2}
+																		d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+																	/>
+																</svg>
+															</button>
+															<button
+																onClick={() => handleDeleteFinding(finding.id)}
+																className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+																title="Delete finding"
+															>
+																<svg
+																	className="w-4 h-4"
+																	fill="none"
+																	stroke="currentColor"
+																	viewBox="0 0 24 24"
+																>
+																	<path
+																		strokeLinecap="round"
+																		strokeLinejoin="round"
+																		strokeWidth={2}
+																		d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+																	/>
+																</svg>
+															</button>
+														</>
+													)}
+												</div>
+											</div>
+										</div>
+									);
+								})
+							)}
+						</div>
 					</div>
 				)}
 
@@ -632,6 +868,17 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				onSubmit={handleSourceModalSubmit}
 			/>
 
+			<FindingFormModal
+				isOpen={findingModalOpen}
+				finding={editingFinding}
+				sources={sources}
+				onClose={() => {
+					setFindingModalOpen(false);
+					setEditingFinding(null);
+				}}
+				onSubmit={handleFindingModalSubmit}
+			/>
+
 			<ConfirmDialog
 				isOpen={deleteConfirmOpen}
 				title="Delete Source"
@@ -643,6 +890,20 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				onCancel={() => {
 					setDeleteConfirmOpen(false);
 					setSourceToDelete(null);
+				}}
+			/>
+
+			<ConfirmDialog
+				isOpen={findingDeleteConfirmOpen}
+				title="Delete Finding"
+				message="Are you sure you want to delete this finding? This action cannot be undone."
+				confirmLabel="Delete"
+				cancelLabel="Cancel"
+				confirmStyle="danger"
+				onConfirm={handleConfirmDeleteFinding}
+				onCancel={() => {
+					setFindingDeleteConfirmOpen(false);
+					setFindingToDelete(null);
 				}}
 			/>
 		</div>

@@ -25,13 +25,15 @@ export interface Source {
 
 export interface Finding {
 	id: number;
-	research_id: number;
-	source_id?: number;
+	research_id?: number;
+	source_ids?: number[];
 	content: string;
 	category?: string;
 	importance?: number;
 	user_notes?: string;
+	created_by?: string;
 	created_at: string;
+	updated_at?: string;
 }
 
 export interface ChatMessage {

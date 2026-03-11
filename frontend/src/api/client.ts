@@ -114,6 +114,38 @@ export const api = {
 		return handleResponse(response);
 	},
 
+	async createFinding(researchId: number, finding: {
+		content: string;
+		source_ids?: number[];
+	}): Promise<Finding> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/findings`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(finding),
+		});
+		return handleResponse(response);
+	},
+
+	async updateFinding(
+		researchId: number,
+		findingId: number,
+		update: { content?: string; source_ids?: number[] }
+	): Promise<Finding> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/findings/${findingId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(update),
+		});
+		return handleResponse(response);
+	},
+
+	async deleteFinding(researchId: number, findingId: number): Promise<void> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/findings/${findingId}`, {
+			method: 'DELETE',
+		});
+		if (!response.ok) throw new Error('Failed to delete finding');
+	},
+
 	// State endpoints
 	async getState(researchId: number): Promise<ResearchState> {
 		const response = await fetch(`${API_BASE}/research/${researchId}/state`);
