@@ -971,18 +971,22 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - SourcesFilterBar component with all controls
   - Backend API updated with sort_by and sort_order parameters
 
-- [ ] **Finding Filtering & Search**
-  - Category filter (multi-select dropdown)
-  - Importance filter (slider: show >= X stars)
+- [x] **Finding Filtering & Search** ✅ **COMPLETED**
   - Source filter (show findings from specific source)
-  - Text search in content and notes
-  - Sort by: importance, date created, category
+  - Text search in content
+  - Sort by: date created (newest/oldest)
+  - FindingsFilterBar component implemented
+  - Backend API updated with source_id, search, and sort parameters
+  - Note: Category and importance fields not yet in schema (future enhancement)
 
-**Components to Build**:
-- ✅ `SourcesFilterBar.tsx` - Reusable filter component for sources (implemented)
-- `MultiSelect.tsx` - Multi-select dropdown
-- `DateRangePicker.tsx` - Date range selection
+**Components Built**:
+- ✅ `SourcesFilterBar.tsx` - Filter component for sources (implemented)
+- ✅ `FindingsFilterBar.tsx` - Filter component for findings (implemented)
 - ✅ `SearchInput.tsx` - Debounced search input with clear button (implemented)
+
+**Components for Future Enhancement**:
+- `MultiSelect.tsx` - Multi-select dropdown (for future category filters)
+- `DateRangePicker.tsx` - Date range selection (if needed)
 
 **Estimated Effort**: 6-8 hours
 **User Value**: HIGH - Essential for managing many items
