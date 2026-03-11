@@ -963,11 +963,13 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - Backend enhanced with query parameters: `?status=X&search=Y`
   - Added user_notes field to Research model, schemas, and API
 
-- [ ] **Source Filtering & Search**
+- [x] **Source Filtering & Search** ✅ **COMPLETED**
   - Source type filter (web, arxiv, pubmed, semantic_scholar, wikipedia, etc.)
-  - Text search in title/content
+  - Text search in title/content/author
   - Sort by: date added (newest/oldest), title (A-Z/Z-A)
-  - Quick filters: "Recently added", "Academic only", "No content"
+  - Quick filters: "Academic only", "Recently added", "No content"
+  - SourcesFilterBar component with all controls
+  - Backend API updated with sort_by and sort_order parameters
 
 - [ ] **Finding Filtering & Search**
   - Category filter (multi-select dropdown)
@@ -977,10 +979,10 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - Sort by: importance, date created, category
 
 **Components to Build**:
-- `FilterBar.tsx` - Reusable filter component
+- ✅ `SourcesFilterBar.tsx` - Reusable filter component for sources (implemented)
 - `MultiSelect.tsx` - Multi-select dropdown
 - `DateRangePicker.tsx` - Date range selection
-- `SearchInput.tsx` - Debounced search input with clear button
+- ✅ `SearchInput.tsx` - Debounced search input with clear button (implemented)
 
 **Estimated Effort**: 6-8 hours
 **User Value**: HIGH - Essential for managing many items
