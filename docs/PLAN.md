@@ -911,8 +911,8 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 
 - [x] **Research Editing**
   - Edit research query inline (with confirmation)
-  - Edit user notes (textarea with save/cancel) - pending database migration
-  - Add/edit/remove tags (tag input component) - pending database migration
+  - Edit user notes (textarea with save/cancel) ✅ **COMPLETED** - Database migration done
+  - Add/edit/remove tags (tag input component) ✅ **COMPLETED** - Database migration done
   - Display last updated timestamp
 
 - [x] **Source CRUD Operations**
