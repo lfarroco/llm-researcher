@@ -159,41 +159,70 @@ app/
 │   ├── planner.py            # Decomposes query into sub-questions
 │   ├── search_agent.py       # Web search subagent
 │   ├── synthesis_agent.py    # Combines findings into document
-│   ├── citation_agent.py     # Formats and validates citations
 │   ├── hypothesis_agent.py   # Generates and ranks hypotheses
-│   └── analysis_agent.py     # Performs statistical/ML analysis
+│   ├── intent_router.py      # Classifies user intent for chat
+│   ├── query_expander.py     # Generates query variations for better coverage
+│   └── reference_chaser.py   # Follows references recursively
 ├── tools/
 │   ├── __init__.py
+│   ├── base.py               # Standardized tool response types
 │   ├── web_search.py         # Tavily/DuckDuckGo search
 │   ├── web_scraper.py        # Extract content from URLs
 │   ├── arxiv_search.py       # Academic paper search
 │   ├── wikipedia.py          # Wikipedia lookup
 │   ├── pubmed_search.py      # PubMed medical literature
 │   ├── semantic_scholar.py   # Semantic Scholar API
-│   ├── pdf_parser.py         # GROBID/pdfplumber parsing
-│   └── data_analysis.py      # Statistical analysis tools
-├── nlp/
+│   ├── crossref_search.py    # Crossref DOI/metadata
+│   ├── openalex_search.py    # OpenAlex open scholarly data
+│   ├── pdf_download.py       # PDF download and caching
+│   └── reference_extractor.py # Extract references from pages
+├── memory/
 │   ├── __init__.py
+│   └── research_state.py     # Pydantic state models
+├── output/
+│   ├── __init__.py
+│   ├── citation_formatter.py # APA, MLA, Chicago styles
+│   └── pdf_exporter.py       # PDF/HTML/DOCX export with Pandoc
+├── routers/
+│   ├── __init__.py
+│   ├── research.py           # Research CRUD endpoints
+│   ├── chat.py               # Chat & WebSocket endpoints
+│   ├── sources.py            # Source CRUD endpoints
+│   ├── findings.py           # Finding CRUD endpoints
+│   ├── notes.py              # Note CRUD endpoints
+│   ├── state.py              # AI state & plan endpoints
+│   └── exports.py            # Document export endpoints
+├── services/
+│   ├── __init__.py
+│   ├── research_service.py   # Background task processing
+│   └── chat_handlers.py      # Intent-specific chat handlers
+├── __init__.py
+├── config.py                 # Application settings
+├── database.py               # SQLAlchemy setup
+├── llm_provider.py           # LLM provider factory with rate limiting
+├── main.py                   # FastAPI application
+├── models.py                 # SQLAlchemy ORM models
+├── rate_limiter.py           # Token bucket rate limiting middleware
+├── researcher.py             # Basic LLM research chain
+├── schemas.py                # Pydantic request/response schemas
+└── websocket_manager.py      # WebSocket connection manager
+```
+
+**Planned directories (not yet implemented):**
+```
+app/
+├── nlp/                      # Phase 10: NLP & Knowledge Extraction
 │   ├── entity_extractor.py   # Named entity recognition
 │   ├── relation_extractor.py # Relationship extraction
 │   ├── summarizer.py         # Document summarization
 │   └── topic_modeler.py      # Topic modeling (LDA)
-├── knowledge/
-│   ├── __init__.py
+├── knowledge/                # Phase 11: Knowledge Graph & Storage
 │   ├── graph_builder.py      # Knowledge graph construction
 │   ├── graph_store.py        # Neo4j/RDFlib interface
 │   └── vector_store.py       # Chroma/FAISS for RAG
-├── memory/
-│   ├── __init__.py
-│   ├── research_state.py     # Pydantic state models
-│   └── checkpointer.py       # PostgreSQL persistence
-├── output/
-│   ├── __init__.py
-│   ├── document_builder.py   # Markdown generation
-│   ├── citation_formatter.py # APA, MLA, Chicago styles
-│   └── pdf_exporter.py       # PDF generation with Pandoc
-└── analysis/
-    ├── __init__.py
+├── tools/
+│   └── pdf_parser.py         # Phase 9: GROBID/pdfplumber parsing
+└── analysis/                 # Phases 13-14: Experiment & Analysis
     ├── statistics.py         # Statistical tests (scipy)
     ├── ml_models.py          # sklearn/torch models
     └── visualization.py      # Matplotlib/Plotly charts
@@ -462,7 +491,7 @@ Implementation is organized in phases, building progressively from foundation to
 
 ### Implementation Status Summary
 
-**Completed Phases**: 9 out of 20 phases (45%)
+**Completed Phases**: 10 out of 20 phases (50%)
 - ✅ Phase 1: Foundation (HIGH)
 - ✅ Phase 2: Core Tools (HIGH)
 - ✅ Phase 3: Core Agents (HIGH)
@@ -474,9 +503,12 @@ Implementation is organized in phases, building progressively from foundation to
 - ✅ Phase 16: Real-time Updates (LOW - Future UI)
 - ✅ Phase 19: Web UI v1.0 (COMPLETE)
 
+**Partially Complete**:
+- 🟡 **Phase 12: Hypothesis Generation** - hypothesis_agent.py implemented and integrated into orchestrator
+
 **HIGH Priority In Progress**:
-- 🚀 **Phase 20: Frontend v2.0** - User Productivity Features (NEW)
-  - Sprint 1: CRUD operations for sources, findings, research editing
+- 🚀 **Phase 20: Frontend v2.0** - User Productivity Features
+  - Sprint 1: CRUD operations for sources, findings, research editing (partially done)
   - Sprint 2: Search & filtering for all resources
   - Sprint 3: Bulk operations & export features
   - Sprint 4: Research plan & AI state visualization
@@ -487,7 +519,7 @@ Implementation is organized in phases, building progressively from foundation to
 - ⏳ Phase 10: NLP & Knowledge Extraction
 - ⏳ Phase 11: Knowledge Graph & Storage
 
-**System Status**: Production-ready for web-based research with real-time UI. Frontend v1.0 provides read-only views; v2.0 will add full CRUD capabilities. Advanced backend features (knowledge extraction, graphs) are pending.
+**System Status**: Production-ready for web-based research with real-time UI. Frontend v1.0 provides research monitoring, knowledge base exploration, notes CRUD, agent step visualization, and chat. V2.0 will add source/finding CRUD, filtering, bulk operations, and exports. Advanced backend features (knowledge extraction, graphs) are pending.
 
 See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
 
@@ -609,20 +641,20 @@ See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
 - [ ] Add Elasticsearch for full-text search (optional)
 - [ ] Create database tables for entities, relationships, embeddings
 
-### Phase 12: Hypothesis Generation | Priority: MEDIUM (Optional)
+### Phase 12: Hypothesis Generation | Priority: MEDIUM (Optional) 🟡 Partial
 *Identify gaps and propose hypotheses - can be skipped if not needed*
 
-- [ ] Implement `app/agents/hypothesis_agent.py`
-  - Analyze knowledge graph for gaps (missing relationships)
-  - Identify contradictions in literature
-  - Propose testable hypotheses using LLM reasoning
+- [x] Implement `app/agents/hypothesis_agent.py`
+  - ~~Analyze knowledge graph for gaps (missing relationships)~~ (requires Phase 11)
+  - [x] Identify contradictions in literature
+  - [x] Propose testable hypotheses using LLM reasoning
 - [ ] Add hypothesis ranking system
   - Novelty score (inverse of existing evidence)
   - Plausibility score (consistency with known relationships)
   - Testability score (data availability)
-- [ ] Implement hypothesis validation against existing literature
+- [x] Implement hypothesis validation against existing literature
 - [ ] Add user feedback loop for hypothesis refinement
-- [ ] Update orchestrator with hypothesis generation step
+- [x] Update orchestrator with hypothesis generation step
 
 ### Phase 13: Experiment Design | Priority: LOW (Optional)
 *Design analyses to test hypotheses - only if doing scientific research*
@@ -717,22 +749,25 @@ See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
 #### ✅ Implemented Features (v1.0)
 - [x] **Research Management**
   - Create new research queries with optional notes
-  - Browse list of all research with status indicators
+  - Browse paginated list of all research with status indicators
   - View detailed research information
   - Delete research queries
+  - Cancel and resume research
+  - Inline editing of research query (EditableResearchHeader)
   - Real-time status updates via polling
 
-- [x] **Research Detail View (5 Tabs)**
-  - Overview tab: Summary metrics and recent sources
+- [x] **Research Detail View (8 Tabs)**
+  - Overview tab: Summary metrics (sources/findings count), status, progress
   - Sources tab: Browse all collected sources with links
   - Findings tab: View extracted findings with categories
-  - Progress tab: Real-time WebSocket event stream
+  - Result tab: Final synthesized document
+  - Knowledge Base tab: Tree view (sub-queries → citations) and flat sources list, source type filtering, relevance scores, hypothesis investigations
+  - Notes tab: CRUD for research notes with category/agent filtering (observation, gap, pattern, contradiction, instruction, summary)
+  - Agent Steps tab: Timeline visualization of agent execution steps, color-coded by type, expandable with metadata
   - Chat tab: Interactive Q&A about research results
 
 - [x] **Real-time Progress Monitoring**
-  - WebSocket connection for live updates
-  - Event stream showing status changes, sources added, findings created
-  - Connection status indicator
+  - Polling-based status updates (1s while researching)
   - Progress percentage display
   - Error notifications
 
@@ -741,12 +776,26 @@ See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
   - View conversation history
   - Assistant responses with timestamps
   - Auto-scroll to latest messages
-  - Loading states
+  - Loading/thinking states
+
+- [x] **Knowledge Base Explorer**
+  - Dual view modes: tree view (by sub-query) and flat source list
+  - Source type filtering (web, arxiv, wikipedia, pubmed, semantic_scholar)
+  - Relevance score bars
+  - Expandable citation snippets
+  - Hypothesis investigations display
+  - Source distribution stats
+
+- [x] **Notes Management**
+  - Create, edit, delete notes
+  - Category-based color coding
+  - Filter by agent and category
+  - Agent attribution (planner, search, hypothesis, synthesis, user)
 
 - [x] **Modern UI/UX**
   - Clean, professional design with Tailwind CSS
   - Responsive layout (desktop + mobile)
-  - Color-coded status badges
+  - Color-coded status badges with icons
   - Loading states and error handling
   - Empty state messages
   - Hover effects and transitions
@@ -794,12 +843,14 @@ See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
   - Link finding to source (dropdown selector)
   - Category autocomplete based on existing categories
 
+**Components Built**:
+- ✅ `EditableResearchHeader.tsx` - Inline editing for query (implemented)
+
 **Components to Build**:
-- `EditableResearchHeader.tsx` - Inline editing for query/notes
 - `SourceFormModal.tsx` - Add/edit source form
 - `FindingFormModal.tsx` - Add/edit finding form
 - `TagInput.tsx` - Multi-tag input with autocomplete
-- `ConfirmDialog.tsx` - Reusable confirmation dialog
+- `ConfirmDialog.tsx` - Reusable confirmation dialog (currently using native `confirm()`)
 
 **Estimated Effort**: 8-12 hours
 **User Value**: HIGH - Core productivity features
