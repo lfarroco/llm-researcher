@@ -692,7 +692,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 - [x] Implement `app/tools/pdf_parser.py` using GROBID
 - [x] Add fallback parsing with `pdfplumber`/`PyPDF2`
 - [x] Extract figures, tables, and equations metadata
-- [ ] Implement BibTeX parsing with `bibtexparser`
+- [x] Implement BibTeX parsing with `bibtexparser`
 - [ ] Create document chunking for large papers
 
 ### Phase 10: NLP & Knowledge Extraction | Priority: HIGH

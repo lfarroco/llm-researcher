@@ -1265,3 +1265,284 @@ class TestPDFParser:
         assert len(pdf.references) == 1
         assert pdf.parser_used == "grobid"
 
+
+class TestBibTeXParser:
+    """Tests for BibTeX parser tool."""
+
+    def test_parse_simple_bibtex_string(self):
+        """Test parsing a simple BibTeX entry."""
+        from app.tools.bibtex_parser import parse_bibtex_string
+
+        bibtex = """
+        @article{Smith2020,
+          author = {John Smith and Jane Doe},
+          title = {A Test Paper},
+          journal = {Test Journal},
+          year = {2020},
+          volume = {10},
+          pages = {1-10}
+        }
+        """
+
+        result = parse_bibtex_string(bibtex)
+
+        assert result.success is True
+        assert result.data is not None
+        assert len(result.data) == 1
+        
+        entry = result.data[0]
+        assert entry.entry_type == "article"
+        assert entry.cite_key == "Smith2020"
+        assert entry.title == "A Test Paper"
+        assert len(entry.authors) == 2
+        assert "John Smith" in entry.authors
+        assert entry.year == 2020
+        assert entry.journal == "Test Journal"
+
+    def test_parse_multiple_bibtex_entries(self):
+        """Test parsing multiple BibTeX entries."""
+        from app.tools.bibtex_parser import parse_bibtex_string
+
+        bibtex = """
+        @article{Smith2020,
+          author = {John Smith},
+          title = {First Paper},
+          journal = {Journal A},
+          year = {2020}
+        }
+        
+        @inproceedings{Doe2021,
+          author = {Jane Doe},
+          title = {Second Paper},
+          booktitle = {Conference B},
+          year = {2021}
+        }
+        """
+
+        result = parse_bibtex_string(bibtex)
+
+        assert result.success is True
+        assert len(result.data) == 2
+        assert result.data[0].entry_type == "article"
+        assert result.data[1].entry_type == "inproceedings"
+
+    def test_parse_empty_bibtex_string(self):
+        """Test that empty BibTeX string returns error."""
+        from app.tools.bibtex_parser import parse_bibtex_string
+
+        result = parse_bibtex_string("")
+
+        assert result.success is False
+        assert result.error is not None
+        assert result.error.error_type == ToolErrorType.INVALID_INPUT
+
+    def test_parse_invalid_bibtex_string(self):
+        """Test that invalid BibTeX returns error."""
+        from app.tools.bibtex_parser import parse_bibtex_string
+
+        bibtex = "This is not valid BibTeX"
+
+        result = parse_bibtex_string(bibtex)
+
+        # Should fail to parse or return no entries
+        assert result.success is False
+        assert result.error is not None
+
+    def test_entry_to_bibtex_string(self):
+        """Test converting BibTeXEntry back to string."""
+        from app.tools.bibtex_parser import BibTeXEntry, entry_to_bibtex_string
+
+        entry = BibTeXEntry(
+            entry_type="article",
+            cite_key="Test2020",
+            title="Test Paper",
+            authors=["John Smith", "Jane Doe"],
+            year=2020,
+            journal="Test Journal",
+            doi="10.1234/test"
+        )
+
+        bibtex_str = entry_to_bibtex_string(entry)
+
+        assert "@article" in bibtex_str.lower()
+        assert "Test2020" in bibtex_str
+        assert "Test Paper" in bibtex_str
+        assert "John Smith and Jane Doe" in bibtex_str
+        assert "2020" in bibtex_str
+
+    def test_create_citation_key(self):
+        """Test citation key generation."""
+        from app.tools.bibtex_parser import create_citation_key
+
+        # Test with full information
+        key = create_citation_key(
+            authors=["John Smith", "Jane Doe"],
+            year=2020,
+            title="Machine Learning for Everyone"
+        )
+        assert key == "Smith2020Machine"
+
+        # Test with no title
+        key = create_citation_key(
+            authors=["John Smith"],
+            year=2020
+        )
+        assert key == "Smith2020"
+
+        # Test with no year
+        key = create_citation_key(
+            authors=["John Smith"],
+            title="Test Paper"
+        )
+        assert key == "SmithXXXXTest"
+
+        # Test with no authors
+        key = create_citation_key(
+            authors=[],
+            year=2020
+        )
+        assert key == "Unknown2020"
+
+    def test_validate_bibtex_entry_valid(self):
+        """Test validation of valid BibTeX entry."""
+        from app.tools.bibtex_parser import BibTeXEntry, validate_bibtex_entry
+
+        entry = BibTeXEntry(
+            entry_type="article",
+            cite_key="Test2020",
+            title="Test Paper",
+            authors=["John Smith"],
+            journal="Test Journal",
+            year=2020
+        )
+
+        is_valid, errors = validate_bibtex_entry(entry)
+
+        assert is_valid is True
+        assert len(errors) == 0
+
+    def test_validate_bibtex_entry_missing_fields(self):
+        """Test validation catches missing required fields."""
+        from app.tools.bibtex_parser import BibTeXEntry, validate_bibtex_entry
+
+        # Article missing journal
+        entry = BibTeXEntry(
+            entry_type="article",
+            cite_key="Test2020",
+            title="Test Paper",
+            authors=["John Smith"],
+            year=2020
+            # Missing journal!
+        )
+
+        is_valid, errors = validate_bibtex_entry(entry)
+
+        assert is_valid is False
+        assert len(errors) > 0
+        assert any("journal" in e.lower() for e in errors)
+
+    def test_merge_bibtex_entries(self):
+        """Test merging two BibTeX entries."""
+        from app.tools.bibtex_parser import BibTeXEntry, merge_bibtex_entries
+
+        entry1 = BibTeXEntry(
+            entry_type="article",
+            cite_key="Test2020",
+            title="Test Paper",
+            authors=["John Smith"],
+            year=2020
+            # Missing journal
+        )
+
+        entry2 = BibTeXEntry(
+            entry_type="article",
+            cite_key="Test2020",
+            title="Test Paper",
+            journal="Test Journal",  # Has journal
+            volume="10"  # Has volume
+        )
+
+        merged = merge_bibtex_entries(entry1, entry2, prefer_entry1=True)
+
+        # Should have fields from both
+        assert merged.title == "Test Paper"
+        assert merged.year == 2020
+        assert merged.journal == "Test Journal"  # From entry2
+        assert merged.volume == "10"  # From entry2
+
+    def test_parse_keywords(self):
+        """Test parsing keywords field."""
+        from app.tools.bibtex_parser import parse_bibtex_string
+
+        bibtex = """
+        @article{Test2020,
+          title = {Test},
+          keywords = {machine learning, neural networks, deep learning}
+        }
+        """
+
+        result = parse_bibtex_string(bibtex)
+
+        assert result.success is True
+        entry = result.data[0]
+        assert len(entry.keywords) == 3
+        assert "machine learning" in entry.keywords
+        assert "neural networks" in entry.keywords
+
+    def test_parse_bibtex_with_doi_and_url(self):
+        """Test parsing BibTeX with DOI and URL."""
+        from app.tools.bibtex_parser import parse_bibtex_string
+
+        bibtex = """
+        @article{Test2020,
+          title = {Test Paper},
+          doi = {10.1234/test},
+          url = {https://example.com/paper}
+        }
+        """
+
+        result = parse_bibtex_string(bibtex)
+
+        assert result.success is True
+        entry = result.data[0]
+        assert entry.doi == "10.1234/test"
+        assert entry.url == "https://example.com/paper"
+
+    def test_parse_bibtex_with_abstract(self):
+        """Test parsing BibTeX with abstract field."""
+        from app.tools.bibtex_parser import parse_bibtex_string
+
+        bibtex = """
+        @article{Test2020,
+          title = {Test Paper},
+          abstract = {This is a test abstract for the paper.}
+        }
+        """
+
+        result = parse_bibtex_string(bibtex)
+
+        assert result.success is True
+        entry = result.data[0]
+        assert entry.abstract == "This is a test abstract for the paper."
+
+    def test_extra_fields_preserved(self):
+        """Test that non-standard BibTeX fields are preserved."""
+        from app.tools.bibtex_parser import parse_bibtex_string
+
+        bibtex = """
+        @article{Test2020,
+          title = {Test Paper},
+          custom_field = {Custom Value},
+          note = {Some note}
+        }
+        """
+
+        result = parse_bibtex_string(bibtex)
+
+        assert result.success is True
+        entry = result.data[0]
+        assert "custom_field" in entry.extra_fields
+        assert entry.extra_fields["custom_field"] == "Custom Value"
+        assert "note" in entry.extra_fields
+
+

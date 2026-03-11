@@ -23,6 +23,11 @@ from app.output.pdf_exporter import (
     export_research_to_docx,
     check_pandoc_installed,
 )
+from app.tools.bibtex_parser import (
+    BibTeXEntry,
+    entries_to_bibtex_string,
+    create_citation_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +232,7 @@ def export_sources_as_bibtex(
     Export all sources as BibTeX format.
 
     Useful for bibliography management and academic writing.
+    Uses structured BibTeX parser for proper formatting.
     """
     research = _get_research_or_404(research_id, db)
 
@@ -240,39 +246,76 @@ def export_sources_as_bibtex(
             detail="No sources found for this research"
         )
 
-    # Generate BibTeX entries
+    # Convert sources to BibTeX entries using our parser
     bibtex_entries = []
-    for idx, source in enumerate(sources, 1):
-        # Create a citation key from title or URL
-        title_key = "".join(
-            c for c in (source.title or "source")[:20]
-            if c.isalnum()
-        ).lower()
-        cite_key = f"{title_key}{idx}"
+    for source in sources:
+        # Parse authors if available
+        authors = []
+        if source.author:
+            # Assume comma-separated or "and"-separated
+            if " and " in source.author:
+                authors = [a.strip() for a in source.author.split(" and ")]
+            elif "," in source.author:
+                authors = [a.strip() for a in source.author.split(",")]
+            else:
+                authors = [source.author]
+
+        # Extract year from accessed_at if no other year available
+        year = source.accessed_at.year if source.accessed_at else None
+
+        # Create citation key
+        cite_key = create_citation_key(
+            authors=authors,
+            year=year,
+            title=source.title
+        )
 
         # Determine entry type based on source type
         entry_type = "misc"
+        extra_fields = {}
+        
         if source.source_type == "arxiv":
             entry_type = "article"
+            # ArXiv papers often have an eprint field
+            if "arxiv.org" in source.url.lower():
+                # Extract arxiv ID from URL
+                import re
+                match = re.search(r'arxiv\.org/(?:abs|pdf)/(\d+\.\d+)', source.url)
+                if match:
+                    extra_fields["eprint"] = match.group(1)
+                    extra_fields["archiveprefix"] = "arXiv"
         elif source.source_type in ["pubmed", "semantic_scholar"]:
             entry_type = "article"
         elif source.source_type == "wikipedia":
-            entry_type = "online"
+            entry_type = "misc"
+            extra_fields["howpublished"] = "\\url{" + source.url + "}"
+        else:
+            entry_type = "misc"
+            if source.source_type:
+                extra_fields["note"] = f"Source type: {source.source_type}"
 
-        # Build BibTeX entry
-        entry = f"@{entry_type}{{{cite_key},\n"
-        if source.title:
-            entry += f'  title = {{{source.title}}},\n'
-        if source.author:
-            entry += f'  author = {{{source.author}}},\n'
-        entry += f'  url = {{{source.url}}},\n'
-        entry += f'  note = {{Accessed: {source.accessed_at.strftime("%Y-%m-%d")}}},\n'
-        if source.source_type:
-            entry += f'  howpublished = {{{source.source_type}}},\n'
-        entry += "}\n"
+        # Add access date note
+        access_note = f"Accessed: {source.accessed_at.strftime('%Y-%m-%d')}"
+        if "note" in extra_fields:
+            extra_fields["note"] = extra_fields["note"] + f", {access_note}"
+        else:
+            extra_fields["note"] = access_note
+
+        # Create BibTeX entry
+        entry = BibTeXEntry(
+            entry_type=entry_type,
+            cite_key=cite_key,
+            title=source.title,
+            authors=authors,
+            year=year,
+            url=source.url,
+            abstract=source.content_snippet[:500] if source.content_snippet else None,
+            extra_fields=extra_fields
+        )
         bibtex_entries.append(entry)
 
-    bibtex_content = "\n".join(bibtex_entries)
+    # Convert to BibTeX string using our parser
+    bibtex_content = entries_to_bibtex_string(bibtex_entries)
     filename = _safe_filename(research.query, research_id, "bib")
 
     return Response(
