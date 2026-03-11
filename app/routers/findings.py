@@ -6,7 +6,7 @@ Handles creating, listing, updating, and deleting research findings
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -42,20 +42,51 @@ def _get_research_or_404(
 )
 def get_research_findings(
     research_id: int,
+    source_id: Optional[int] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = "desc",
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
-    """Get all findings for a research project."""
+    """Get findings with optional filtering and sorting.
+
+    Args:
+        research_id: ID of the research project
+        source_id: Filter by findings that reference this source
+        search: Search in finding content
+        sort_by: Sort field (created_at)
+        sort_order: Sort order (asc, desc)
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return
+    """
     _get_research_or_404(research_id, db)
 
-    findings = db.query(models.ResearchFinding).filter(
+    query = db.query(models.ResearchFinding).filter(
         models.ResearchFinding.research_id == research_id
-    ).order_by(
-        models.ResearchFinding.created_at.desc()
-    ).offset(skip).limit(limit).all()
+    )
 
-    return findings
+    if source_id:
+        from sqlalchemy.dialects.postgresql import JSONB
+        from sqlalchemy import cast
+        query = query.filter(
+            cast(models.ResearchFinding.source_ids, JSONB).contains([source_id])
+        )
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            models.ResearchFinding.content.ilike(search_pattern)
+        )
+
+    # Apply sorting (only created_at for now)
+    if sort_order == "asc":
+        query = query.order_by(models.ResearchFinding.created_at.asc())
+    else:  # default to desc
+        query = query.order_by(models.ResearchFinding.created_at.desc())
+
+    return query.offset(skip).limit(limit).all()
 
 
 @router.post(

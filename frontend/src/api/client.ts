@@ -142,8 +142,25 @@ export const api = {
 	},
 
 	// Findings endpoints
-	async getFindings(researchId: number): Promise<Finding[]> {
-		const response = await fetch(`${API_BASE}/research/${researchId}/findings`);
+	async getFindings(
+		researchId: number,
+		filters?: {
+			source_id?: number;
+			search?: string;
+			sort_by?: string;
+			sort_order?: 'asc' | 'desc';
+		}
+	): Promise<Finding[]> {
+		const params = new URLSearchParams();
+		if (filters?.source_id) params.append('source_id', filters.source_id.toString());
+		if (filters?.search) params.append('search', filters.search);
+		if (filters?.sort_by) {
+			params.append('sort_by', filters.sort_by);
+			params.append('sort_order', filters.sort_order || 'desc');
+		}
+
+		const url = `${API_BASE}/research/${researchId}/findings${params.toString() ? `?${params}` : ''}`;
+		const response = await fetch(url);
 		return handleResponse(response);
 	},
 

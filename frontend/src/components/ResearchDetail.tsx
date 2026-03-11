@@ -11,6 +11,7 @@ import SourceFormModal from './SourceFormModal';
 import FindingFormModal from './FindingFormModal';
 import ConfirmDialog from './ConfirmDialog';
 import SourcesFilterBar, { type SourceFilters } from './SourcesFilterBar';
+import FindingsFilterBar, { type FindingFilters } from './FindingsFilterBar';
 
 interface Props {
 	researchId: number;
@@ -36,6 +37,12 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	});
 	const [allSources, setAllSources] = useState<Source[]>([]); // Store all sources for quick filters
 	const [filteredSources, setFilteredSources] = useState<Source[]>([]);
+
+	// Finding filtering state
+	const [findingFilters, setFindingFilters] = useState<FindingFilters>({
+		sort_order: 'desc',
+	});
+	const [filteredFindings, setFilteredFindings] = useState<Finding[]>([]);
 
 	// Source CRUD state
 	const [sourceModalOpen, setSourceModalOpen] = useState(false);
@@ -95,23 +102,41 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		}
 	}, [researchId]);
 
+	const loadFindings = useCallback(async (filters?: FindingFilters) => {
+		try {
+			// Build filter params for API
+			const apiFilters: any = {};
+			if (filters?.source_id) apiFilters.source_id = filters.source_id;
+			if (filters?.search) apiFilters.search = filters.search;
+			if (filters?.sort_order) {
+				apiFilters.sort_by = 'created_at';
+				apiFilters.sort_order = filters.sort_order;
+			}
+
+			const findingsData = await api.getFindings(researchId, apiFilters);
+			setFilteredFindings(findingsData);
+			setFindings(findingsData);
+		} catch (err) {
+			console.error('Failed to load findings:', err);
+		}
+	}, [researchId]);
+
 	const loadData = useCallback(async () => {
 		try {
 			setLoading(true);
 			setError(null);
-			const [researchData, findingsData] = await Promise.all([
-				api.getResearch(researchId),
-				api.getFindings(researchId),
+			const researchData = await api.getResearch(researchId);
+			await Promise.all([
+				loadSources(sourceFilters),
+				loadFindings(findingFilters),
 			]);
-			await loadSources(sourceFilters);
 			setResearch(researchData);
-			setFindings(findingsData);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load research');
 		} finally {
 			setLoading(false);
 		}
-	}, [researchId, loadSources, sourceFilters]);
+	}, [researchId, loadSources, loadFindings, sourceFilters, findingFilters]);
 
 	useEffect(() => {
 		loadData();
@@ -189,6 +214,12 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const handleSourceFiltersChange = (filters: SourceFilters) => {
 		setSourceFilters(filters);
 		loadSources(filters);
+	};
+
+	// Finding filter handler
+	const handleFindingFiltersChange = (filters: FindingFilters) => {
+		setFindingFilters(filters);
+		loadFindings(filters);
 	};
 
 	// Source CRUD handlers
@@ -729,7 +760,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 					<div>
 						<div className="flex justify-between items-center mb-4">
 							<h3 className="text-lg font-semibold text-gray-900">
-								Findings ({findings.length})
+								Findings
 							</h3>
 							<button
 								onClick={handleAddFinding}
@@ -738,6 +769,13 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								+ Add Finding
 							</button>
 						</div>
+
+						<FindingsFilterBar
+							filters={findingFilters}
+							onFiltersChange={handleFindingFiltersChange}
+							totalFindings={filteredFindings.length}
+							sources={allSources}
+						/>
 
 						<div className="space-y-3">
 							{findings.length === 0 ? (
