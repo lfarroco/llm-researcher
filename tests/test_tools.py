@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.tools.base import ToolError, ToolErrorType, ToolResponse, get_setting
 from app.tools.web_search import WebSearchResult, web_search
 from app.tools.arxiv_search import ArxivResult, arxiv_search, is_academic_query
+from app.tools.elsevier_search import elsevier_search
 from app.tools.springer_search import springer_search
 from app.tools.wikipedia import WikipediaResult, wikipedia_search
 
@@ -265,6 +266,57 @@ class TestSpringerSearch:
     async def test_springer_search_without_api_key_returns_empty(self):
         """Test Springer search gracefully returns no results without API key."""
         results = await springer_search("test query", springer_api_key=None)
+        assert results == []
+
+
+class TestElsevierSearch:
+    """Tests for Elsevier search tool."""
+
+    @pytest.mark.asyncio
+    async def test_elsevier_search_parses_results(self):
+        """Test Elsevier search parses API payload into structured results."""
+        payload = {
+            "search-results": {
+                "entry": [
+                    {
+                        "eid": "2-s2.0-85123456789",
+                        "dc:title": "Advances in retrieval-augmented generation",
+                        "dc:description": "Survey of RAG methods in production.",
+                        "dc:creator": "Alice Smith",
+                        "prism:doi": "10.1016/j.future.2024.01.001",
+                        "prism:publicationName": "Future Generation Computer Systems",
+                        "prism:coverDate": "2024-03-01",
+                        "prism:url": "https://api.elsevier.com/content/abstract/scopus_id/85123456789",
+                        "citedby-count": "42",
+                    }
+                ]
+            }
+        }
+
+        with patch("app.tools.elsevier_search.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.json.return_value = payload
+            mock_response.raise_for_status.return_value = None
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+            results = await elsevier_search(
+                "retrieval augmented generation",
+                elsevier_api_key="test-elsevier-key",
+            )
+
+            assert len(results) == 1
+            assert results[0].eid == "2-s2.0-85123456789"
+            assert "retrieval-augmented generation" in results[0].title
+            assert results[0].doi == "10.1016/j.future.2024.01.001"
+            assert results[0].authors == ["Alice Smith"]
+            assert results[0].citedby_count == 42
+
+    @pytest.mark.asyncio
+    async def test_elsevier_search_without_api_key_returns_empty(self):
+        """Test Elsevier search gracefully returns no results without API key."""
+        results = await elsevier_search("test query", elsevier_api_key=None)
         assert results == []
 
 

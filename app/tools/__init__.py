@@ -13,6 +13,7 @@ from app.tools.plugins import (
     ArxivPlugin,
     WikipediaPlugin,
     SpringerPlugin,
+    ElsevierPlugin,
     register_defaults,
 )
 from app.tools.web_search import web_search, WebSearchResult
@@ -40,6 +41,7 @@ from app.tools.openalex_search import (
     openalex_lookup_doi,
 )
 from app.tools.springer_search import springer_search, SpringerResult
+from app.tools.elsevier_search import elsevier_search, ElsevierResult
 
 __all__ = [
     # Base types
@@ -56,6 +58,7 @@ __all__ = [
     "ArxivPlugin",
     "WikipediaPlugin",
     "SpringerPlugin",
+    "ElsevierPlugin",
     "register_defaults",
     # Web search
     "web_search",
@@ -85,6 +88,9 @@ __all__ = [
     # Springer
     "springer_search",
     "SpringerResult",
+    # Elsevier
+    "elsevier_search",
+    "ElsevierResult",
     # Reference extractor
     "extract_references_from_url",
     "extract_references_from_html",

@@ -69,6 +69,9 @@ OPENAI_API_KEY=your_api_key_here
 ```bash
 # Springer Nature metadata API (enables Springer search plugin)
 SPRINGER_API_KEY=your_springer_api_key_here
+
+# Elsevier Scopus API (enables Elsevier search plugin)
+ELSEVIER_API_KEY=your_elsevier_api_key_here
 ```
 
 ### Start the Application

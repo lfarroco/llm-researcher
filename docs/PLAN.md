@@ -192,7 +192,7 @@ The codebase uses a plugin registry to decouple extensible subsystems from the a
 
 **Location**: `app/tools/registry.py`, `app/tools/plugins.py`
 
-Built-in plugins: `WebSearchPlugin`, `ArxivPlugin`, `WikipediaPlugin`, `SpringerPlugin`.
+Built-in plugins: `WebSearchPlugin`, `ArxivPlugin`, `WikipediaPlugin`, `SpringerPlugin`, `ElsevierPlugin`.
 
 To add a new search source, implement `SearchPlugin` and call `get_registry().register(MyPlugin())` at startup. The plugin controls:
 - whether it requires an academic query context (`requires_academic_context`)
@@ -203,7 +203,6 @@ To add a new search source, implement `SearchPlugin` and call `get_registry().re
 - `PubMedPlugin` — `pubmed_search` already exists in `app/tools/pubmed_search.py`; gate it on `is_academic_query` and a `NCBI_API_KEY` availability check
 - `SemanticScholarPlugin` — `semantic_scholar_search` exists in `app/tools/semantic_scholar.py`; useful for computing citation counts and finding related papers
 - `OpenAlexPlugin` — `openalex_search` exists in `app/tools/openalex_search.py`; open-access metadata, no key required
-- `ElsevierPlugin` — not implemented; likely via Elsevier APIs (for example, Scopus/ScienceDirect) with API key and terms-of-use gating
 
 ---
 
@@ -322,7 +321,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 - [x] Implement `app/tools/semantic_scholar.py` - Semantic Scholar API
 - [x] Implement `app/tools/crossref_search.py` - Crossref DOI/metadata
 - [x] Implement `app/tools/openalex_search.py` - OpenAlex open scholarly data
-- [ ] Implement Elsevier academic provider integration (Scopus/ScienceDirect)
+- [x] Implement Elsevier academic provider integration (Scopus/ScienceDirect)
 - [x] Implement Springer academic provider integration (Springer Nature)
 - [x] Add PDF download and caching for full-text retrieval
 
