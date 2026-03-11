@@ -15,7 +15,7 @@ def test_research_filtering():
 # Step 1: Create test researches with unique searchable text (limited to 3 to respect rate limit)
     print("Step 1: Creating test researches with unique text...")
     research_ids = []
-    
+
     test_queries = [
         ("FILTERTEST_machine_learning basics", "Test notes for ML"),
         ("FILTERTEST_neural_networks explained", "Important neural notes"),
@@ -44,8 +44,10 @@ def test_research_filtering():
     response = requests.get(f"{BASE_URL}/research?search=FILTERTEST_machine")
     assert response.status_code == 200
     filtered = response.json()
-    machine_count = len([r for r in filtered if r["id"] in research_ids and "FILTERTEST_machine" in r["query"]])
-    print(f"   ✓ Found {machine_count} of our researches containing 'FILTERTEST_machine' (expected 1)")
+    machine_count = len([r for r in filtered if r["id"]
+                        in research_ids and "FILTERTEST_machine" in r["query"]])
+    print(
+        f"   ✓ Found {machine_count} of our researches containing 'FILTERTEST_machine' (expected 1)")
     assert machine_count == 1, f"Expected 1 match, got {machine_count}"
 
     # Step 3: Test search filter by notes text
@@ -53,8 +55,10 @@ def test_research_filtering():
     response = requests.get(f"{BASE_URL}/research?search=Important")
     assert response.status_code == 200
     filtered = response.json()
-    notes_count = len([r for r in filtered if r["id"] in research_ids and r.get("user_notes") and "Important" in r["user_notes"]])
-    print(f"   ✓ Found {notes_count} of our researches with 'Important' in notes (expected 1)")
+    notes_count = len([r for r in filtered if r["id"] in research_ids and r.get(
+        "user_notes") and "Important" in r["user_notes"]])
+    print(
+        f"   ✓ Found {notes_count} of our researches with 'Important' in notes (expected 1)")
     assert notes_count == 1, f"Expected 1 match, got {notes_count}"
 
     # Step 4: Test search filter with broader match
@@ -74,10 +78,11 @@ def test_research_filtering():
     # Get actual status of our first research
     response = requests.get(f"{BASE_URL}/research")
     all_researches = response.json()
-    our_first_research = next((r for r in all_researches if r["id"] == research_ids[0]), None)
+    our_first_research = next(
+        (r for r in all_researches if r["id"] == research_ids[0]), None)
     actual_status = our_first_research["status"] if our_first_research else "error"
     print(f"   Testing filter for status: {actual_status}")
-    
+
     # Filter by that status
     response = requests.get(f"{BASE_URL}/research?status={actual_status}")
     assert response.status_code == 200
@@ -86,7 +91,8 @@ def test_research_filtering():
     print(
         f"   ✓ Found {len(status_ids)} of our test researches with '{actual_status}' status")
     # At least some should match
-    assert len(status_ids) >= 1, f"Expected at least 1 with status '{actual_status}', got {len(status_ids)}"
+    assert len(
+        status_ids) >= 1, f"Expected at least 1 with status '{actual_status}', got {len(status_ids)}"
 
     # Step 6: Test combined filters (status + search)
     print(f"\nStep 6: Testing combined filters ({actual_status} + quantum)...")
