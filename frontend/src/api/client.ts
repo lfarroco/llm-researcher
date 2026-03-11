@@ -81,8 +81,25 @@ export const api = {
 	},
 
 	// Sources endpoints
-	async getSources(researchId: number): Promise<Source[]> {
-		const response = await fetch(`${API_BASE}/research/${researchId}/sources`);
+	async getSources(
+		researchId: number,
+		filters?: {
+			source_type?: string;
+			tag?: string;
+			search?: string;
+			sort_by?: string;
+			sort_order?: 'asc' | 'desc';
+		}
+	): Promise<Source[]> {
+		const params = new URLSearchParams();
+		if (filters?.source_type) params.append('source_type', filters.source_type);
+		if (filters?.tag) params.append('tag', filters.tag);
+		if (filters?.search) params.append('search', filters.search);
+		if (filters?.sort_by) params.append('sort_by', filters.sort_by);
+		if (filters?.sort_order) params.append('sort_order', filters.sort_order);
+
+		const url = `${API_BASE}/research/${researchId}/sources${params.toString() ? `?${params}` : ''}`;
+		const response = await fetch(url);
 		return handleResponse(response);
 	},
 

@@ -45,17 +45,21 @@ def get_research_sources(
     source_type: Optional[str] = None,
     tag: Optional[str] = None,
     search: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = "desc",
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
-    """Get sources with optional filtering.
+    """Get sources with optional filtering and sorting.
 
     Args:
         research_id: ID of the research project
         source_type: Filter by source type (web, arxiv, wikipedia, etc.)
         tag: Filter by tag (sources that have this tag)
         search: Search in title, author, or content snippet
+        sort_by: Sort field (accessed_at, title)
+        sort_order: Sort order (asc, desc)
         skip: Number of records to skip (pagination)
         limit: Maximum number of records to return
     """
@@ -84,6 +88,17 @@ def get_research_sources(
             | (models.ResearchSource.author.ilike(search_pattern))
             | (models.ResearchSource.content_snippet.ilike(search_pattern))
         )
+
+    # Apply sorting
+    if sort_by == "title":
+        order_column = models.ResearchSource.title
+    else:  # default to accessed_at
+        order_column = models.ResearchSource.accessed_at
+
+    if sort_order == "asc":
+        query = query.order_by(order_column.asc())
+    else:  # default to desc
+        query = query.order_by(order_column.desc())
 
     return query.offset(skip).limit(limit).all()
 

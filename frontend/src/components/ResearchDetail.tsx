@@ -10,6 +10,7 @@ import ResearchNotes from './ResearchNotes';
 import SourceFormModal from './SourceFormModal';
 import FindingFormModal from './FindingFormModal';
 import ConfirmDialog from './ConfirmDialog';
+import SourcesFilterBar, { type SourceFilters } from './SourcesFilterBar';
 
 interface Props {
 	researchId: number;
@@ -28,6 +29,14 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const [error, setError] = useState<string | null>(null);
 	const [latestStep, setLatestStep] = useState<AgentStep | null>(null);
 
+	// Source filtering state
+	const [sourceFilters, setSourceFilters] = useState<SourceFilters>({
+		sort_by: undefined,
+		sort_order: 'desc',
+	});
+	const [allSources, setAllSources] = useState<Source[]>([]); // Store all sources for quick filters
+	const [filteredSources, setFilteredSources] = useState<Source[]>([]);
+
 	// Source CRUD state
 	const [sourceModalOpen, setSourceModalOpen] = useState(false);
 	const [editingSource, setEditingSource] = useState<Source | null>(null);
@@ -42,24 +51,67 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const [findingToDelete, setFindingToDelete] = useState<number | null>(null);
 	const [editingFindingContent, setEditingFindingContent] = useState<{ [key: number]: string }>({});
 
+	const loadSources = useCallback(async (filters?: SourceFilters) => {
+		try {
+			// Build filter params for API
+			const apiFilters: any = {};
+			if (filters?.source_type) apiFilters.source_type = filters.source_type;
+			if (filters?.search) apiFilters.search = filters.search;
+			if (filters?.sort_by) {
+				apiFilters.sort_by = filters.sort_by;
+				apiFilters.sort_order = filters.sort_order || 'desc';
+			}
+
+			const sourcesData = await api.getSources(researchId, apiFilters);
+			setAllSources(sourcesData);
+			
+			// Apply quick filters on frontend (since they're complex logic)
+			let filtered = sourcesData;
+			if (filters?.quick_filter) {
+				const now = Date.now();
+				const oneDayMs = 24 * 60 * 60 * 1000;
+				
+				switch (filters.quick_filter) {
+					case 'academic':
+						filtered = filtered.filter(s => 
+							['arxiv', 'pubmed', 'semantic_scholar', 'openalex', 'crossref'].includes(s.source_type)
+						);
+						break;
+					case 'recent':
+						filtered = filtered.filter(s => 
+							now - new Date(s.accessed_at).getTime() < oneDayMs
+						);
+						break;
+					case 'no_content':
+						filtered = filtered.filter(s => !s.content_snippet || s.content_snippet.trim().length === 0);
+						break;
+				}
+			}
+			
+			setFilteredSources(filtered);
+			setSources(filtered);
+		} catch (err) {
+			console.error('Failed to load sources:', err);
+		}
+	}, [researchId]);
+
 	const loadData = useCallback(async () => {
 		try {
 			setLoading(true);
 			setError(null);
-			const [researchData, sourcesData, findingsData] = await Promise.all([
+			const [researchData, findingsData] = await Promise.all([
 				api.getResearch(researchId),
-				api.getSources(researchId),
 				api.getFindings(researchId),
 			]);
+			await loadSources(sourceFilters);
 			setResearch(researchData);
-			setSources(sourcesData);
 			setFindings(findingsData);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load research');
 		} finally {
 			setLoading(false);
 		}
-	}, [researchId]);
+	}, [researchId, loadSources, sourceFilters]);
 
 	useEffect(() => {
 		loadData();
@@ -131,6 +183,12 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		} catch (err) {
 			throw err;
 		}
+	};
+
+	// Source filter handler
+	const handleSourceFiltersChange = (filters: SourceFilters) => {
+		setSourceFilters(filters);
+		loadSources(filters);
 	};
 
 	// Source CRUD handlers
@@ -481,7 +539,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 					<div>
 						<div className="flex justify-between items-center mb-4">
 							<h3 className="text-lg font-semibold text-gray-900">
-								Sources ({sources.length})
+								Sources
 							</h3>
 							<button
 								onClick={handleAddSource}
@@ -490,6 +548,12 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								+ Add Source
 							</button>
 						</div>
+
+						<SourcesFilterBar
+							filters={sourceFilters}
+							onFiltersChange={handleSourceFiltersChange}
+							totalSources={filteredSources.length}
+						/>
 
 						<div className="space-y-3">
 							{sources.length === 0 ? (
