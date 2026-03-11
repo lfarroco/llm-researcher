@@ -56,9 +56,11 @@ class EntityExtractor:
         if "entity_ruler" in nlp.pipe_names:
             ruler = nlp.get_pipe("entity_ruler")
         else:
-            ruler = nlp.add_pipe("entity_ruler", before="ner" if "ner" in nlp.pipe_names else None)
+            ruler = nlp.add_pipe(
+                "entity_ruler", before="ner" if "ner" in nlp.pipe_names else None)
 
         patterns = []
+
         def to_pattern(term: str) -> list[dict[str, str]]:
             return [{"LOWER": token} for token in term.split()]
 
@@ -132,7 +134,8 @@ class EntityExtractor:
                 "mention_count": len(mention_list),
             })
 
-        items.sort(key=lambda x: (-x["mention_count"], x["entity_type"], x["name"].lower()))
+        items.sort(key=lambda x: (-x["mention_count"],
+                   x["entity_type"], x["name"].lower()))
         return items
 
     def _fallback_keyword_extract(

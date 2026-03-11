@@ -33,7 +33,8 @@ def test_entity_extractor_detects_research_entities():
 
     assert 'method' in types or 'concept' in types
     assert 'metric' in types or 'accuracy' in names
-    assert any('outperforms' in e['name'].lower() for e in entities if e['entity_type'] == 'finding')
+    assert any('outperforms' in e['name'].lower()
+               for e in entities if e['entity_type'] == 'finding')
 
 
 def test_entities_endpoint_returns_extracted_entities():
