@@ -1066,18 +1066,18 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - ⏸️ Checkpoint browser (view state at different times) - deferred
   - ⏸️ "Restart from checkpoint" button - deferred
 
-- [ ] **Improved Overview Tab**
-  - Visual progress indicator (% complete)
-  - Timeline of research events
-  - Key metrics cards (sources count, findings count, sub-queries)
-  - Recent activity feed
-  - Estimated time remaining (if researching)
+- [x] **Improved Overview Tab** ✅ PARTIAL (Sprint 4)
+  - ✅ Visual progress indicator (% complete)
+  - ✅ Timeline of research events
+  - ✅ Key metrics cards (sources count, findings count, sub-queries)
+  - ✅ Recent activity feed
+  - ⏸️ Estimated time remaining (if researching) - deferred
 
 **Components to Build**:
-- `ResearchPlanTab.tsx` - New tab for plan management
-- `StateInspector.tsx` - AI state visualization
-- `TimelineView.tsx` - Event timeline
-- `MetricsCards.tsx` - Statistics dashboard
+- ✅ `ResearchPlanTab.tsx` - New tab for plan management (implemented)
+- ✅ `StateInspector.tsx` - AI state visualization (implemented)
+- ✅ `TimelineView.tsx` - Event timeline (implemented)
+- ✅ `MetricsCards.tsx` - Statistics dashboard (implemented)
 
 **Estimated Effort**: 8-10 hours
 **User Value**: MEDIUM-HIGH - Transparency and control

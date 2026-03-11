@@ -15,6 +15,8 @@ import FindingsFilterBar, { type FindingFilters } from './FindingsFilterBar';
 import ExportMenu from './ExportMenu';
 import ResearchPlanTab from './ResearchPlanTab';
 import StateInspector from './StateInspector';
+import MetricsCards from './MetricsCards';
+import TimelineView from './TimelineView';
 
 interface Props {
 	researchId: number;
@@ -55,6 +57,8 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		sort_order: 'desc',
 	});
 	const [filteredFindings, setFilteredFindings] = useState<Finding[]>([]);
+	const [planSubQueryCount, setPlanSubQueryCount] = useState(0);
+	const [planCompletedCount, setPlanCompletedCount] = useState(0);
 
 	// Source CRUD state
 	const [sourceModalOpen, setSourceModalOpen] = useState(false);
@@ -138,10 +142,21 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			setLoading(true);
 			setError(null);
 			const researchData = await api.getResearch(researchId);
+			const planData = await api.getPlan(researchId).catch(() => null);
 			await Promise.all([
 				loadSources(sourceFilters),
 				loadFindings(findingFilters),
 			]);
+			if (planData) {
+				setPlanSubQueryCount(planData.sub_queries.length);
+				const completed = planData.sub_queries.filter(
+					(q) => planData.progress[q]?.status === 'completed'
+				).length;
+				setPlanCompletedCount(completed);
+			} else {
+				setPlanSubQueryCount(0);
+				setPlanCompletedCount(0);
+			}
 			setResearch(researchData);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load research');
@@ -426,6 +441,30 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		{ id: 'chat', label: 'Chat' },
 	];
 
+	const timelineEvents = [
+		{
+			id: `research-${research.id}`,
+			label: 'Research created',
+			time: research.created_at,
+			detail: research.query,
+			type: 'research' as const,
+		},
+		...sources.slice(0, 4).map((source) => ({
+			id: `source-${source.id}`,
+			label: 'Source added',
+			time: source.accessed_at,
+			detail: source.title,
+			type: 'source' as const,
+		})),
+		...findings.slice(0, 4).map((finding) => ({
+			id: `finding-${finding.id}`,
+			label: 'Finding created',
+			time: finding.created_at,
+			detail: finding.content.slice(0, 120),
+			type: 'finding' as const,
+		})),
+	].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
+
 	return (
 		<div className="bg-white rounded-lg shadow">
 			{/* Header */}
@@ -537,22 +576,13 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								</p>
 							</div>
 						)}
-						<div className="grid grid-cols-3 gap-4">
-							<div className="bg-blue-50 p-4 rounded-lg">
-								<p className="text-sm text-blue-600 font-medium">Sources</p>
-								<p className="text-2xl font-bold text-blue-900">{sources.length}</p>
-							</div>
-							<div className="bg-green-50 p-4 rounded-lg">
-								<p className="text-sm text-green-600 font-medium">Findings</p>
-								<p className="text-2xl font-bold text-green-900">{findings.length}</p>
-							</div>
-							<div className="bg-purple-50 p-4 rounded-lg">
-								<p className="text-sm text-purple-600 font-medium">Status</p>
-								<p className="text-lg font-bold text-purple-900 capitalize">
-									{research.status}
-								</p>
-							</div>
-						</div>
+						<MetricsCards
+							status={research.status}
+							sourceCount={sources.length}
+							findingCount={findings.length}
+							subQueryCount={planSubQueryCount}
+							completedSubQueryCount={planCompletedCount}
+						/>
 
 						{sources.length > 0 && (
 							<div>
@@ -576,6 +606,8 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								</div>
 							</div>
 						)}
+
+						<TimelineView events={timelineEvents} />
 
 						<StateInspector researchId={researchId} />
 					</div>
