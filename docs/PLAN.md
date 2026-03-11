@@ -525,6 +525,93 @@ See [STATUS_REPORT.md](STATUS_REPORT.md) for detailed progress tracking.
 
 ---
 
+## Plugin Architecture
+
+The codebase uses a plugin registry to decouple extensible subsystems from the agents and services that consume them. Adding a capability no longer requires touching internal agent logic — only implementing a protocol and registering the plugin.
+
+### Search Plugins ✅ Implemented
+
+**Location**: `app/tools/registry.py`, `app/tools/plugins.py`
+
+Built-in plugins: `WebSearchPlugin`, `ArxivPlugin`, `WikipediaPlugin`.
+
+To add a new search source, implement `SearchPlugin` and call `get_registry().register(MyPlugin())` at startup. The plugin controls:
+- whether it requires an academic query context (`requires_academic_context`)
+- whether it should run on all query variations or only the first (`first_variation_only`)
+- the mapping from its raw result type to a normalised `Citation`
+
+**Next candidates for search plugins** (no orchestrator changes needed):
+- `PubMedPlugin` — `pubmed_search` already exists in `app/tools/pubmed_search.py`; gate it on `is_academic_query` and a `NCBI_API_KEY` availability check
+- `SemanticScholarPlugin` — `semantic_scholar_search` exists in `app/tools/semantic_scholar.py`; useful for computing citation counts and finding related papers
+- `OpenAlexPlugin` — `openalex_search` exists in `app/tools/openalex_search.py`; open-access metadata, no key required
+
+---
+
+### Export Plugins (Next Candidate)
+
+**Location**: `app/output/pdf_exporter.py`, `app/routers/exports.py`
+
+**Problem today**: `pdf_exporter.py` has a hard-coded `ExportFormat` enum and `if format == PDF: … elif format == HTML: …` dispatch. Adding DOCX/ePub/LaTeX means editing those files.
+
+**Proposed interface**:
+
+```python
+class ExportPlugin(Protocol):
+    format: ExportFormat          # "pdf", "html", "docx", "epub", …
+    mime_type: str                # for the HTTP response Content-Type
+    file_extension: str
+
+    def is_available(self) -> bool:  # e.g. check pandoc is installed
+        ...
+
+    def export(self, markdown: str, options: dict) -> bytes:
+        ...
+```
+
+Built-in plugins would wrap the existing pandoc-based exporter. The `/exports` router iterates the registry instead of hard-coding formats.
+
+---
+
+### Citation Style Plugins (Next Candidate)
+
+**Location**: `app/output/citation_formatter.py`
+
+**Problem today**: APA, MLA, and Chicago CSL templates are embedded as hard-coded strings inside a `CSL_STYLES` dict; adding a new style means editing `citation_formatter.py`.
+
+**Proposed interface**:
+
+```python
+class CitationStylePlugin(Protocol):
+    style: CitationStyle          # "apa", "mla", "chicago", "ieee", …
+    csl_xml: str                  # Full CSL stylesheet content
+
+    def format_reference(self, citation: Citation) -> str:
+        ...
+```
+
+Plugins can load their CSL from a bundled file, a URL, or a string literal, keeping `citation_formatter.py` free of style-specific knowledge.
+
+---
+
+### LLM Provider Plugins (Future Candidate)
+
+**Location**: `app/llm_provider.py`
+
+`LLMProviderFactory.create_provider()` already dispatches over a string `provider_type` with `if/elif` branches (`openai`, `ollama`, `groq`). The existing `LLMProvider` ABC is already close to a plugin contract.
+
+**Proposed change**: replace the factory's `if/elif` with a registry lookup, so new providers (Anthropic, Mistral, Bedrock, etc.) can be registered without editing `llm_provider.py`.
+
+```python
+class LLMProviderPlugin(Protocol):
+    provider_type: str            # "openai", "anthropic", …
+    def is_available(self) -> bool: ...
+    def get_llm(self, model: str, temperature: float, **kwargs) -> BaseChatModel: ...
+```
+
+This is a lower-priority change because the ABC already gives reasonable isolation, but it becomes worthwhile once a third or fourth provider is added.
+
+---
+
 ### Phase 1: Foundation ✅ Priority: HIGH
 - [x] Add new dependencies to `requirements.txt`
 - [x] Create `app/memory/research_state.py` with Pydantic models
