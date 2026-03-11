@@ -370,22 +370,29 @@ class TestConnectionManagerEdgeCases:
         assert mock_websocket.send_json.call_count == 3
 
 
-# Optional: Integration test with real LLM
-@pytest.mark.integration
-def test_run_research_with_real_llm():
+# Test with mocked LLM instead of integration test
+def test_run_research_with_mocked_llm():
     """
-    Integration test with real LLM.
+    Test run_research with mocked LLM response.
 
-    Run with: pytest -m integration
-    Requires valid OpenAI API key or running Ollama server.
+    Previously this was an integration test making real LLM calls.
+    Now uses mocks for faster, more reliable testing.
     """
-    from app.config import settings
-
-    if settings.llm_provider == "openai" and not settings.openai_api_key:
-        pytest.skip("OpenAI API key not configured")
-
     query = "What is the capital of France?"
-    result = run_research(query)
+
+    # Mock the LLM response
+    mock_response = MagicMock()
+    mock_response.content = (
+        "The capital of France is Paris. Paris is the largest city in France and "
+        "serves as the country's political, economic, and cultural center. "
+        "It has been the capital since the late 10th century."
+    )
+
+    mock_chain = MagicMock()
+    mock_chain.invoke = MagicMock(return_value=mock_response)
+
+    with patch("app.researcher.get_researcher_chain", return_value=mock_chain):
+        result = run_research(query)
 
     assert isinstance(result, str)
     assert len(result) > 10
