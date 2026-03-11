@@ -7,6 +7,13 @@ from app.tools.base import (
     ToolResponse,
     get_setting,
 )
+from app.tools.registry import SearchPlugin, ToolRegistry, get_registry
+from app.tools.plugins import (
+    WebSearchPlugin,
+    ArxivPlugin,
+    WikipediaPlugin,
+    register_defaults,
+)
 from app.tools.web_search import web_search, WebSearchResult
 from app.tools.arxiv_search import arxiv_search, ArxivResult
 from app.tools.wikipedia import wikipedia_search, WikipediaResult
@@ -39,6 +46,14 @@ __all__ = [
     "ToolErrorType",
     "ToolResponse",
     "get_setting",
+    # Plugin system
+    "SearchPlugin",
+    "ToolRegistry",
+    "get_registry",
+    "WebSearchPlugin",
+    "ArxivPlugin",
+    "WikipediaPlugin",
+    "register_defaults",
     # Web search
     "web_search",
     "WebSearchResult",

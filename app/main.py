@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from app.database import get_db
 from app import models
 from app.services.research_service import process_research
+from app.tools.plugins import register_defaults as register_default_plugins
 
 # Import routers
 from app.routers import research as research_router
@@ -69,6 +70,9 @@ async def background_task_worker():
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     global _background_worker_running, _background_worker_task
+
+    # Register built-in search plugins into the global ToolRegistry
+    register_default_plugins()
 
     # Database tables are now managed by Alembic migrations
     # Run: docker compose exec app alembic upgrade head

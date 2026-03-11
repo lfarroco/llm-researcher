@@ -21,12 +21,10 @@ from app.memory.research_state import (
     Citation,
     ResearchNote,
     ResearchState,
-    SourceType,
     SubQueryResult,
 )
-from app.tools.web_search import web_search
-from app.tools.arxiv_search import arxiv_search, is_academic_query
-from app.tools.wikipedia import wikipedia_search
+from app.tools.arxiv_search import is_academic_query
+from app.tools.registry import get_registry
 from app.agents.query_expander import expand_query
 
 logger = logging.getLogger(__name__)
@@ -179,17 +177,17 @@ async def filter_relevant_citations(
 async def search_for_subquery(
     sub_query: str,
     include_academic: bool = False,
-    include_wikipedia: bool = True,
 ) -> SubQueryResult:
     """
     Search all relevant sources for a single sub-query.
 
     Generates query variations and searches with each to improve coverage.
+    Which sources are queried is determined by the global ToolRegistry; add
+    or remove plugins there rather than modifying this function.
 
     Args:
         sub_query: The question to research
-        include_academic: Whether to search ArXiv
-        include_wikipedia: Whether to search Wikipedia
+        include_academic: Whether to include academic sources (e.g. ArXiv)
 
     Returns:
         SubQueryResult with citations
@@ -198,10 +196,7 @@ async def search_for_subquery(
         f"[SEARCH] Starting search for sub-query: '{sub_query[:60]}...'"
     )
     logger.debug(f"[SEARCH] Full sub-query: {sub_query}")
-    logger.debug(
-        f"[SEARCH] include_academic={include_academic}, "
-        f"include_wikipedia={include_wikipedia}"
-    )
+    logger.debug(f"[SEARCH] include_academic={include_academic}")
 
     # Generate query variations for improved search coverage
     logger.debug("[SEARCH] Generating query variations")
@@ -219,6 +214,8 @@ async def search_for_subquery(
     citations = []
     errors = []
 
+    registry = get_registry()
+
     # Search each query variation
     for query_idx, current_query in enumerate(query_variations, 1):
         logger.debug(
@@ -226,52 +223,32 @@ async def search_for_subquery(
             f"{len(query_variations)}: '{current_query[:50]}...'"
         )
 
-        # Prepare search tasks for this query variation
-        tasks = []
-        task_types = []
-
-        # Always search web
-        logger.debug(
-            f"[SEARCH] Adding web search task for variation {query_idx}"
+        include_academic_for_variation = (
+            include_academic or is_academic_query(current_query)
         )
-        tasks.append(web_search(current_query, max_results=5))
-        task_types.append("web")
-
-        # Conditionally add ArXiv
-        if include_academic or is_academic_query(current_query):
-            logger.debug(
-                f"[SEARCH] Adding ArXiv search task for variation {query_idx} "
-                "(academic query detected)"
-            )
-            tasks.append(arxiv_search(current_query, max_results=3))
-            task_types.append("arxiv")
-
-        # Conditionally add Wikipedia
-        # (only for first variation to avoid duplicates)
-        if include_wikipedia and query_idx == 1:
-            logger.debug(
-                f"[SEARCH] Adding Wikipedia search task "
-                f"for variation {query_idx}"
-            )
-            tasks.append(wikipedia_search(current_query, sentences=5))
-            task_types.append("wikipedia")
-
+        plugins = registry.get_plugins(
+            include_academic=include_academic_for_variation,
+            first_variation=(query_idx == 1),
+        )
+        plugin_names = [p.name for p in plugins]
         logger.debug(
-            f"[SEARCH] Executing {len(tasks)} search tasks for variation "
-            f"{query_idx}: {task_types}"
+            f"[SEARCH] Plugins for variation {query_idx}: {plugin_names}"
         )
 
-        # Execute all searches for this variation concurrently
+        # Execute all plugin searches concurrently
+        tasks = [
+            p.search(current_query, max_results=p.default_max_results)
+            for p in plugins
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         logger.debug(
             f"[SEARCH] All search tasks completed for variation {query_idx}"
         )
 
-        citation_id_base = len(citations) + 1
-        for result, source_type in zip(results, task_types):
+        for plugin, result in zip(plugins, results):
             if isinstance(result, Exception):
                 error_msg = (
-                    f"{source_type} search failed for variation {query_idx}: "
+                    f"{plugin.name} search failed for variation {query_idx}: "
                     f"{str(result)}"
                 )
                 logger.error(f"[SEARCH] {error_msg}", exc_info=result)
@@ -279,41 +256,10 @@ async def search_for_subquery(
                 continue
 
             logger.debug(
-                f"[SEARCH] Processing {len(result)} results from "
-                f"{source_type} (variation {query_idx})"
+                f"[SEARCH] {len(result)} results from "
+                f"{plugin.name} (variation {query_idx})"
             )
-            for item in result:
-                # Convert to Citation based on source type
-                if source_type == "web":
-                    citations.append(Citation(
-                        id=f"[{citation_id_base}]",
-                        url=item.url,
-                        title=item.title,
-                        snippet=item.snippet,
-                        source_type=SourceType.WEB,
-                        relevance_score=item.score,
-                    ))
-                elif source_type == "arxiv":
-                    citations.append(Citation(
-                        id=f"[{citation_id_base}]",
-                        url=item.url,
-                        title=item.title,
-                        author=", ".join(item.authors[:3]),  # First 3
-                        snippet=item.summary[:500],
-                        source_type=SourceType.ARXIV,
-                        relevance_score=0.8,  # Generally relevant
-                    ))
-                elif source_type == "wikipedia":
-                    citations.append(Citation(
-                        id=f"[{citation_id_base}]",
-                        url=item.url,
-                        title=item.title,
-                        snippet=item.summary,
-                        source_type=SourceType.WIKIPEDIA,
-                        relevance_score=0.7,
-                    ))
-
-                citation_id_base += 1
+            citations.extend(result)
 
     # Deduplicate citations by URL before filtering
     logger.debug(
