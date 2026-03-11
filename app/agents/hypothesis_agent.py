@@ -200,6 +200,60 @@ def rank_hypotheses_by_evidence(
     return ranked
 
 
+def refine_hypotheses_with_user_feedback(
+    hypotheses: list[Hypothesis],
+    user_feedback_notes: list[ResearchNote],
+) -> list[Hypothesis]:
+    """Refine and re-prioritize hypotheses using user feedback notes.
+
+    The refinement loop uses lightweight keyword overlap so users can steer
+    what gets investigated first without requiring another LLM call.
+    """
+    if not hypotheses or not user_feedback_notes:
+        return hypotheses
+
+    feedback_text = " ".join(
+        note.content for note in user_feedback_notes if note.content
+    )
+    if not feedback_text.strip():
+        return hypotheses
+
+    stop_words = {
+        "about", "after", "also", "because", "between", "focus",
+        "into", "more", "should", "than", "that", "their", "there",
+        "these", "those", "this", "with", "from", "what", "when",
+        "where", "which", "would", "could", "include", "avoid",
+    }
+    feedback_keywords = {
+        token.lower()
+        for token in re.findall(r"[A-Za-z]{4,}", feedback_text)
+        if token.lower() not in stop_words
+    }
+
+    if not feedback_keywords:
+        return hypotheses
+
+    scored: list[tuple[int, Hypothesis]] = []
+    for hyp in hypotheses:
+        haystack = (
+            f"{hyp.statement} {hyp.reasoning} {hyp.search_query}".lower()
+        )
+        overlap = sum(1 for kw in feedback_keywords if kw in haystack)
+
+        refined = hyp.model_copy(deep=True)
+        if overlap == 0:
+            top_terms = sorted(feedback_keywords)[:2]
+            if top_terms:
+                refined.search_query = (
+                    f"{refined.search_query} {' '.join(top_terms)}"
+                )
+
+        scored.append((overlap, refined))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [item[1] for item in scored]
+
+
 async def search_for_hypothesis(
     hypothesis: Hypothesis,
     include_academic: bool = False,
@@ -397,6 +451,28 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
             "agent_steps": steps,
         }
 
+    user_feedback_notes = [
+        note
+        for note in state.research_notes
+        if note.agent == "user"
+        and note.category in {"instruction", "observation", "contradiction"}
+    ]
+    if user_feedback_notes:
+        steps.append(AgentStep(
+            step_type="thinking",
+            title="Refining hypotheses with user feedback",
+            description=(
+                f"Applying {len(user_feedback_notes)} user note(s) "
+                f"to prioritize and refine hypothesis searches."
+            ),
+            status="completed",
+            metadata={"feedback_notes_used": len(user_feedback_notes)},
+        ))
+        hypotheses = refine_hypotheses_with_user_feedback(
+            hypotheses,
+            user_feedback_notes,
+        )
+
     # Collect existing URLs for deduplication
     existing_urls = {c.url for c in state.citations}
 
@@ -426,6 +502,8 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
     hypothesis_results: list[tuple[Hypothesis, list[Citation]]] = []
     for i, result in enumerate(results):
         step_idx = i + 1  # +1 because first step is the analysis step
+        if user_feedback_notes:
+            step_idx += 1
 
         if isinstance(result, Exception):
             logger.error(

@@ -29,10 +29,12 @@ from app.agents.hypothesis_agent import (
     Hypothesis,
     generate_hypotheses,
     rank_hypotheses_by_evidence,
+    refine_hypotheses_with_user_feedback,
 )
 from app.memory.research_state import (
     ResearchState,
     Citation,
+    ResearchNote,
     SubQueryResult,
     SourceType,
 )
@@ -874,3 +876,98 @@ class TestHypothesisRanking:
         assert len(hypothesis_steps) == 2
         assert all("rank" in step.metadata for step in hypothesis_steps)
         assert all("score" in step.metadata for step in hypothesis_steps)
+
+
+class TestHypothesisFeedbackLoop:
+    """Tests for user feedback refinement in hypothesis generation."""
+
+    def test_refine_hypotheses_with_user_feedback_reorders(self):
+        """Hypotheses matching user feedback keywords should be prioritized."""
+        hypotheses = [
+            Hypothesis(
+                statement="AI tutors improve chemistry scores.",
+                search_query="ai tutor chemistry outcomes",
+                reasoning="Need domain-specific evidence.",
+                aspect="chemistry",
+            ),
+            Hypothesis(
+                statement="AI tutors benefit novice learners most.",
+                search_query="ai tutor novice effect size",
+                reasoning="Effects may vary by prior knowledge.",
+                aspect="learner level",
+            ),
+        ]
+        feedback = [
+            ResearchNote(
+                agent="user",
+                category="instruction",
+                content="Please focus on novice learners and baseline skill.",
+            )
+        ]
+
+        refined = refine_hypotheses_with_user_feedback(hypotheses, feedback)
+
+        assert len(refined) == 2
+        assert "novice learners" in refined[0].statement.lower()
+
+    @pytest.mark.asyncio
+    async def test_generate_hypotheses_adds_feedback_refinement_step(self):
+        """Hypothesis workflow should record when user feedback is applied."""
+        state = ResearchState(
+            research_id=77,
+            query="How effective are AI tutors?",
+            sub_queries=["Which groups benefit most?"],
+            citations=[
+                Citation(
+                    id="[1]",
+                    url="https://seed.example",
+                    title="Seed",
+                    snippet="seed",
+                    source_type=SourceType.WEB,
+                )
+            ],
+            research_notes=[
+                ResearchNote(
+                    agent="user",
+                    category="instruction",
+                    content="Prioritize novice learner effects.",
+                )
+            ],
+        )
+
+        llm_result = {
+            "observations": "Need subgroup analysis.",
+            "hypotheses": [
+                {
+                    "statement": "AI tutors improve outcomes in STEM.",
+                    "search_query": "AI tutor stem outcomes",
+                    "reasoning": "Common claim needing stronger validation.",
+                    "aspect": "STEM outcomes",
+                }
+            ],
+        }
+
+        generated_hypothesis = Hypothesis(**llm_result["hypotheses"][0])
+        citations = [
+            Citation(
+                id="[0]",
+                url="https://example.com/evidence",
+                title="Evidence",
+                snippet="Evidence",
+                source_type=SourceType.WEB,
+            )
+        ]
+
+        with patch("app.agents.hypothesis_agent.rate_limited_llm_call", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = llm_result
+
+            with patch("app.agents.hypothesis_agent.search_for_hypothesis", new_callable=AsyncMock) as mock_search:
+                mock_search.return_value = (generated_hypothesis, citations)
+                result = await generate_hypotheses(state)
+
+        feedback_steps = [
+            step for step in result["agent_steps"]
+            if step.title == "Refining hypotheses with user feedback"
+        ]
+        assert len(feedback_steps) == 1
+        assert feedback_steps[0].metadata.get("feedback_notes_used") == 1
