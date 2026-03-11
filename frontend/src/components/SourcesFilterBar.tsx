@@ -117,31 +117,28 @@ export default function SourcesFilterBar({ filters, onFiltersChange, totalSource
 				<span className="text-sm text-gray-600">Quick filters:</span>
 				<button
 					onClick={() => handleQuickFilter('academic')}
-					className={`px-3 py-1 text-sm rounded-full transition-colors ${
-						filters.quick_filter === 'academic'
+					className={`px-3 py-1 text-sm rounded-full transition-colors ${filters.quick_filter === 'academic'
 							? 'bg-blue-100 text-blue-700 font-medium'
 							: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-					}`}
+						}`}
 				>
 					Academic Only
 				</button>
 				<button
 					onClick={() => handleQuickFilter('recent')}
-					className={`px-3 py-1 text-sm rounded-full transition-colors ${
-						filters.quick_filter === 'recent'
+					className={`px-3 py-1 text-sm rounded-full transition-colors ${filters.quick_filter === 'recent'
 							? 'bg-blue-100 text-blue-700 font-medium'
 							: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-					}`}
+						}`}
 				>
 					Recently Added
 				</button>
 				<button
 					onClick={() => handleQuickFilter('no_content')}
-					className={`px-3 py-1 text-sm rounded-full transition-colors ${
-						filters.quick_filter === 'no_content'
+					className={`px-3 py-1 text-sm rounded-full transition-colors ${filters.quick_filter === 'no_content'
 							? 'bg-blue-100 text-blue-700 font-medium'
 							: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-					}`}
+						}`}
 				>
 					No Content
 				</button>

@@ -71,7 +71,8 @@ def get_research_findings(
         from sqlalchemy.dialects.postgresql import JSONB
         from sqlalchemy import cast
         query = query.filter(
-            cast(models.ResearchFinding.source_ids, JSONB).contains([source_id])
+            cast(models.ResearchFinding.source_ids,
+                 JSONB).contains([source_id])
         )
 
     if search:

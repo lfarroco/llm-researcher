@@ -71,21 +71,21 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 
 			const sourcesData = await api.getSources(researchId, apiFilters);
 			setAllSources(sourcesData);
-			
+
 			// Apply quick filters on frontend (since they're complex logic)
 			let filtered = sourcesData;
 			if (filters?.quick_filter) {
 				const now = Date.now();
 				const oneDayMs = 24 * 60 * 60 * 1000;
-				
+
 				switch (filters.quick_filter) {
 					case 'academic':
-						filtered = filtered.filter(s => 
+						filtered = filtered.filter(s =>
 							['arxiv', 'pubmed', 'semantic_scholar', 'openalex', 'crossref'].includes(s.source_type)
 						);
 						break;
 					case 'recent':
-						filtered = filtered.filter(s => 
+						filtered = filtered.filter(s =>
 							now - new Date(s.accessed_at).getTime() < oneDayMs
 						);
 						break;
@@ -94,7 +94,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 						break;
 				}
 			}
-			
+
 			setFilteredSources(filtered);
 			setSources(filtered);
 		} catch (err) {
