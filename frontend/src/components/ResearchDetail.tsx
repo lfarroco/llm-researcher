@@ -14,6 +14,7 @@ import SourcesFilterBar, { type SourceFilters } from './SourcesFilterBar';
 import FindingsFilterBar, { type FindingFilters } from './FindingsFilterBar';
 import ExportMenu from './ExportMenu';
 import ResearchPlanTab from './ResearchPlanTab';
+import StateInspector from './StateInspector';
 
 interface Props {
 	researchId: number;
@@ -575,6 +576,8 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								</div>
 							</div>
 						)}
+
+						<StateInspector researchId={researchId} />
 					</div>
 				)}
 

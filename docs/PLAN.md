@@ -1059,12 +1059,12 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - ✅ "Remove sub-query" button (with impact warning)
   - ⏸️ Reorder sub-queries (drag-and-drop) - deferred
 
-- [ ] **AI State Inspector** (Expandable panel)
-  - Display current research step
-  - Show reasoning log (why decisions were made)
-  - View intermediate results
-  - Checkpoint browser (view state at different times)
-  - "Restart from checkpoint" button
+- [x] **AI State Inspector** (Expandable panel) ✅ PARTIAL (Sprint 4)
+  - ✅ Display current research status and activity
+  - ✅ Show reasoning log (decision history)
+  - ✅ View intermediate results (pending/completed queries + metrics)
+  - ⏸️ Checkpoint browser (view state at different times) - deferred
+  - ⏸️ "Restart from checkpoint" button - deferred
 
 - [ ] **Improved Overview Tab**
   - Visual progress indicator (% complete)
