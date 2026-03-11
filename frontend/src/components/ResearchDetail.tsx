@@ -13,6 +13,7 @@ import ConfirmDialog from './ConfirmDialog';
 import SourcesFilterBar, { type SourceFilters } from './SourcesFilterBar';
 import FindingsFilterBar, { type FindingFilters } from './FindingsFilterBar';
 import ExportMenu from './ExportMenu';
+import ResearchPlanTab from './ResearchPlanTab';
 
 interface Props {
 	researchId: number;
@@ -20,7 +21,16 @@ interface Props {
 	onUpdate: () => void;
 }
 
-type Tab = 'overview' | 'sources' | 'findings' | 'result' | 'knowledge' | 'notes' | 'chat' | 'steps';
+type Tab =
+	| 'overview'
+	| 'plan'
+	| 'sources'
+	| 'findings'
+	| 'result'
+	| 'knowledge'
+	| 'notes'
+	| 'chat'
+	| 'steps';
 
 export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props) {
 	const [research, setResearch] = useState<Research | null>(null);
@@ -405,6 +415,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 
 	const tabs: { id: Tab; label: string; count?: number }[] = [
 		{ id: 'overview', label: 'Overview' },
+		{ id: 'plan', label: 'Plan' },
 		{ id: 'sources', label: 'Sources', count: sources.length },
 		{ id: 'findings', label: 'Findings', count: findings.length },
 		{ id: 'result', label: 'Result' },
@@ -938,6 +949,13 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 							)}
 						</div>
 					</div>
+				)}
+
+				{activeTab === 'plan' && (
+					<ResearchPlanTab
+						researchId={researchId}
+						researchQuery={research.query}
+					/>
 				)}
 
 				{activeTab === 'result' && (

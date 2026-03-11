@@ -57,6 +57,25 @@ export interface ResearchState {
 	[key: string]: any;
 }
 
+export interface ResearchPlanProgressItem {
+	status: 'completed' | 'pending';
+	finding?: string | null;
+}
+
+export interface ResearchPlan {
+	query: string;
+	refined_question?: string | null;
+	sub_queries: string[];
+	progress: Record<string, ResearchPlanProgressItem>;
+	outline?: string | null;
+}
+
+export interface ResearchPlanUpdatePayload {
+	add_queries?: string[];
+	remove_queries?: string[];
+	refined_question?: string;
+}
+
 export interface AgentStep {
 	timestamp: string;
 	step_type: 'planning' | 'searching' | 'relevance_filter' | 'thinking' | 'hypothesis' | 'synthesis' | 'formatting' | 'summary' | 'error';

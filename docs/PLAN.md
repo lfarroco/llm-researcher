@@ -1051,13 +1051,13 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 
 **Frontend Implementation**:
 
-- [ ] **Research Plan View** (New tab in ResearchDetail)
-  - Display main research question
-  - List all sub-queries with status (completed/pending)
-  - Show which sources/findings answer each sub-query
-  - "Add sub-query" button
-  - "Remove sub-query" button (with impact warning)
-  - Reorder sub-queries (drag-and-drop)
+- [x] **Research Plan View** (New tab in ResearchDetail) ✅ PARTIAL (Sprint 4)
+  - ✅ Display main research question
+  - ✅ List all sub-queries with status (completed/pending)
+  - ✅ Show finding snippets for completed sub-queries
+  - ✅ "Add sub-query" button
+  - ✅ "Remove sub-query" button (with impact warning)
+  - ⏸️ Reorder sub-queries (drag-and-drop) - deferred
 
 - [ ] **AI State Inspector** (Expandable panel)
   - Display current research step

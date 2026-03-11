@@ -1,4 +1,15 @@
-import type { Research, Source, Finding, ChatMessage, ResearchState, AgentStepsResponse, KnowledgeBaseResponse, ResearchNote } from '../types';
+import type {
+	Research,
+	Source,
+	Finding,
+	ChatMessage,
+	ResearchState,
+	ResearchPlan,
+	ResearchPlanUpdatePayload,
+	AgentStepsResponse,
+	KnowledgeBaseResponse,
+	ResearchNote,
+} from '../types';
 
 const API_BASE = '/api';
 
@@ -199,6 +210,23 @@ export const api = {
 	// State endpoints
 	async getState(researchId: number): Promise<ResearchState> {
 		const response = await fetch(`${API_BASE}/research/${researchId}/state`);
+		return handleResponse(response);
+	},
+
+	async getPlan(researchId: number): Promise<ResearchPlan> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/plan`);
+		return handleResponse(response);
+	},
+
+	async updatePlan(
+		researchId: number,
+		payload: ResearchPlanUpdatePayload
+	): Promise<ResearchPlan> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/plan`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(payload),
+		});
 		return handleResponse(response);
 	},
 
