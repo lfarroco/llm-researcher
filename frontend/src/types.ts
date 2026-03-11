@@ -138,3 +138,17 @@ export interface ResearchNote {
 	created_at: string;
 	updated_at: string;
 }
+
+export interface ExtractedEntity {
+	name: string;
+	entity_type: 'method' | 'material' | 'metric' | 'finding' | 'concept' | string;
+	mentions: string[];
+	mention_count: number;
+}
+
+export interface ResearchEntitiesResponse {
+	research_id: number;
+	status: string;
+	total_entities: number;
+	entities: ExtractedEntity[];
+}

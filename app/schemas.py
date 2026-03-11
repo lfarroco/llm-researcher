@@ -329,3 +329,29 @@ class ResearchNoteResponse(BaseModel):
     content: str
     created_at: datetime
     updated_at: datetime
+
+
+class ExtractedEntityResponse(BaseModel):
+    """Entity extracted from research sources/findings."""
+
+    name: str = Field(description="Canonical entity text")
+    entity_type: str = Field(
+        description="Entity type: method|material|metric|finding|concept"
+    )
+    mentions: list[str] = Field(
+        default_factory=list,
+        description="Source/finding references where this entity appears"
+    )
+    mention_count: int = Field(
+        default=0,
+        description="Number of distinct mentions"
+    )
+
+
+class ResearchEntitiesResponse(BaseModel):
+    """Entity extraction result for one research item."""
+
+    research_id: int
+    status: str
+    total_entities: int
+    entities: list[ExtractedEntityResponse] = Field(default_factory=list)

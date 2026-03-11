@@ -698,7 +698,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 *Extract structured knowledge from text*
 
 - [x] Create `app/nlp/` module structure
-- [ ] Implement `app/nlp/entity_extractor.py` using spaCy
+- [x] Implement `app/nlp/entity_extractor.py` using spaCy
   - Scientific entity types: methods, materials, metrics, findings
   - Custom NER model fine-tuning for domain-specific entities
 - [ ] Implement `app/nlp/relation_extractor.py`

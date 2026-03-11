@@ -58,3 +58,6 @@ python-dateutil>=2.8.0
 
 # Validation
 validators>=0.22.0
+
+# NLP extraction (Phase 10)
+spacy>=3.7.0

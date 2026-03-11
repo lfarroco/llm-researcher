@@ -9,6 +9,7 @@ import type {
 	AgentStepsResponse,
 	KnowledgeBaseResponse,
 	ResearchNote,
+	ResearchEntitiesResponse,
 } from '../types';
 
 const API_BASE = '/api';
@@ -254,6 +255,12 @@ export const api = {
 	// Knowledge base endpoint
 	async getKnowledgeBase(researchId: number): Promise<KnowledgeBaseResponse> {
 		const response = await fetch(`${API_BASE}/research/${researchId}/knowledge-base`);
+		return handleResponse(response);
+	},
+
+	// Entities endpoint
+	async getEntities(researchId: number): Promise<ResearchEntitiesResponse> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/entities`);
 		return handleResponse(response);
 	},
 

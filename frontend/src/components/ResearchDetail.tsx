@@ -17,6 +17,7 @@ import ResearchPlanTab from './ResearchPlanTab';
 import StateInspector from './StateInspector';
 import MetricsCards from './MetricsCards';
 import TimelineView from './TimelineView';
+import ResearchEntitiesTab from './ResearchEntitiesTab';
 import { useToast } from '../hooks/useToast';
 
 interface Props {
@@ -30,6 +31,7 @@ type Tab =
 	| 'plan'
 	| 'sources'
 	| 'findings'
+	| 'entities'
 	| 'result'
 	| 'knowledge'
 	| 'notes'
@@ -61,6 +63,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const [filteredFindings, setFilteredFindings] = useState<Finding[]>([]);
 	const [planSubQueryCount, setPlanSubQueryCount] = useState(0);
 	const [planCompletedCount, setPlanCompletedCount] = useState(0);
+	const [entityCount, setEntityCount] = useState(0);
 
 	// Source CRUD state
 	const [sourceModalOpen, setSourceModalOpen] = useState(false);
@@ -145,6 +148,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			setError(null);
 			const researchData = await api.getResearch(researchId);
 			const planData = await api.getPlan(researchId).catch(() => null);
+			const entitiesData = await api.getEntities(researchId).catch(() => null);
 			await Promise.all([
 				loadSources(sourceFilters),
 				loadFindings(findingFilters),
@@ -159,6 +163,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				setPlanSubQueryCount(0);
 				setPlanCompletedCount(0);
 			}
+			setEntityCount(entitiesData?.total_entities || 0);
 			setResearch(researchData);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load research');
@@ -457,6 +462,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		{ id: 'plan', label: 'Plan' },
 		{ id: 'sources', label: 'Sources', count: sources.length },
 		{ id: 'findings', label: 'Findings', count: findings.length },
+		{ id: 'entities', label: 'Entities', count: entityCount },
 		{ id: 'result', label: 'Result' },
 		{ id: 'knowledge', label: 'Knowledge Base' },
 		{ id: 'notes', label: 'Notes' },
@@ -1008,6 +1014,8 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 						</div>
 					</div>
 				)}
+
+				{activeTab === 'entities' && <ResearchEntitiesTab researchId={researchId} />}
 
 				{activeTab === 'plan' && (
 					<ResearchPlanTab

@@ -18,7 +18,9 @@ from app.schemas import (
     ResearchPlanUpdate,
     ResearchDocumentResponse,
     ResearchSourceResponse,
+    ResearchEntitiesResponse,
 )
+from app.nlp.entity_extractor import EntityExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +213,60 @@ def get_knowledge_base(
         "total_citations": len(citations_raw),
         "source_type_distribution": type_counts,
     }
+
+
+@router.get(
+    "/research/{research_id}/entities",
+    response_model=ResearchEntitiesResponse,
+)
+def get_research_entities(
+    research_id: int,
+    db: Session = Depends(get_db),
+):
+    """Extract entities from current research sources and findings."""
+    research = _get_research_or_404(research_id, db)
+
+    sources = db.query(models.ResearchSource).filter(
+        models.ResearchSource.research_id == research_id
+    ).all()
+    findings = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.research_id == research_id
+    ).all()
+
+    documents: list[dict[str, str]] = []
+
+    for source in sources:
+        text_parts = [
+            source.title or "",
+            source.content_snippet or "",
+            source.user_notes or "",
+        ]
+        text = "\n".join(part for part in text_parts if part).strip()
+        if not text:
+            continue
+        documents.append({
+            "text": text,
+            "mention": source.title or source.url or f"source:{source.id}",
+        })
+
+    for finding in findings:
+        text = (finding.content or "").strip()
+        if not text:
+            continue
+        documents.append({
+            "text": text,
+            "mention": f"finding:{finding.id}",
+        })
+
+    extractor = EntityExtractor()
+    entities = extractor.extract_with_mentions(documents)
+
+    return ResearchEntitiesResponse(
+        research_id=research_id,
+        status=research.status,
+        total_entities=len(entities),
+        entities=entities,
+    )
 
 
 @router.get(
