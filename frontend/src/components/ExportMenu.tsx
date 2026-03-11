@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useToast } from '../hooks/useToast';
 
 interface Props {
 	researchId: number;
@@ -10,6 +11,7 @@ interface Props {
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export default function ExportMenu({ researchId, type, buttonText = 'Export', className = '' }: Props) {
+	const { showToast } = useToast();
 	const [isOpen, setIsOpen] = useState(false);
 	const [exporting, setExporting] = useState(false);
 
@@ -62,7 +64,10 @@ export default function ExportMenu({ researchId, type, buttonText = 'Export', cl
 			window.URL.revokeObjectURL(downloadUrl);
 			document.body.removeChild(a);
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Export failed');
+			showToast(
+				err instanceof Error ? err.message : 'Export failed',
+				'error'
+			);
 		} finally {
 			setExporting(false);
 		}

@@ -17,6 +17,7 @@ import ResearchPlanTab from './ResearchPlanTab';
 import StateInspector from './StateInspector';
 import MetricsCards from './MetricsCards';
 import TimelineView from './TimelineView';
+import { useToast } from '../hooks/useToast';
 
 interface Props {
 	researchId: number;
@@ -36,6 +37,7 @@ type Tab =
 	| 'steps';
 
 export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props) {
+	const { showToast } = useToast();
 	const [research, setResearch] = useState<Research | null>(null);
 	const [sources, setSources] = useState<Source[]>([]);
 	const [findings, setFindings] = useState<Finding[]>([]);
@@ -203,7 +205,10 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			await api.deleteResearch(researchId);
 			onDelete(researchId);
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to delete research');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to delete research',
+				'error'
+			);
 		}
 	};
 
@@ -213,7 +218,10 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			onUpdate();
 			loadData();
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to cancel research');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to cancel research',
+				'error'
+			);
 		}
 	};
 
@@ -223,7 +231,10 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			onUpdate();
 			loadData();
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to resume research');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to resume research',
+				'error'
+			);
 		}
 	};
 
@@ -298,7 +309,10 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			setDeleteConfirmOpen(false);
 			setSourceToDelete(null);
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to delete source');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to delete source',
+				'error'
+			);
 			setDeleteConfirmOpen(false);
 			setSourceToDelete(null);
 		}
@@ -327,7 +341,10 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			);
 			handleCancelEditNotes(sourceId);
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to update notes');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to update notes',
+				'error'
+			);
 		}
 	};
 
@@ -376,7 +393,10 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			setFindingDeleteConfirmOpen(false);
 			setFindingToDelete(null);
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to delete finding');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to delete finding',
+				'error'
+			);
 			setFindingDeleteConfirmOpen(false);
 			setFindingToDelete(null);
 		}
@@ -397,7 +417,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const handleSaveFindingContent = async (findingId: number) => {
 		const content = editingFindingContent[findingId];
 		if (!content.trim()) {
-			alert('Content cannot be empty');
+			showToast('Content cannot be empty', 'error');
 			return;
 		}
 		try {
@@ -409,7 +429,10 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			);
 			handleCancelEditFindingContent(findingId);
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to update finding');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to update finding',
+				'error'
+			);
 		}
 	};
 

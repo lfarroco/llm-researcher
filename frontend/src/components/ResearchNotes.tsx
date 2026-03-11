@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api/client';
 import type { ResearchNote } from '../types';
+import { useToast } from '../hooks/useToast';
 
 interface Props {
 	researchId: number;
@@ -26,6 +27,7 @@ const AGENT_LABELS: Record<string, string> = {
 };
 
 export default function ResearchNotes({ researchId }: Props) {
+	const { showToast } = useToast();
 	const [notes, setNotes] = useState<ResearchNote[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [newContent, setNewContent] = useState('');
@@ -62,7 +64,7 @@ export default function ResearchNotes({ researchId }: Props) {
 			setNewContent('');
 			loadNotes();
 		} catch {
-			alert('Failed to create note');
+			showToast('Failed to create note', 'error');
 		}
 	};
 
@@ -74,7 +76,7 @@ export default function ResearchNotes({ researchId }: Props) {
 			setEditContent('');
 			loadNotes();
 		} catch {
-			alert('Failed to update note');
+			showToast('Failed to update note', 'error');
 		}
 	};
 
@@ -84,7 +86,7 @@ export default function ResearchNotes({ researchId }: Props) {
 			await api.deleteNote(researchId, noteId);
 			loadNotes();
 		} catch {
-			alert('Failed to delete note');
+			showToast('Failed to delete note', 'error');
 		}
 	};
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client';
 import type { ResearchPlan } from '../types';
+import { useToast } from '../hooks/useToast';
 
 interface Props {
 	researchId: number;
@@ -11,6 +12,7 @@ export default function ResearchPlanTab({ researchId, researchQuery }: Props) {
 	const [plan, setPlan] = useState<ResearchPlan | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const { showToast } = useToast();
 	const [newQuery, setNewQuery] = useState('');
 	const [saving, setSaving] = useState(false);
 
@@ -49,7 +51,10 @@ export default function ResearchPlanTab({ researchId, researchQuery }: Props) {
 			setPlan(updated);
 			setNewQuery('');
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to add sub-query');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to add sub-query',
+				'error'
+			);
 		} finally {
 			setSaving(false);
 		}
@@ -69,7 +74,10 @@ export default function ResearchPlanTab({ researchId, researchQuery }: Props) {
 			});
 			setPlan(updated);
 		} catch (err) {
-			alert(err instanceof Error ? err.message : 'Failed to remove sub-query');
+			showToast(
+				err instanceof Error ? err.message : 'Failed to remove sub-query',
+				'error'
+			);
 		} finally {
 			setSaving(false);
 		}

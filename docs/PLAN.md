@@ -1100,7 +1100,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - Dark mode toggle (save preference)
   - Improved loading skeletons (not just "Loading...")
   - Empty state illustrations
-  - Success/error toast notifications (not just alerts)
+  - ✅ Success/error toast notifications (not just alerts)
   - Smooth page transitions
   - Animated progress bars
 
@@ -1121,7 +1121,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 **Components to Build**:
 - `KeyboardShortcuts.tsx` - Help modal with shortcuts
 - `CommandPalette.tsx` - Quick search/navigation
-- `Toast.tsx` - Notification system
+- ✅ `Toast.tsx` - Notification system (implemented)
 - `SettingsPanel.tsx` - User preferences
 
 **Estimated Effort**: 10-12 hours
