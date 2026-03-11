@@ -12,6 +12,7 @@ import FindingFormModal from './FindingFormModal';
 import ConfirmDialog from './ConfirmDialog';
 import SourcesFilterBar, { type SourceFilters } from './SourcesFilterBar';
 import FindingsFilterBar, { type FindingFilters } from './FindingsFilterBar';
+import ExportMenu from './ExportMenu';
 
 interface Props {
 	researchId: number;
@@ -572,12 +573,15 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 							<h3 className="text-lg font-semibold text-gray-900">
 								Sources
 							</h3>
-							<button
-								onClick={handleAddSource}
-								className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
-							>
-								+ Add Source
-							</button>
+							<div className="flex gap-2">
+								<ExportMenu researchId={researchId} type="sources" />
+								<button
+									onClick={handleAddSource}
+									className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+								>
+									+ Add Source
+								</button>
+							</div>
 						</div>
 
 						<SourcesFilterBar
@@ -762,12 +766,15 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 							<h3 className="text-lg font-semibold text-gray-900">
 								Findings
 							</h3>
-							<button
-								onClick={handleAddFinding}
-								className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
-							>
-								+ Add Finding
-							</button>
+							<div className="flex gap-2">
+								<ExportMenu researchId={researchId} type="findings" />
+								<button
+									onClick={handleAddFinding}
+									className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+								>
+									+ Add Finding
+								</button>
+							</div>
 						</div>
 
 						<FindingsFilterBar

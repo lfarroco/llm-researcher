@@ -2,9 +2,14 @@
 Exports router - document export endpoints (PDF, HTML, DOCX, Markdown).
 
 Handles exporting research documents in various formats using pandoc.
+Also provides data exports for sources (BibTeX) and findings (CSV/JSON).
 """
 
+import csv
+import io
+import json
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -41,6 +46,16 @@ def _get_research_with_document(
                 "Please complete the research first."
             ),
         )
+    return research
+
+
+def _get_research_or_404(research_id: int, db: Session) -> models.Research:
+    """Fetch research by ID or raise 404."""
+    research = db.query(models.Research).filter(
+        models.Research.id == research_id
+    ).first()
+    if not research:
+        raise HTTPException(status_code=404, detail="Research not found")
     return research
 
 
@@ -197,6 +212,275 @@ def export_research_as_markdown(
     return Response(
         content=research.result.encode('utf-8'),
         media_type="text/markdown",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        },
+    )
+
+
+@router.get("/research/{research_id}/export/sources/bibtex")
+def export_sources_as_bibtex(
+    research_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Export all sources as BibTeX format.
+    
+    Useful for bibliography management and academic writing.
+    """
+    research = _get_research_or_404(research_id, db)
+    
+    sources = db.query(models.ResearchSource).filter(
+        models.ResearchSource.research_id == research_id
+    ).all()
+    
+    if not sources:
+        raise HTTPException(
+            status_code=404,
+            detail="No sources found for this research"
+        )
+    
+    # Generate BibTeX entries
+    bibtex_entries = []
+    for idx, source in enumerate(sources, 1):
+        # Create a citation key from title or URL
+        title_key = "".join(
+            c for c in (source.title or "source")[:20]
+            if c.isalnum()
+        ).lower()
+        cite_key = f"{title_key}{idx}"
+        
+        # Determine entry type based on source type
+        entry_type = "misc"
+        if source.source_type == "arxiv":
+            entry_type = "article"
+        elif source.source_type in ["pubmed", "semantic_scholar"]:
+            entry_type = "article"
+        elif source.source_type == "wikipedia":
+            entry_type = "online"
+        
+        # Build BibTeX entry
+        entry = f"@{entry_type}{{{cite_key},\n"
+        if source.title:
+            entry += f'  title = {{{source.title}}},\n'
+        if source.author:
+            entry += f'  author = {{{source.author}}},\n'
+        entry += f'  url = {{{source.url}}},\n'
+        entry += f'  note = {{Accessed: {source.accessed_at.strftime("%Y-%m-%d")}}},\n'
+        if source.source_type:
+            entry += f'  howpublished = {{{source.source_type}}},\n'
+        entry += "}\n"
+        bibtex_entries.append(entry)
+    
+    bibtex_content = "\n".join(bibtex_entries)
+    filename = _safe_filename(research.query, research_id, "bib")
+    
+    return Response(
+        content=bibtex_content.encode('utf-8'),
+        media_type="application/x-bibtex",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        },
+    )
+
+
+@router.get("/research/{research_id}/export/findings/csv")
+def export_findings_as_csv(
+    research_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Export all findings as CSV format.
+    
+    Includes finding content, source IDs, creator, and timestamps.
+    """
+    research = _get_research_or_404(research_id, db)
+    
+    findings = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.research_id == research_id
+    ).all()
+    
+    if not findings:
+        raise HTTPException(
+            status_code=404,
+            detail="No findings found for this research"
+        )
+    
+    # Create CSV in memory
+    output = io.StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=[
+            'id',
+            'content',
+            'source_ids',
+            'created_by',
+            'created_at',
+            'updated_at'
+        ]
+    )
+    writer.writeheader()
+    
+    for finding in findings:
+        writer.writerow({
+            'id': finding.id,
+            'content': finding.content,
+            'source_ids': json.dumps(finding.source_ids) if finding.source_ids else '',
+            'created_by': finding.created_by,
+            'created_at': finding.created_at.isoformat(),
+            'updated_at': finding.updated_at.isoformat(),
+        })
+    
+    csv_content = output.getvalue()
+    filename = _safe_filename(research.query, research_id, "csv")
+    
+    return Response(
+        content=csv_content.encode('utf-8'),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        },
+    )
+
+
+@router.get("/research/{research_id}/export/findings/json")
+def export_findings_as_json(
+    research_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Export all findings as JSON format.
+    
+    Includes all finding data in structured JSON format.
+    """
+    research = _get_research_or_404(research_id, db)
+    
+    findings = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.research_id == research_id
+    ).all()
+    
+    if not findings:
+        raise HTTPException(
+            status_code=404,
+            detail="No findings found for this research"
+        )
+    
+    # Convert to JSON-serializable format
+    findings_data = [
+        {
+            'id': f.id,
+            'content': f.content,
+            'source_ids': f.source_ids,
+            'created_by': f.created_by,
+            'created_at': f.created_at.isoformat(),
+            'updated_at': f.updated_at.isoformat(),
+        }
+        for f in findings
+    ]
+    
+    json_content = json.dumps(findings_data, indent=2)
+    filename = _safe_filename(research.query, research_id, "json")
+    
+    return Response(
+        content=json_content.encode('utf-8'),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        },
+    )
+
+
+@router.get("/research/{research_id}/export/data")
+def export_research_data(
+    research_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Export full research data as JSON.
+    
+    Includes research metadata, all sources, findings, and notes.
+    Useful for backup, migration, or data analysis.
+    """
+    research = _get_research_or_404(research_id, db)
+    
+    # Fetch all related data
+    sources = db.query(models.ResearchSource).filter(
+        models.ResearchSource.research_id == research_id
+    ).all()
+    
+    findings = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.research_id == research_id
+    ).all()
+    
+    notes = db.query(models.ResearchNote).filter(
+        models.ResearchNote.research_id == research_id
+    ).all()
+    
+    # Build complete data structure
+    research_data = {
+        'research': {
+            'id': research.id,
+            'query': research.query,
+            'result': research.result,
+            'status': research.status,
+            'user_notes': research.user_notes,
+            'tags': research.tags,
+            'created_at': research.created_at.isoformat(),
+            'updated_at': research.updated_at.isoformat(),
+        },
+        'sources': [
+            {
+                'id': s.id,
+                'url': s.url,
+                'title': s.title,
+                'author': s.author,
+                'content_snippet': s.content_snippet,
+                'source_type': s.source_type,
+                'relevance_score': s.relevance_score,
+                'user_notes': s.user_notes,
+                'tags': s.tags,
+                'accessed_at': s.accessed_at.isoformat(),
+            }
+            for s in sources
+        ],
+        'findings': [
+            {
+                'id': f.id,
+                'content': f.content,
+                'source_ids': f.source_ids,
+                'created_by': f.created_by,
+                'created_at': f.created_at.isoformat(),
+                'updated_at': f.updated_at.isoformat(),
+            }
+            for f in findings
+        ],
+        'notes': [
+            {
+                'id': n.id,
+                'agent': n.agent,
+                'category': n.category,
+                'content': n.content,
+                'created_at': n.created_at.isoformat(),
+                'updated_at': n.updated_at.isoformat(),
+            }
+            for n in notes
+        ],
+        'export_metadata': {
+            'exported_at': datetime.now().isoformat(),
+            'version': '1.0',
+        }
+    }
+    
+    json_content = json.dumps(research_data, indent=2)
+    filename = _safe_filename(
+        research.query,
+        research_id,
+        "full_data.json"
+    )
+    
+    return Response(
+        content=json_content.encode('utf-8'),
+        media_type="application/json",
         headers={
             "Content-Disposition": f"attachment; filename={filename}"
         },
