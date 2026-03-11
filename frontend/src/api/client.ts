@@ -70,6 +70,44 @@ export const api = {
 		return handleResponse(response);
 	},
 
+	async createSource(researchId: number, source: {
+		url: string;
+		title?: string;
+		author?: string;
+		content_snippet?: string;
+		source_type?: string;
+		relevance_score?: number;
+		user_notes?: string;
+		tags?: string[];
+	}): Promise<Source> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/sources`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(source),
+		});
+		return handleResponse(response);
+	},
+
+	async updateSource(
+		researchId: number,
+		sourceId: number,
+		update: { user_notes?: string; tags?: string[]; title?: string }
+	): Promise<Source> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/sources/${sourceId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(update),
+		});
+		return handleResponse(response);
+	},
+
+	async deleteSource(researchId: number, sourceId: number): Promise<void> {
+		const response = await fetch(`${API_BASE}/research/${researchId}/sources/${sourceId}`, {
+			method: 'DELETE',
+		});
+		if (!response.ok) throw new Error('Failed to delete source');
+	},
+
 	// Findings endpoints
 	async getFindings(researchId: number): Promise<Finding[]> {
 		const response = await fetch(`${API_BASE}/research/${researchId}/findings`);

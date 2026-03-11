@@ -7,6 +7,8 @@ import EditableResearchHeader from './EditableResearchHeader';
 import AgentSteps from './AgentSteps';
 import KnowledgeBase from './KnowledgeBase';
 import ResearchNotes from './ResearchNotes';
+import SourceFormModal from './SourceFormModal';
+import ConfirmDialog from './ConfirmDialog';
 
 interface Props {
 	researchId: number;
@@ -24,6 +26,13 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [latestStep, setLatestStep] = useState<AgentStep | null>(null);
+
+	// Source CRUD state
+	const [sourceModalOpen, setSourceModalOpen] = useState(false);
+	const [editingSource, setEditingSource] = useState<Source | null>(null);
+	const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+	const [sourceToDelete, setSourceToDelete] = useState<number | null>(null);
+	const [editingNotes, setEditingNotes] = useState<{ [key: number]: string }>({});
 
 	const loadData = useCallback(async () => {
 		try {
@@ -113,6 +122,88 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			onUpdate();
 		} catch (err) {
 			throw err;
+		}
+	};
+
+	// Source CRUD handlers
+	const handleAddSource = () => {
+		setEditingSource(null);
+		setSourceModalOpen(true);
+	};
+
+	const handleEditSource = (source: Source) => {
+		setEditingSource(source);
+		setSourceModalOpen(true);
+	};
+
+	const handleSourceModalSubmit = async (sourceData: any) => {
+		try {
+			if (editingSource) {
+				// Update existing source
+				const updated = await api.updateSource(researchId, editingSource.id, {
+					user_notes: sourceData.user_notes,
+					tags: sourceData.tags,
+					title: sourceData.title,
+				});
+				setSources((prev) =>
+					prev.map((s) => (s.id === updated.id ? updated : s))
+				);
+			} else {
+				// Create new source
+				const newSource = await api.createSource(researchId, sourceData);
+				setSources((prev) => [newSource, ...prev]);
+			}
+			setSourceModalOpen(false);
+			setEditingSource(null);
+		} catch (err) {
+			throw err;
+		}
+	};
+
+	const handleDeleteSource = (sourceId: number) => {
+		setSourceToDelete(sourceId);
+		setDeleteConfirmOpen(true);
+	};
+
+	const handleConfirmDelete = async () => {
+		if (sourceToDelete === null) return;
+
+		try {
+			await api.deleteSource(researchId, sourceToDelete);
+			setSources((prev) => prev.filter((s) => s.id !== sourceToDelete));
+			setDeleteConfirmOpen(false);
+			setSourceToDelete(null);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to delete source');
+			setDeleteConfirmOpen(false);
+			setSourceToDelete(null);
+		}
+	};
+
+	const handleStartEditNotes = (sourceId: number, currentNotes: string) => {
+		setEditingNotes((prev) => ({ ...prev, [sourceId]: currentNotes || '' }));
+	};
+
+	const handleCancelEditNotes = (sourceId: number) => {
+		setEditingNotes((prev) => {
+			const updated = { ...prev };
+			delete updated[sourceId];
+			return updated;
+		});
+	};
+
+	const handleSaveNotes = async (sourceId: number) => {
+		const notes = editingNotes[sourceId];
+		try {
+			const updated = await api.updateSource(researchId, sourceId, {
+				user_notes: notes,
+			});
+			setSources((prev) =>
+				prev.map((s) => (s.id === updated.id ? updated : s))
+			);
+			handleCancelEditNotes(sourceId);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to update notes');
 		}
 	};
 
@@ -297,34 +388,186 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				)}
 
 				{activeTab === 'sources' && (
-					<div className="space-y-3">
-						{sources.length === 0 ? (
-							<p className="text-center text-gray-500 py-8">No sources yet</p>
-						) : (
-							sources.map((source) => (
-								<div key={source.id} className="border rounded-lg p-4 hover:bg-gray-50">
-									<a
-										href={source.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="text-blue-600 hover:underline font-medium"
+					<div>
+						<div className="flex justify-between items-center mb-4">
+							<h3 className="text-lg font-semibold text-gray-900">
+								Sources ({sources.length})
+							</h3>
+							<button
+								onClick={handleAddSource}
+								className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+							>
+								+ Add Source
+							</button>
+						</div>
+
+						<div className="space-y-3">
+							{sources.length === 0 ? (
+								<div className="text-center py-12">
+									<p className="text-gray-500 mb-4">No sources yet</p>
+									<button
+										onClick={handleAddSource}
+										className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
 									>
-										{source.title}
-									</a>
-									<div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-										<span className="px-2 py-1 bg-gray-100 rounded">
-											{source.source_type}
-										</span>
-										<span>{new Date(source.accessed_at).toLocaleString()}</span>
-									</div>
-									{source.content_snippet && (
-										<p className="mt-2 text-sm text-gray-600 line-clamp-3">
-											{source.content_snippet}
-										</p>
-									)}
+										Add your first source
+									</button>
 								</div>
-							))
-						)}
+							) : (
+								sources.map((source) => {
+									const isEditingNotes = editingNotes[source.id] !== undefined;
+									return (
+										<div key={source.id} className="border rounded-lg p-4 hover:bg-gray-50">
+											<div className="flex items-start justify-between">
+												<div className="flex-1 min-w-0">
+													<a
+														href={source.url}
+														target="_blank"
+														rel="noopener noreferrer"
+														className="text-blue-600 hover:underline font-medium break-words"
+													>
+														{source.title}
+													</a>
+													<div className="flex items-center gap-2 mt-2 text-xs text-gray-500 flex-wrap">
+														<span className="px-2 py-1 bg-gray-100 rounded">
+															{source.source_type}
+														</span>
+														<span>{new Date(source.accessed_at).toLocaleString()}</span>
+														{source.author && (
+															<span className="text-gray-600">by {source.author}</span>
+														)}
+													</div>
+													{source.content_snippet && (
+														<p className="mt-2 text-sm text-gray-600 line-clamp-3">
+															{source.content_snippet}
+														</p>
+													)}
+													{source.tags && source.tags.length > 0 && (
+														<div className="flex gap-1 mt-2 flex-wrap">
+															{source.tags.map((tag) => (
+																<span
+																	key={tag}
+																	className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded"
+																>
+																	{tag}
+																</span>
+															))}
+														</div>
+													)}
+
+													{/* Notes section with inline editing */}
+													<div className="mt-3">
+														{isEditingNotes ? (
+															<div className="space-y-2">
+																<textarea
+																	value={editingNotes[source.id]}
+																	onChange={(e) =>
+																		setEditingNotes((prev) => ({
+																			...prev,
+																			[source.id]: e.target.value,
+																		}))
+																	}
+																	className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+																	rows={3}
+																	placeholder="Add notes about this source..."
+																/>
+																<div className="flex gap-2">
+																	<button
+																		onClick={() => handleSaveNotes(source.id)}
+																		className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+																	>
+																		Save
+																	</button>
+																	<button
+																		onClick={() => handleCancelEditNotes(source.id)}
+																		className="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors"
+																	>
+																		Cancel
+																	</button>
+																</div>
+															</div>
+														) : (
+															<>
+																{source.user_notes ? (
+																	<div className="bg-yellow-50 border border-yellow-200 rounded p-2">
+																		<p className="text-sm text-gray-700">{source.user_notes}</p>
+																	</div>
+																) : (
+																	<p className="text-sm text-gray-400 italic">No notes</p>
+																)}
+															</>
+														)}
+													</div>
+												</div>
+
+												<div className="ml-3 flex gap-1 flex-shrink-0">
+													{!isEditingNotes && (
+														<button
+															onClick={() =>
+																handleStartEditNotes(source.id, source.user_notes || '')
+															}
+															className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+															title="Edit notes"
+														>
+															<svg
+																className="w-4 h-4"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	strokeLinecap="round"
+																	strokeLinejoin="round"
+																	strokeWidth={2}
+																	d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+																/>
+															</svg>
+														</button>
+													)}
+													<button
+														onClick={() => handleEditSource(source)}
+														className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+														title="Edit source"
+													>
+														<svg
+															className="w-4 h-4"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																strokeLinecap="round"
+																strokeLinejoin="round"
+																strokeWidth={2}
+																d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+															/>
+														</svg>
+													</button>
+													<button
+														onClick={() => handleDeleteSource(source.id)}
+														className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+														title="Delete source"
+													>
+														<svg
+															className="w-4 h-4"
+															fill="none"
+															stroke="currentColor"
+															viewBox="0 0 24 24"
+														>
+															<path
+																strokeLinecap="round"
+																strokeLinejoin="round"
+																strokeWidth={2}
+																d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+															/>
+														</svg>
+													</button>
+												</div>
+											</div>
+										</div>
+									);
+								})
+							)}
+						</div>
 					</div>
 				)}
 
@@ -377,6 +620,31 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 
 				{activeTab === 'chat' && <ChatInterface researchId={researchId} />}
 			</div>
+
+			{/* Modals */}
+			<SourceFormModal
+				isOpen={sourceModalOpen}
+				source={editingSource}
+				onClose={() => {
+					setSourceModalOpen(false);
+					setEditingSource(null);
+				}}
+				onSubmit={handleSourceModalSubmit}
+			/>
+
+			<ConfirmDialog
+				isOpen={deleteConfirmOpen}
+				title="Delete Source"
+				message="Are you sure you want to delete this source? This action cannot be undone."
+				confirmLabel="Delete"
+				cancelLabel="Cancel"
+				confirmStyle="danger"
+				onConfirm={handleConfirmDelete}
+				onCancel={() => {
+					setDeleteConfirmOpen(false);
+					setSourceToDelete(null);
+				}}
+			/>
 		</div>
 	);
 }
