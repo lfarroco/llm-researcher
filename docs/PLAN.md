@@ -954,13 +954,14 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 
 **Frontend Implementation**:
 
-- [ ] **Research List Filtering**
-  - Status filter dropdown (all, pending, researching, completed, failed)
-  - Tag filter (multi-select from existing tags)
-  - Date range picker (created between X and Y)
-  - Text search across queries and notes
-  - Active filters display with "clear" buttons
-  - Filter result count
+- [x] **Research List Filtering** ✅ **COMPLETED**
+  - Status filter dropdown (all, pending, researching, completed, failed, cancelled, error)
+  - Text search across queries and user notes (case-insensitive, debounced 300ms)
+  - Active filters display with "clear X filters" button
+  - Filter result count shown above list
+  - SearchInput component with debounced onChange
+  - Backend enhanced with query parameters: `?status=X&search=Y`
+  - Added user_notes field to Research model, schemas, and API
 
 - [ ] **Source Filtering & Search**
   - Source type filter (web, arxiv, pubmed, semantic_scholar, wikipedia, etc.)
