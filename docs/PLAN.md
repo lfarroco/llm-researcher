@@ -915,7 +915,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - Add/edit/remove tags (tag input component) - pending database migration
   - Display last updated timestamp
 
-- [ ] **Source CRUD Operations**
+- [x] **Source CRUD Operations**
   - "Add Source" button with modal form (URL/DOI input, auto-fetch metadata)
   - Edit source modal (title, URL, notes, metadata)
   - Delete source with confirmation
@@ -932,12 +932,10 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 
 **Components Built**:
 - ✅ `EditableResearchHeader.tsx` - Inline editing for query (implemented)
+- ✅ `SourceFormModal.tsx` - Add/edit source form (implemented)
+- ✅ `ConfirmDialog.tsx` - Reusable confirmation dialog (implemented)
 
 **Components to Build**:
-- `SourceFormModal.tsx` - Add/edit source form
-- `FindingFormModal.tsx` - Add/edit finding form
-- `TagInput.tsx` - Multi-tag input with autocomplete
-- `ConfirmDialog.tsx` - Reusable confirmation dialog (currently using native `confirm()`)
 
 **Estimated Effort**: 8-12 hours
 **User Value**: HIGH - Core productivity features
