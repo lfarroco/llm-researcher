@@ -922,17 +922,19 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - Inline edit notes on sources
   - Visual feedback for save/delete operations
 
-- [ ] **Finding CRUD Operations**
+- [x] **Finding CRUD Operations**
   - "Add Finding" button with form (content, category, importance, source link)
   - Edit finding modal (all fields editable)
   - Delete finding with confirmation
-  - Drag-and-drop importance slider (1-5 stars)
+  - Drag-and-drop importance slider (1-5 stars) - not implemented yet
   - Link finding to source (dropdown selector)
-  - Category autocomplete based on existing categories
+  - Category autocomplete based on existing categories - not implemented yet
+  - Inline edit for finding content
 
 **Components Built**:
 - ✅ `EditableResearchHeader.tsx` - Inline editing for query (implemented)
 - ✅ `SourceFormModal.tsx` - Add/edit source form (implemented)
+- ✅ `FindingFormModal.tsx` - Add/edit finding form (implemented)
 - ✅ `ConfirmDialog.tsx` - Reusable confirmation dialog (implemented)
 
 **Components to Build**:
