@@ -508,10 +508,11 @@ Implementation is organized in phases, building progressively from foundation to
 
 **HIGH Priority In Progress**:
 - 🚀 **Phase 20: Frontend v2.0** - User Productivity Features
-  - Sprint 1: CRUD operations for sources, findings, research editing (partially done)
-  - Sprint 2: Search & filtering for all resources
-  - Sprint 3: Bulk operations & export features
-  - Sprint 4: Research plan & AI state visualization
+  - ✅ Sprint 1: CRUD operations for sources, findings, research editing
+  - ✅ Sprint 2: Search & filtering for all resources
+  - ✅ Sprint 3: Export features (BibTeX, CSV, JSON, full data backup)
+  - ⏸️ Sprint 3: Bulk operations (deferred)
+  - 🔄 Sprint 4: Research plan & AI state visualization (NEXT)
   - Sprint 5: UX polish & quality of life improvements
 
 **HIGH Priority Remaining (Backend)**:
@@ -937,7 +938,14 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 - ✅ `FindingFormModal.tsx` - Add/edit finding form (implemented)
 - ✅ `ConfirmDialog.tsx` - Reusable confirmation dialog (implemented)
 
-**Components to Build**:
+**Status**: ✅ **SPRINT 1 COMPLETED** - All core CRUD operations functional
+
+**Estimated Effort**: 10-12 hours (completed)
+**User Value**: CRITICAL - Users can now modify research data
+
+---
+
+#### 📦 Sprint 2: Filtering & Search (Week 3) ✅ **COMPLETED**
 
 **Estimated Effort**: 8-12 hours
 **User Value**: HIGH - Core productivity features
@@ -993,8 +1001,10 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 
 ---
 
-#### 📦 Sprint 3: Bulk Operations & Export (Week 4)
+#### 📦 Sprint 3: Bulk Operations & Export (Week 4) ⏸️ PARTIALLY COMPLETE
 **Goal**: Power-user features for efficiency
+
+**Status**: Export features completed, bulk operations deferred
 
 **Backend APIs**: Partial support, may need batch endpoints
 - Export endpoints exist: `/research/{id}/export/bibtex`, `/research/{id}/export/json`
@@ -1014,12 +1024,12 @@ This is a lower-priority change because the ABC already gives reasonable isolati
   - Export selected to JSON/CSV
   - Progress indicator for bulk operations
 
-- [ ] **Export Features**
-  - Export all sources as BibTeX (download button)
-  - Export all findings as CSV/JSON
-  - Export full research as JSON backup
-  - Copy sources to clipboard (formatted text)
-  - Share research summary (generate shareable link)
+- [x] **Export Features** ✅ COMPLETED (Sprint 3)
+  - ✅ Export all sources as BibTeX (download button)
+  - ✅ Export all findings as CSV/JSON
+  - ✅ Export full research as JSON backup
+  - ⏸️ Copy sources to clipboard (formatted text) - DEFERRED
+  - ⏸️ Share research summary (generate shareable link) - DEFERRED
 
 **Components to Build**:
 - `SelectableList.tsx` - List with checkbox selection
