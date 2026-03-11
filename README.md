@@ -64,6 +64,13 @@ LLM_MODEL=gpt-4o
 OPENAI_API_KEY=your_api_key_here
 ```
 
+#### Optional Academic Provider Keys
+
+```bash
+# Springer Nature metadata API (enables Springer search plugin)
+SPRINGER_API_KEY=your_springer_api_key_here
+```
+
 ### Start the Application
 
 ```bash

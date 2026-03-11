@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
     tavily_api_key: str = ""  # For web search
     semantic_scholar_api_key: str = ""  # Optional: higher rate limits
+    springer_api_key: str = ""  # Optional: Springer Nature metadata API
     ncbi_api_key: str = ""  # Optional: for PubMed higher rate limits
     ncbi_email: str = "llm-researcher@example.com"  # Required for NCBI API
     app_env: str = "development"

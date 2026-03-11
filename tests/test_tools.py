@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.tools.base import ToolError, ToolErrorType, ToolResponse, get_setting
 from app.tools.web_search import WebSearchResult, web_search
 from app.tools.arxiv_search import ArxivResult, arxiv_search, is_academic_query
+from app.tools.springer_search import springer_search
 from app.tools.wikipedia import WikipediaResult, wikipedia_search
 
 
@@ -209,6 +210,62 @@ class TestWikipediaSearch:
             assert len(results) == 2
             assert results[0].title == "Machine Learning"
             assert "Machine learning" in results[0].summary
+
+
+class TestSpringerSearch:
+    """Tests for Springer search tool."""
+
+    @pytest.mark.asyncio
+    async def test_springer_search_parses_results(self):
+        """Test Springer search parses API payload into structured results."""
+        payload = {
+            "records": [
+                {
+                    "identifier": "doi:10.1007/s00134-024-01234-5",
+                    "title": "Clinical applications of foundation models",
+                    "creators": [
+                        {"creator": "Alice Smith"},
+                        {"creator": "Bob Jones"},
+                    ],
+                    "abstract": "A review of foundation model applications.",
+                    "publicationName": "Intensive Care Medicine",
+                    "publicationDate": "2024-07-01",
+                    "doi": "10.1007/s00134-024-01234-5",
+                    "url": [
+                        {
+                            "value": "https://link.springer.com/article/10.1007/s00134-024-01234-5"
+                        }
+                    ],
+                    "keyword": ["foundation model", "clinical AI"],
+                }
+            ]
+        }
+
+        with patch("app.tools.springer_search.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_response = MagicMock()
+            mock_response.json.return_value = payload
+            mock_response.raise_for_status.return_value = None
+            mock_client.get.return_value = mock_response
+            mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+            results = await springer_search(
+                "foundation models in healthcare",
+                springer_api_key="test-springer-key",
+            )
+
+            assert len(results) == 1
+            assert results[0].title == "Clinical applications of foundation models"
+            assert results[0].doi == "10.1007/s00134-024-01234-5"
+            assert "Alice Smith" in results[0].authors
+            assert results[0].url.startswith(
+                "https://link.springer.com/article")
+
+    @pytest.mark.asyncio
+    async def test_springer_search_without_api_key_returns_empty(self):
+        """Test Springer search gracefully returns no results without API key."""
+        results = await springer_search("test query", springer_api_key=None)
+        assert results == []
 
 
 class TestWebSearchResult:

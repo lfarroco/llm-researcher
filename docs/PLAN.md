@@ -192,7 +192,7 @@ The codebase uses a plugin registry to decouple extensible subsystems from the a
 
 **Location**: `app/tools/registry.py`, `app/tools/plugins.py`
 
-Built-in plugins: `WebSearchPlugin`, `ArxivPlugin`, `WikipediaPlugin`.
+Built-in plugins: `WebSearchPlugin`, `ArxivPlugin`, `WikipediaPlugin`, `SpringerPlugin`.
 
 To add a new search source, implement `SearchPlugin` and call `get_registry().register(MyPlugin())` at startup. The plugin controls:
 - whether it requires an academic query context (`requires_academic_context`)
@@ -204,7 +204,6 @@ To add a new search source, implement `SearchPlugin` and call `get_registry().re
 - `SemanticScholarPlugin` — `semantic_scholar_search` exists in `app/tools/semantic_scholar.py`; useful for computing citation counts and finding related papers
 - `OpenAlexPlugin` — `openalex_search` exists in `app/tools/openalex_search.py`; open-access metadata, no key required
 - `ElsevierPlugin` — not implemented; likely via Elsevier APIs (for example, Scopus/ScienceDirect) with API key and terms-of-use gating
-- `SpringerPlugin` — not implemented; likely via Springer Nature Metadata API with API key and rate-limit handling
 
 ---
 
@@ -324,7 +323,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 - [x] Implement `app/tools/crossref_search.py` - Crossref DOI/metadata
 - [x] Implement `app/tools/openalex_search.py` - OpenAlex open scholarly data
 - [ ] Implement Elsevier academic provider integration (Scopus/ScienceDirect)
-- [ ] Implement Springer academic provider integration (Springer Nature)
+- [x] Implement Springer academic provider integration (Springer Nature)
 - [x] Add PDF download and caching for full-text retrieval
 
 ### Phase 9: PDF & Document Parsing ✅ Priority: HIGH

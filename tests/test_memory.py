@@ -105,6 +105,7 @@ class TestSourceType:
         assert SourceType.WIKIPEDIA.value == "wikipedia"
         assert SourceType.PUBMED.value == "pubmed"
         assert SourceType.SEMANTIC_SCHOLAR.value == "semantic_scholar"
+        assert SourceType.SPRINGER.value == "springer"
 
     def test_source_type_from_string(self):
         """Test creating SourceType from string."""

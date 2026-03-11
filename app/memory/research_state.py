@@ -56,6 +56,7 @@ class SourceType(str, Enum):
     WIKIPEDIA = "wikipedia"
     PUBMED = "pubmed"
     SEMANTIC_SCHOLAR = "semantic_scholar"
+    SPRINGER = "springer"
 
 
 class Citation(BaseModel):
