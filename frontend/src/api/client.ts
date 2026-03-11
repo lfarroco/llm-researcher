@@ -21,8 +21,24 @@ export const api = {
 		return handleResponse(response);
 	},
 
-	async listResearch(skip = 0, limit = 50): Promise<Research[]> {
-		const response = await fetch(`${API_BASE}/research?skip=${skip}&limit=${limit}`);
+	async listResearch(
+		skip = 0,
+		limit = 50,
+		filters?: { status?: string; search?: string }
+	): Promise<Research[]> {
+		const params = new URLSearchParams({
+			skip: skip.toString(),
+			limit: limit.toString(),
+		});
+
+		if (filters?.status) {
+			params.append('status', filters.status);
+		}
+		if (filters?.search) {
+			params.append('search', filters.search);
+		}
+
+		const response = await fetch(`${API_BASE}/research?${params.toString()}`);
 		return handleResponse(response);
 	},
 

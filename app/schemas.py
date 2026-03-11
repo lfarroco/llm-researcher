@@ -6,6 +6,10 @@ from typing import Optional
 class ResearchCreate(BaseModel):
     """Request to create a new research task."""
     query: str = Field(description="Research query/topic to investigate")
+    user_notes: Optional[str] = Field(
+        default=None,
+        description="Optional user notes about this research"
+    )
 
 
 class ResearchResponse(BaseModel):
@@ -16,6 +20,7 @@ class ResearchResponse(BaseModel):
     query: str
     result: Optional[str] = None
     status: str
+    user_notes: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

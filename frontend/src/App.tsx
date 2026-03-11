@@ -11,10 +11,18 @@ function App() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
+	// Filter state
+	const [statusFilter, setStatusFilter] = useState<string>('');
+	const [searchQuery, setSearchQuery] = useState<string>('');
+
 	const loadResearches = async () => {
 		try {
 			setLoading(true);
-			const data = await api.listResearch();
+			const filters: { status?: string; search?: string } = {};
+			if (statusFilter) filters.status = statusFilter;
+			if (searchQuery) filters.search = searchQuery;
+
+			const data = await api.listResearch(0, 50, filters);
 			setResearches(data);
 			setError(null);
 		} catch (err) {
@@ -26,10 +34,15 @@ function App() {
 
 	useEffect(() => {
 		loadResearches();
-		// Poll for updates every 10 seconds
-		const interval = setInterval(loadResearches, 10000);
-		return () => clearInterval(interval);
-	}, []);
+	}, [statusFilter, searchQuery]);
+
+	useEffect(() => {
+		// Poll for updates every 10 seconds (only if no active filters for performance)
+		if (!statusFilter && !searchQuery) {
+			const interval = setInterval(loadResearches, 10000);
+			return () => clearInterval(interval);
+		}
+	}, [statusFilter, searchQuery]);
 
 	const handleResearchCreated = (research: Research) => {
 		setResearches([research, ...researches]);
@@ -72,6 +85,10 @@ function App() {
 							selectedId={selectedResearch}
 							onSelect={setSelectedResearch}
 							loading={loading}
+							statusFilter={statusFilter}
+							onStatusFilterChange={setStatusFilter}
+							searchQuery={searchQuery}
+							onSearchQueryChange={setSearchQuery}
 						/>
 					</div>
 

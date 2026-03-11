@@ -1,10 +1,15 @@
 import type { Research } from '../types';
+import SearchInput from './SearchInput';
 
 interface Props {
 	researches: Research[];
 	selectedId: number | null;
 	onSelect: (id: number) => void;
 	loading: boolean;
+	statusFilter: string;
+	onStatusFilterChange: (status: string) => void;
+	searchQuery: string;
+	onSearchQueryChange: (query: string) => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -25,7 +30,22 @@ const statusIcons: Record<string, string> = {
 	cancelled: '⚠️',
 };
 
-export default function ResearchList({ researches, selectedId, onSelect, loading }: Props) {
+export default function ResearchList({
+	researches,
+	selectedId,
+	onSelect,
+	loading,
+	statusFilter,
+	onStatusFilterChange,
+	searchQuery,
+	onSearchQueryChange
+}: Props) {
+	const activeFilterCount = [statusFilter, searchQuery].filter(Boolean).length;
+
+	const handleClearFilters = () => {
+		onStatusFilterChange('');
+		onSearchQueryChange('');
+	};
 	if (loading && researches.length === 0) {
 		return (
 			<div className="bg-white rounded-lg shadow p-6">
@@ -54,6 +74,42 @@ export default function ResearchList({ researches, selectedId, onSelect, loading
 			<div className="p-4 border-b">
 				<h2 className="text-lg font-semibold">Research History</h2>
 				<p className="text-sm text-gray-600">{researches.length} queries</p>
+			</div>
+
+			{/* Filter UI */}
+			<div className="p-4 border-b bg-gray-50 space-y-3">
+				<SearchInput
+					value={searchQuery}
+					onChange={onSearchQueryChange}
+					placeholder="Search queries or notes..."
+				/>
+
+				<div className="flex items-center gap-2">
+					<label className="text-sm font-medium text-gray-700 min-w-[60px]">
+						Status:
+					</label>
+					<select
+						value={statusFilter}
+						onChange={(e) => onStatusFilterChange(e.target.value)}
+						className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+					>
+						<option value="">All</option>
+						<option value="pending">⏳ Pending</option>
+						<option value="researching">🔍 Researching</option>
+						<option value="completed">✅ Completed</option>
+						<option value="failed">❌ Failed</option>
+						<option value="cancelled">⚠️ Cancelled</option>
+					</select>
+				</div>
+
+				{activeFilterCount > 0 && (
+					<button
+						onClick={handleClearFilters}
+						className="w-full px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+					>
+						Clear {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}
+					</button>
+				)}
 			</div>
 
 			<div className="divide-y max-h-[600px] overflow-y-auto">

@@ -6,7 +6,7 @@ research tasks.
 """
 
 import logging
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
 from sqlalchemy.orm import Session
@@ -52,7 +52,11 @@ def create_research(
     client_ip = request.client.host if request.client else "unknown"
     check_research_rate_limit(client_ip)
 
-    research = models.Research(query=payload.query, status="pending")
+    research = models.Research(
+        query=payload.query,
+        user_notes=payload.user_notes,
+        status="pending"
+    )
     db.add(research)
     db.commit()
     db.refresh(research)
@@ -129,9 +133,32 @@ def create_batch_research(
 def list_research(
     skip: int = 0,
     limit: int = 20,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    return db.query(models.Research).order_by(
+    """
+    List research projects with optional filtering.
+
+    Args:
+        skip: Number of records to skip (pagination)
+        limit: Maximum number of records to return
+        status: Filter by status (pending, researching, completed, etc.)
+        search: Search in query and user_notes fields
+    """
+    query = db.query(models.Research)
+
+    if status:
+        query = query.filter(models.Research.status == status)
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            (models.Research.query.ilike(search_pattern))
+            | (models.Research.user_notes.ilike(search_pattern))
+        )
+
+    return query.order_by(
         models.Research.created_at.desc()
     ).offset(skip).limit(limit).all()
 
