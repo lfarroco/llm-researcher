@@ -697,7 +697,7 @@ This is a lower-priority change because the ABC already gives reasonable isolati
 ### Phase 10: NLP & Knowledge Extraction | Priority: HIGH
 *Extract structured knowledge from text*
 
-- [ ] Create `app/nlp/` module structure
+- [x] Create `app/nlp/` module structure
 - [ ] Implement `app/nlp/entity_extractor.py` using spaCy
   - Scientific entity types: methods, materials, metrics, findings
   - Custom NER model fine-tuning for domain-specific entities
