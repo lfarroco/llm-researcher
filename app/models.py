@@ -131,3 +131,17 @@ class ResearchNote(Base):
 
     # Relationships
     research = relationship("Research", back_populates="notes")
+
+
+class AppSetting(Base):
+    """Persistent runtime override for application settings."""
+
+    __tablename__ = "app_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), nullable=False, unique=True, index=True)
+    value = Column(Text, nullable=False)
+    value_type = Column(String(20), nullable=False, default="string")
+    updated_at = Column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )

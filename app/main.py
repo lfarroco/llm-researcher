@@ -25,6 +25,7 @@ from app.routers import state as state_router
 from app.routers import exports as exports_router
 from app.routers import chat as chat_router
 from app.routers import notes as notes_router
+from app.routers import settings as settings_router
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -110,3 +111,4 @@ app.include_router(state_router.router)
 app.include_router(exports_router.router)
 app.include_router(chat_router.router)
 app.include_router(notes_router.router)
+app.include_router(settings_router.router)

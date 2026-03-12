@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 
 
 class ResearchCreate(BaseModel):
@@ -355,3 +355,20 @@ class ResearchEntitiesResponse(BaseModel):
     status: str
     total_entities: int
     entities: list[ExtractedEntityResponse] = Field(default_factory=list)
+
+
+class AppSettingResponse(BaseModel):
+    """Response for one runtime setting value."""
+
+    key: str
+    type: str
+    sensitive: bool
+    value: Any
+    default_value: Any
+    source: str = Field(description="'env' or 'db'")
+
+
+class AppSettingUpdate(BaseModel):
+    """Request to upsert one runtime setting override."""
+
+    value: Any

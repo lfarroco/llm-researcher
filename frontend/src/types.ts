@@ -152,3 +152,12 @@ export interface ResearchEntitiesResponse {
 	total_entities: number;
 	entities: ExtractedEntity[];
 }
+
+export interface AppSetting {
+	key: string;
+	type: 'string' | 'integer' | 'number' | 'boolean';
+	sensitive: boolean;
+	value: string | number | boolean;
+	default_value: string | number | boolean;
+	source: 'env' | 'db';
+}

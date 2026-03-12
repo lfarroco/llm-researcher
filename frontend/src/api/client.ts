@@ -10,6 +10,7 @@ import type {
 	KnowledgeBaseResponse,
 	ResearchNote,
 	ResearchEntitiesResponse,
+	AppSetting,
 } from '../types';
 
 const API_BASE = '/api';
@@ -293,6 +294,31 @@ export const api = {
 			method: 'DELETE',
 		});
 		if (!response.ok) throw new Error('Failed to delete note');
+	},
+
+	// Runtime settings endpoints
+	async listSettings(): Promise<AppSetting[]> {
+		const response = await fetch(`${API_BASE}/settings`);
+		return handleResponse(response);
+	},
+
+	async updateSetting(
+		key: string,
+		value: string | number | boolean,
+	): Promise<AppSetting> {
+		const response = await fetch(`${API_BASE}/settings/${key}`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ value }),
+		});
+		return handleResponse(response);
+	},
+
+	async clearSettingOverride(key: string): Promise<AppSetting> {
+		const response = await fetch(`${API_BASE}/settings/${key}`, {
+			method: 'DELETE',
+		});
+		return handleResponse(response);
 	},
 };
 
