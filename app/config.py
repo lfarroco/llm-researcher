@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@db:5432/researcher"
     openai_api_key: str = ""
     groq_api_key: str = ""
+    deepseek_api_key: str = ""
     tavily_api_key: str = ""  # For web search
     semantic_scholar_api_key: str = ""  # Optional: higher rate limits
     springer_api_key: str = ""  # Optional: Springer Nature metadata API
@@ -20,12 +21,14 @@ class Settings(BaseSettings):
     app_env: str = "development"
 
     # LLM Provider Configuration
-    llm_provider: str = "ollama"  # Options: "openai", "ollama", "groq"
+    llm_provider: str = "ollama"  # Options: "openai", "ollama", "groq", "deepseek"
     # Model: "gpt-4o", "qwen3:4b", "llama2", etc.
     llm_model: str = "qwen3:4b"
     llm_temperature: float = 0.2
     # Ollama server URL
     ollama_base_url: str = "http://host.docker.internal:11434"
+    # DeepSeek OpenAI-compatible API base URL
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
 
     # Research settings
     research_max_sources: int = 20  # Max citations per research
@@ -55,9 +58,22 @@ class Settings(BaseSettings):
     @property
     def llm_api_key(self) -> str:
         """Return the API key for the configured LLM provider."""
-        return {"openai": self.openai_api_key, "groq": self.groq_api_key}.get(
+        return {
+            "openai": self.openai_api_key,
+            "groq": self.groq_api_key,
+            "deepseek": self.deepseek_api_key,
+        }.get(
             self.llm_provider, ""
         )
+
+    @computed_field
+    @property
+    def llm_base_url(self) -> str:
+        """Return the base URL for the configured LLM provider."""
+        return {
+            "ollama": self.ollama_base_url,
+            "deepseek": self.deepseek_base_url,
+        }.get(self.llm_provider, "")
 
 
 _base_settings = Settings()
@@ -66,6 +82,7 @@ _base_settings = Settings()
 SENSITIVE_SETTINGS = {
     "openai_api_key",
     "groq_api_key",
+    "deepseek_api_key",
     "tavily_api_key",
     "semantic_scholar_api_key",
     "springer_api_key",
@@ -205,8 +222,17 @@ class RuntimeSettingsProxy:
             provider_keys = {
                 "openai": self.openai_api_key,
                 "groq": self.groq_api_key,
+                "deepseek": self.deepseek_api_key,
             }
             return provider_keys.get(provider, "")
+
+        if name == "llm_base_url":
+            provider = self.llm_provider
+            provider_urls = {
+                "ollama": self.ollama_base_url,
+                "deepseek": self.deepseek_base_url,
+            }
+            return provider_urls.get(provider, "")
 
         default_value = getattr(_base_settings, name)
         if name not in EDITABLE_SETTINGS:

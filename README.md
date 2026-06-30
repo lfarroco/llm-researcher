@@ -22,6 +22,8 @@ This project supports multiple LLM providers:
 
 - **OpenAI** – GPT-4o, GPT-4, GPT-3.5-turbo, etc.
 - **Ollama** – Local models like qwen3:4b, llama2, mistral, etc.
+- **Groq** – Fast hosted models like llama-3.3-70b-versatile.
+- **DeepSeek** – OpenAI-compatible DeepSeek API models.
 
 Configure your preferred provider in the `.env` file.
 
@@ -32,6 +34,8 @@ Configure your preferred provider in the `.env` file.
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/)
 - **For OpenAI**: An [OpenAI API key](https://platform.openai.com/api-keys)
 - **For Ollama**: [Ollama installed](https://ollama.ai/) with your desired model pulled
+- **For Groq**: A [Groq API key](https://console.groq.com/keys)
+- **For DeepSeek**: A DeepSeek API key
 
 ### Setup
 
@@ -62,6 +66,26 @@ ollama serve
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o
 OPENAI_API_KEY=your_api_key_here
+```
+
+#### Using Groq
+
+```bash
+# In your .env file:
+LLM_PROVIDER=groq
+LLM_MODEL=llama-3.3-70b-versatile
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+#### Using DeepSeek
+
+```bash
+# In your .env file:
+LLM_PROVIDER=deepseek
+LLM_MODEL=deepseek-chat
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
+# Optional (default shown):
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 ```
 
 #### Optional Academic Provider Keys

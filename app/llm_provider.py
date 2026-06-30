@@ -173,6 +173,46 @@ class GroqProvider(LLMProvider):
         return llm
 
 
+class DeepSeekProvider(LLMProvider):
+    """Provider for DeepSeek models via OpenAI-compatible API."""
+
+    def __init__(
+        self,
+        model: str = "deepseek-chat",
+        api_key: Optional[str] = None,
+        base_url: str = "https://api.deepseek.com/v1",
+        temperature: float = 0.2,
+    ):
+        self.model = model
+        self.api_key = api_key
+        self.base_url = base_url
+        self.temperature = temperature
+        logger.debug(
+            f"Initialized DeepSeek provider with model={model}, base_url={base_url}, temperature={temperature}"
+        )
+
+    def get_llm(self) -> BaseChatModel:
+        logger.debug(
+            f"Creating DeepSeek ChatOpenAI instance with model={self.model}")
+        from app.config import settings
+
+        # DeepSeek exposes an OpenAI-compatible API.
+        llm = ChatOpenAI(
+            model=self.model,
+            api_key=self.api_key,
+            base_url=self.base_url,
+            temperature=self.temperature,
+            max_retries=settings.llm_max_retries,
+            timeout=180,  # 3 minute timeout
+            request_timeout=180,
+        )
+        logger.debug(
+            f"DeepSeek ChatOpenAI configured with {settings.llm_max_retries} retries, "
+            f"exponential backoff enabled"
+        )
+        return llm
+
+
 class LLMProviderFactory:
     """Factory class to create LLM providers based on configuration."""
 
@@ -188,12 +228,11 @@ class LLMProviderFactory:
         Create an LLM provider based on the provider type.
 
         Args:
-            provider_type: Type of provider ("openai" or "ollama")
+            provider_type: Type of provider ("openai", "ollama", "groq", or "deepseek")
             model: Model name to use
             temperature: Temperature for generation
-            api_key: API key for OpenAI (required for OpenAI provider)
-            base_url: Base URL for Ollama server
-                (optional, defaults to localhost:11434)
+            api_key: API key for OpenAI-compatible or Groq providers
+            base_url: Base URL for Ollama or DeepSeek server
 
         Returns:
             An instance of the appropriate LLMProvider
@@ -224,9 +263,16 @@ class LLMProviderFactory:
                 api_key=api_key,
                 temperature=temperature,
             )
+        elif provider_type == "deepseek":
+            return DeepSeekProvider(
+                model=model,
+                api_key=api_key,
+                base_url=base_url or "https://api.deepseek.com/v1",
+                temperature=temperature,
+            )
         else:
             logger.error(f"Unsupported provider type: {provider_type}")
             raise ValueError(
                 f"Unsupported provider type: {provider_type}. "
-                f"Supported types are: openai, ollama, groq"
+                f"Supported types are: openai, ollama, groq, deepseek"
             )

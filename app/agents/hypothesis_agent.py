@@ -111,7 +111,7 @@ def get_hypothesis_chain():
         model=settings.llm_model,
         temperature=0.5,  # Higher for creative hypothesis generation
         api_key=settings.llm_api_key,
-        base_url=settings.ollama_base_url,
+        base_url=settings.llm_base_url,
     )
     llm = provider.get_llm()
     parser = JsonOutputParser(pydantic_object=HypothesesOutput)

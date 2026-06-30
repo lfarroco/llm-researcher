@@ -61,7 +61,7 @@ def get_planner_chain():
         model=settings.llm_model,
         temperature=0.3,  # Slightly higher for creative decomposition
         api_key=settings.llm_api_key,
-        base_url=settings.ollama_base_url,
+        base_url=settings.llm_base_url,
     )
 
     llm = provider.get_llm()

@@ -91,7 +91,7 @@ async def expand_query(query: str, num_variations: int = 2) -> list[str]:
             model=settings.llm_model,
             temperature=0.7,  # Higher temperature for creative variations
             api_key=settings.llm_api_key,
-            base_url=settings.ollama_base_url,
+            base_url=settings.llm_base_url,
         )
 
         llm = provider.get_llm()

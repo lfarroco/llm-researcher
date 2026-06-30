@@ -14,6 +14,7 @@ from app.llm_provider import (
     LLMProvider,
     OpenAIProvider,
     OllamaProvider,
+    DeepSeekProvider,
     LLMProviderFactory,
 )
 from app.rate_limiter import (
@@ -36,7 +37,8 @@ class TestSettings:
         assert isinstance(settings.database_url, str)
         assert len(settings.database_url) > 0
         assert settings.app_env in ["development", "production", "test"]
-        assert settings.llm_provider in ["openai", "ollama"]
+        assert settings.llm_provider in [
+            "openai", "ollama", "groq", "deepseek"]
         assert isinstance(settings.llm_model, str)
         assert settings.llm_temperature >= 0.0
         assert settings.llm_temperature <= 1.0
@@ -222,6 +224,21 @@ class TestLLMProviderFactory:
         assert isinstance(provider, OllamaProvider)
         assert provider.base_url == "http://localhost:11434"
 
+    def test_create_deepseek_provider(self):
+        """Test factory creates DeepSeek provider."""
+        provider = LLMProviderFactory.create_provider(
+            provider_type="deepseek",
+            model="deepseek-chat",
+            api_key="sk-deepseek-test",
+            temperature=0.2,
+        )
+
+        assert isinstance(provider, DeepSeekProvider)
+        assert provider.model == "deepseek-chat"
+        assert provider.api_key == "sk-deepseek-test"
+        assert provider.base_url == "https://api.deepseek.com/v1"
+        assert provider.temperature == 0.2
+
     def test_create_provider_invalid_type(self):
         """Test factory raises error for invalid provider type."""
         with pytest.raises(ValueError) as exc_info:
@@ -231,7 +248,7 @@ class TestLLMProviderFactory:
             )
 
         assert "Unsupported provider type: invalid" in str(exc_info.value)
-        assert "openai, ollama" in str(exc_info.value)
+        assert "openai, ollama, groq, deepseek" in str(exc_info.value)
 
 
 class TestTokenBucket:

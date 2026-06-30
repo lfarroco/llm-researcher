@@ -128,7 +128,7 @@ async def handle_question_intent(
         model=settings.llm_model,
         temperature=0.3,
         api_key=settings.llm_api_key,
-        base_url=settings.ollama_base_url,
+        base_url=settings.llm_base_url,
     )
     chain = prompt | provider.get_llm()
 
