@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from './api/client';
 import type { Research } from './types';
 import ResearchForm from './components/ResearchForm';
@@ -7,6 +7,7 @@ import ResearchDetail from './components/ResearchDetail';
 
 function App() {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const [researches, setResearches] = useState<Research[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -17,28 +18,38 @@ function App() {
 		navigate(`/research/${id}`);
 	};
 
-	const loadResearches = async () => {
+	const loadResearches = useCallback(async (showLoading = true) => {
 		try {
-			setLoading(true);
+			if (showLoading) {
+				setLoading(true);
+			}
 			const data = await api.listResearch(0, 100);
 			setResearches(data);
 			setError(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load researches');
 		} finally {
-			setLoading(false);
+			if (showLoading) {
+				setLoading(false);
+			}
 		}
-	};
+	}, []);
 
 	useEffect(() => {
 		loadResearches();
-	}, []);
+	}, [loadResearches]);
 
 	useEffect(() => {
-		// Poll for updates every 10 seconds
-		const interval = setInterval(loadResearches, 10000);
+		if (location.pathname !== '/') {
+			return;
+		}
+
+		// Poll list updates while on the list page only.
+		const interval = setInterval(() => {
+			loadResearches(false);
+		}, 10000);
 		return () => clearInterval(interval);
-	}, []);
+	}, [location.pathname, loadResearches]);
 
 	const handleResearchCreated = (research: Research) => {
 		setResearches([research, ...researches]);
