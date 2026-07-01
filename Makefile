@@ -50,7 +50,9 @@ lint:
 
 ## Start services and stream logs
 dev:
-	docker compose up --build
+	docker compose up -d --build db app grobid
+	docker compose stop frontend || true
+	cd frontend && npm run dev
 ## Database Migrations
 ## Run pending migrations
 migrate:
