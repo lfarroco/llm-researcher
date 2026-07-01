@@ -1,31 +1,26 @@
 import { useState, useEffect } from 'react';
+import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { api } from './api/client';
 import type { Research } from './types';
 import ResearchForm from './components/ResearchForm';
-import ResearchList from './components/ResearchList';
 import ResearchDetail from './components/ResearchDetail';
-import SettingsPage from './components/SettingsPage';
 
 function App() {
+	const navigate = useNavigate();
 	const [researches, setResearches] = useState<Research[]>([]);
-	const [selectedResearch, setSelectedResearch] = useState<number | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [activeView, setActiveView] = useState<'research' | 'settings'>('research');
+	const [activeTab] = useState<'research'>('research');
 	const [showResearchForm, setShowResearchForm] = useState(false);
 
-	// Filter state
-	const [statusFilter, setStatusFilter] = useState<string>('');
-	const [searchQuery, setSearchQuery] = useState<string>('');
+	const openResearch = (id: number) => {
+		navigate(`/research/${id}`);
+	};
 
 	const loadResearches = async () => {
 		try {
 			setLoading(true);
-			const filters: { status?: string; search?: string } = {};
-			if (statusFilter) filters.status = statusFilter;
-			if (searchQuery) filters.search = searchQuery;
-
-			const data = await api.listResearch(0, 50, filters);
+			const data = await api.listResearch(0, 100);
 			setResearches(data);
 			setError(null);
 		} catch (err) {
@@ -37,57 +32,160 @@ function App() {
 
 	useEffect(() => {
 		loadResearches();
-	}, [statusFilter, searchQuery]);
+	}, []);
 
 	useEffect(() => {
-		// Poll for updates every 10 seconds (only if no active filters for performance)
-		if (!statusFilter && !searchQuery) {
-			const interval = setInterval(loadResearches, 10000);
-			return () => clearInterval(interval);
-		}
-	}, [statusFilter, searchQuery]);
+		// Poll for updates every 10 seconds
+		const interval = setInterval(loadResearches, 10000);
+		return () => clearInterval(interval);
+	}, []);
 
 	const handleResearchCreated = (research: Research) => {
 		setResearches([research, ...researches]);
-		setSelectedResearch(research.id);
+		openResearch(research.id);
 		setShowResearchForm(false);
 	};
 
 	const handleResearchDeleted = (id: number) => {
 		setResearches(researches.filter(r => r.id !== id));
-		if (selectedResearch === id) {
-			setSelectedResearch(null);
+		navigate('/');
+	};
+
+	const ResearchTableRoute = () => (
+		<div className="space-y-6">
+			<div className="bg-white rounded-lg shadow p-4">
+				<button
+					onClick={() => setShowResearchForm((prev) => !prev)}
+					className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+				>
+					{showResearchForm ? 'Close New Research' : 'New Research'}
+				</button>
+			</div>
+
+			{showResearchForm && (
+				<ResearchForm onResearchCreated={handleResearchCreated} />
+			)}
+
+			<div className="bg-white rounded-lg shadow overflow-hidden">
+				<div className="p-4 border-b border-gray-200 flex items-center justify-between gap-4">
+					<div>
+						<h2 className="text-lg font-semibold text-gray-900">Research</h2>
+						<p className="text-sm text-gray-600">{researches.length} items</p>
+					</div>
+				</div>
+
+				{loading && researches.length === 0 ? (
+					<div className="p-8 text-center text-gray-500">Loading research items...</div>
+				) : researches.length === 0 ? (
+					<div className="p-8 text-center text-gray-500">No research items yet.</div>
+				) : (
+					<div className="overflow-x-auto">
+						<table className="min-w-full divide-y divide-gray-200">
+							<thead className="bg-gray-50">
+								<tr>
+									<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Title</th>
+									<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Status</th>
+									<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Created</th>
+									<th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Updated</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-gray-100 bg-white">
+								{researches.map((research) => (
+									<tr
+										key={research.id}
+										onClick={() => openResearch(research.id)}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												openResearch(research.id);
+											}
+										}}
+										tabIndex={0}
+										className="cursor-pointer hover:bg-gray-50"
+									>
+										<td className="px-4 py-3 text-sm text-gray-900 max-w-md">
+											<button
+												type="button"
+												onClick={(e) => {
+													e.stopPropagation();
+													openResearch(research.id);
+												}}
+												className="text-blue-700 hover:text-blue-800 hover:underline text-left truncate w-full"
+												title={research.query}
+											>
+												{research.query}
+											</button>
+										</td>
+										<td className="px-4 py-3 text-sm text-gray-700 capitalize">{research.status}</td>
+										<td className="px-4 py-3 text-sm text-gray-700">{new Date(research.created_at).toLocaleString()}</td>
+										<td className="px-4 py-3 text-sm text-gray-700">{new Date(research.updated_at).toLocaleString()}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+
+	const ResearchDetailRoute = () => {
+		const { researchId } = useParams();
+		const parsedId = Number(researchId);
+
+		if (!Number.isInteger(parsedId) || parsedId <= 0) {
+			return <Navigate to="/" replace />;
 		}
+
+		const handleBack = () => {
+			if (window.history.length > 1) {
+				navigate(-1);
+				return;
+			}
+			navigate('/');
+		};
+
+		return (
+			<div className="space-y-4">
+				<div className="bg-white rounded-lg shadow p-4">
+					<button
+						type="button"
+						onClick={handleBack}
+						className="text-blue-700 hover:text-blue-800 hover:underline"
+					>
+						← Back to Research
+					</button>
+				</div>
+				<ResearchDetail
+					researchId={parsedId}
+					onDelete={handleResearchDeleted}
+					onUpdate={loadResearches}
+				/>
+			</div>
+		);
 	};
 
 	return (
 		<div className="min-h-screen bg-gray-50">
 			<header className="bg-white shadow-sm">
-				<div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+				<div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
 					<div>
 						<h1 className="text-2xl font-bold text-gray-900">🔬 LLM Researcher</h1>
 						<p className="text-sm text-gray-600 mt-1">
 							Autonomous AI-powered research assistant
 						</p>
 					</div>
-					<nav className="flex items-center gap-2">
+				</div>
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+					<nav className="flex items-end gap-1 border-b border-gray-200">
 						<button
-							onClick={() => setActiveView('research')}
-							className={`px-3 py-2 text-sm rounded-md transition-colors ${activeView === 'research'
-								? 'bg-blue-600 text-white'
-								: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+							type="button"
+							className={`-mb-px px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'research'
+								? 'border-blue-600 text-blue-700'
+								: 'border-transparent text-gray-500'
 								}`}
 						>
 							Research
-						</button>
-						<button
-							onClick={() => setActiveView('settings')}
-							className={`px-3 py-2 text-sm rounded-md transition-colors ${activeView === 'settings'
-								? 'bg-blue-600 text-white'
-								: 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-								}`}
-						>
-							Settings
 						</button>
 					</nav>
 				</div>
@@ -100,54 +198,11 @@ function App() {
 					</div>
 				)}
 
-				{activeView === 'settings' ? (
-					<SettingsPage />
-				) : (
-					<>
-						<div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6 items-start">
-							<aside className="space-y-4 lg:sticky lg:top-6">
-								<div className="bg-white rounded-lg shadow p-4">
-									<button
-										onClick={() => setShowResearchForm((prev) => !prev)}
-										className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
-									>
-										{showResearchForm ? 'Close New Research' : 'New Research'}
-									</button>
-								</div>
-
-								{showResearchForm && (
-									<ResearchForm onResearchCreated={handleResearchCreated} />
-								)}
-
-								<ResearchList
-									researches={researches}
-									selectedId={selectedResearch}
-									onSelect={setSelectedResearch}
-									loading={loading}
-									statusFilter={statusFilter}
-									onStatusFilterChange={setStatusFilter}
-									searchQuery={searchQuery}
-									onSearchQueryChange={setSearchQuery}
-								/>
-							</aside>
-
-							<section>
-								{selectedResearch ? (
-									<ResearchDetail
-										researchId={selectedResearch}
-										onDelete={handleResearchDeleted}
-										onUpdate={loadResearches}
-									/>
-								) : (
-									<div className="bg-white rounded-lg shadow p-12 text-center text-gray-500">
-										<p className="text-lg">Select a research query to view details</p>
-										<p className="text-sm mt-2">or start a new one from the sidebar</p>
-									</div>
-								)}
-							</section>
-						</div>
-					</>
-				)}
+				<Routes>
+					<Route path="/" element={<ResearchTableRoute />} />
+					<Route path="/research/:researchId" element={<ResearchDetailRoute />} />
+					<Route path="*" element={<Navigate to="/" replace />} />
+				</Routes>
 			</main>
 
 			<footer className="mt-12 pb-6 text-center text-sm text-gray-500">
