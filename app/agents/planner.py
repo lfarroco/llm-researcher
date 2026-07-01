@@ -135,7 +135,6 @@ async def plan_research(state: ResearchState) -> dict[str, Any]:
     notes = [
         ResearchNote(
             agent="planner",
-            category="instruction",
             content=(
                 f"Research strategy: {search_strategy}. "
                 f"Decomposed into {len(sub_queries)} sub-questions. "
@@ -146,7 +145,6 @@ async def plan_research(state: ResearchState) -> dict[str, Any]:
     for sq in sub_queries:
         notes.append(ResearchNote(
             agent="planner",
-            category="instruction",
             content=f"Investigate: {sq}",
         ))
 

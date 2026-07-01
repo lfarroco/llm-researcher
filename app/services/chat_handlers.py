@@ -254,7 +254,7 @@ async def handle_generate_intent(
     ).all()
     research_notes = [
         ResearchNote(
-            agent=n.agent, category=n.category, content=n.content
+            agent=n.agent, content=n.content
         )
         for n in db_notes
     ]
@@ -263,7 +263,6 @@ async def handle_generate_intent(
     if instructions:
         research_notes.append(ResearchNote(
             agent="user",
-            category="instruction",
             content=(
                 f"User instruction for report generation: {instructions}"
             ),
@@ -272,7 +271,6 @@ async def handle_generate_intent(
         # Use the full message as instruction context
         research_notes.append(ResearchNote(
             agent="user",
-            category="instruction",
             content=(
                 f"User instruction for report generation: {message}"
             ),
@@ -430,7 +428,6 @@ async def handle_add_intent(
         note = models.ResearchNote(
             research_id=research_id,
             agent="user",
-            category="note",
             content=content,
         )
         db.add(note)
@@ -459,7 +456,6 @@ async def handle_add_intent(
         note = models.ResearchNote(
             research_id=research_id,
             agent="user",
-            category="note",
             content=stripped,
         )
         db.add(note)
@@ -593,7 +589,6 @@ async def handle_edit_intent(
             note = models.ResearchNote(
                 research_id=research_id,
                 agent="user",
-                category="note",
                 content=content,
             )
             db.add(note)

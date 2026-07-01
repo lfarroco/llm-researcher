@@ -110,7 +110,6 @@ def save_notes_to_db(
         db_note = models.ResearchNote(
             research_id=research_id,
             agent=note.agent,
-            category=note.category,
             content=note.content,
         )
         db.add(db_note)

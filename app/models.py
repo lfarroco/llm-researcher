@@ -120,9 +120,6 @@ class ResearchNote(Base):
     agent = Column(
         String(50), nullable=False
     )  # planner|search|hypothesis|synthesis|user
-    category = Column(
-        String(50), nullable=False
-    )  # observation|gap|pattern|contradiction|instruction|summary
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(

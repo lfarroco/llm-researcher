@@ -42,7 +42,6 @@ def _get_research_or_404(
 def get_research_notes(
     research_id: int,
     agent: str | None = None,
-    category: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Get all notes for a research project, optionally filtered."""
@@ -52,8 +51,6 @@ def get_research_notes(
     )
     if agent:
         query = query.filter(models.ResearchNote.agent == agent)
-    if category:
-        query = query.filter(models.ResearchNote.category == category)
     return query.order_by(models.ResearchNote.created_at).all()
 
 
@@ -72,7 +69,6 @@ def create_research_note(
     db_note = models.ResearchNote(
         research_id=research_id,
         agent=note.agent,
-        category=note.category,
         content=note.content,
     )
     db.add(db_note)
@@ -102,8 +98,6 @@ def update_research_note(
 
     if update.content is not None:
         db_note.content = update.content
-    if update.category is not None:
-        db_note.category = update.category
     db.commit()
     db.refresh(db_note)
     return db_note

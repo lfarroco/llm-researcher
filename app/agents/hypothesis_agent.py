@@ -396,7 +396,7 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
         notes_lines = []
         for note in state.research_notes:
             notes_lines.append(
-                f"[{note.agent}/{note.category}] {note.content}"
+                f"[{note.agent}] {note.content}"
             )
         notes_context = (
             "Research notes from prior stages:\n"
@@ -455,7 +455,7 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
         note
         for note in state.research_notes
         if note.agent == "user"
-        and note.category in {"instruction", "observation", "contradiction"}
+        and note.content
     ]
     if user_feedback_notes:
         steps.append(AgentStep(
@@ -604,7 +604,6 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
     if observations:
         notes.append(ResearchNote(
             agent="hypothesis",
-            category="pattern",
             content=f"Hypothesis analysis observations: {observations}",
         ))
     for hyp in hypotheses:
@@ -617,7 +616,6 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
         if evidence_count > 0:
             notes.append(ResearchNote(
                 agent="hypothesis",
-                category="observation",
                 content=(
                     f"Investigated hypothesis on '{hyp.aspect}': "
                     f"{hyp.statement}. Reasoning: {hyp.reasoning}. "
@@ -627,7 +625,6 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
         else:
             notes.append(ResearchNote(
                 agent="hypothesis",
-                category="gap",
                 content=(
                     f"Could not find evidence for hypothesis on "
                     f"'{hyp.aspect}': {hyp.statement}"

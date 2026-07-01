@@ -502,7 +502,6 @@ def export_research_data(
             {
                 'id': n.id,
                 'agent': n.agent,
-                'category': n.category,
                 'content': n.content,
                 'created_at': n.created_at.isoformat(),
                 'updated_at': n.updated_at.isoformat(),

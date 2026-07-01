@@ -120,7 +120,7 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         notes_lines = []
         for note in state.research_notes:
             notes_lines.append(
-                f"[{note.agent}/{note.category}] {note.content}"
+                f"[{note.agent}] {note.content}"
             )
         notes_context = (
             "Research notes and observations from the investigation:\n"
@@ -166,7 +166,6 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
 
     synthesis_note = ResearchNote(
         agent="synthesis",
-        category="summary",
         content=(
             f"Synthesized {len(state.citations)} sources into a "
             f"{len(draft)}-character draft document."

@@ -439,7 +439,6 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
     notes = [
         ResearchNote(
             agent="search",
-            category="observation",
             content=(
                 f"Search phase collected "
                 f"{len(unique_citations)} unique sources "
@@ -452,7 +451,6 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
         if sqr.status == "failed":
             notes.append(ResearchNote(
                 agent="search",
-                category="gap",
                 content=(
                     f"Search failed for: {sqr.sub_query}. "
                     f"Error: {sqr.error}"
@@ -461,7 +459,6 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
         elif not sqr.citations:
             notes.append(ResearchNote(
                 agent="search",
-                category="gap",
                 content=f"No sources found for: {sqr.sub_query}",
             ))
 

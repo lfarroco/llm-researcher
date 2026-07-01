@@ -295,12 +295,6 @@ class ResearchNoteCreate(BaseModel):
         default="user",
         description="Who is writing: planner|search|hypothesis|synthesis|user"
     )
-    category: str = Field(
-        description=(
-            "Note type: observation|gap|pattern|"
-            "contradiction|instruction|summary"
-        )
-    )
     content: str = Field(
         description="The note content"
     )
@@ -312,10 +306,6 @@ class ResearchNoteUpdate(BaseModel):
         default=None,
         description="Updated note content"
     )
-    category: Optional[str] = Field(
-        default=None,
-        description="Updated category"
-    )
 
 
 class ResearchNoteResponse(BaseModel):
@@ -325,7 +315,6 @@ class ResearchNoteResponse(BaseModel):
     id: int
     research_id: int
     agent: str
-    category: str
     content: str
     created_at: datetime
     updated_at: datetime

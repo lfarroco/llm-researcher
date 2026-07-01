@@ -271,7 +271,7 @@ export const api = {
 		return handleResponse(response);
 	},
 
-	async createNote(researchId: number, note: { category: string; content: string }): Promise<ResearchNote> {
+	async createNote(researchId: number, note: { content: string }): Promise<ResearchNote> {
 		const response = await fetch(`${API_BASE}/research/${researchId}/notes`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -280,7 +280,7 @@ export const api = {
 		return handleResponse(response);
 	},
 
-	async updateNote(researchId: number, noteId: number, update: { content?: string; category?: string }): Promise<ResearchNote> {
+	async updateNote(researchId: number, noteId: number, update: { content?: string }): Promise<ResearchNote> {
 		const response = await fetch(`${API_BASE}/research/${researchId}/notes/${noteId}`, {
 			method: 'PATCH',
 			headers: { 'Content-Type': 'application/json' },

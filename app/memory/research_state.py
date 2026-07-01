@@ -127,20 +127,14 @@ class ResearchNote(BaseModel):
     """A note written by an agent or user during research.
 
     Notes serve as the research's evolving memory — a shared cognitive
-    workspace where agents record observations, gaps, patterns, and
-    instructions for downstream agents.
+    workspace where agents and users record important context for
+    downstream steps.
     """
 
     agent: str = Field(
         description=(
             "Who wrote this note: "
             "planner|search|hypothesis|synthesis|user"
-        )
-    )
-    category: str = Field(
-        description=(
-            "Note type: observation|gap|pattern|"
-            "contradiction|instruction|summary"
         )
     )
     content: str = Field(

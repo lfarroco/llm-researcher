@@ -900,7 +900,6 @@ class TestHypothesisFeedbackLoop:
         feedback = [
             ResearchNote(
                 agent="user",
-                category="instruction",
                 content="Please focus on novice learners and baseline skill.",
             )
         ]
@@ -929,7 +928,6 @@ class TestHypothesisFeedbackLoop:
             research_notes=[
                 ResearchNote(
                     agent="user",
-                    category="instruction",
                     content="Prioritize novice learner effects.",
                 )
             ],
