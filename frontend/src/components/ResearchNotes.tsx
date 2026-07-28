@@ -81,6 +81,11 @@ export default function ResearchNotes({ researchId }: Props) {
 		setEditContent(note.content);
 	};
 
+	const cancelEdit = () => {
+		setEditingId(null);
+		setEditContent('');
+	};
+
 	const filteredNotes = notes.filter((n) => {
 		if (filterAgent && n.agent !== filterAgent) return false;
 		return true;
@@ -173,38 +178,75 @@ export default function ResearchNotes({ researchId }: Props) {
 											{new Date(note.created_at).toLocaleString()}
 										</span>
 									</div>
-									{note.agent === 'user' && (
 										<div className="flex gap-1">
-											<button
-												onClick={() => (isEditing ? handleUpdate(note.id) : startEdit(note))}
-												className="text-xs text-gray-400 hover:text-gray-600"
-											>
-												{isEditing ? 'Save' : 'Edit'}
-											</button>
-											{isEditing && (
+											{!isEditing && (
 												<button
-													onClick={() => setEditingId(null)}
-													className="text-xs text-gray-400 hover:text-gray-600"
+													onClick={() => startEdit(note)}
+													className="p-2 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+													title="Edit note"
+												>
+													<svg
+														className="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+														/>
+													</svg>
+												</button>
+											)}
+											{note.agent === 'user' && !isEditing && (
+												<button
+													onClick={() => handleDelete(note.id)}
+													className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+													title="Delete note"
+												>
+													<svg
+														className="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-7 0h8"
+														/>
+													</svg>
+												</button>
+											)}
+										</div>
+								</div>
+								{isEditing ? (
+										<div className="space-y-2">
+											<textarea
+												value={editContent}
+												onChange={(e) => setEditContent(e.target.value)}
+												className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+												rows={3}
+											/>
+											<div className="flex gap-2">
+												<button
+													onClick={() => handleUpdate(note.id)}
+													disabled={!editContent.trim()}
+													className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 transition-colors"
+												>
+													Save
+												</button>
+												<button
+													onClick={cancelEdit}
+													className="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors"
 												>
 													Cancel
 												</button>
-											)}
-											<button
-												onClick={() => handleDelete(note.id)}
-												className="text-xs text-red-400 hover:text-red-600"
-											>
-												Delete
-											</button>
+											</div>
 										</div>
-									)}
-								</div>
-								{isEditing ? (
-									<textarea
-										value={editContent}
-										onChange={(e) => setEditContent(e.target.value)}
-										className="w-full text-sm border rounded px-2 py-1 mt-1"
-										rows={3}
-									/>
 								) : (
 									<p className="text-sm text-gray-900 whitespace-pre-wrap">{note.content}</p>
 								)}
