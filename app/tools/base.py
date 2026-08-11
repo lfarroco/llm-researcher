@@ -8,7 +8,7 @@ This module provides:
 """
 
 from enum import Enum
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -54,9 +54,22 @@ class ToolResponse(BaseModel, Generic[T]):
         default=None, description="Error info if failed")
 
     @classmethod
+    def _concrete(cls) -> type["ToolResponse[Any]"]:
+        """Return a concrete (fully parameterized) version of this class.
+
+        pydantic does not guarantee that instantiating an unparameterized
+        generic model is allowed, so when the classmethod is invoked on the
+        bare ``ToolResponse`` class we bind the type parameter explicitly
+        before constructing the instance.
+        """
+        if cls.__pydantic_generic_metadata__["parameters"]:
+            return cls[Any]
+        return cls
+
+    @classmethod
     def ok(cls, data: list[T]) -> "ToolResponse[T]":
         """Create a successful response."""
-        return cls(success=True, data=data)
+        return cls._concrete()(success=True, data=data)
 
     @classmethod
     def fail(
@@ -67,7 +80,7 @@ class ToolResponse(BaseModel, Generic[T]):
         recoverable: bool = True,
     ) -> "ToolResponse[T]":
         """Create a failed response."""
-        return cls(
+        return cls._concrete()(
             success=False,
             error=ToolError(
                 error_type=error_type,

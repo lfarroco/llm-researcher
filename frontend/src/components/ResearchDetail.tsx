@@ -65,6 +65,11 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const [planCompletedCount, setPlanCompletedCount] = useState(0);
 	const [entityCount, setEntityCount] = useState(0);
 
+	// Pagination state
+	const PAGE_SIZE = 20;
+	const [sourcePage, setSourcePage] = useState(1);
+	const [findingPage, setFindingPage] = useState(1);
+
 	// Source CRUD state
 	const [sourceModalOpen, setSourceModalOpen] = useState(false);
 	const [editingSource, setEditingSource] = useState<Source | null>(null);
@@ -78,6 +83,12 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	const [findingDeleteConfirmOpen, setFindingDeleteConfirmOpen] = useState(false);
 	const [findingToDelete, setFindingToDelete] = useState<number | null>(null);
 	const [editingFindingContent, setEditingFindingContent] = useState<{ [key: number]: string }>({});
+
+	// Bulk selection state
+	const [selectedSourceIds, setSelectedSourceIds] = useState<Set<number>>(new Set());
+	const [selectedFindingIds, setSelectedFindingIds] = useState<Set<number>>(new Set());
+	const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+	const [bulkDeleteType, setBulkDeleteType] = useState<'source' | 'finding' | null>(null);
 
 	const loadSources = useCallback(async (filters?: SourceFilters) => {
 		try {
@@ -176,6 +187,12 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 		loadData();
 	}, [loadData]);
 
+	// Reset pagination when tab changes
+	useEffect(() => {
+		setSourcePage(1);
+		setFindingPage(1);
+	}, [activeTab]);
+
 	useEffect(() => {
 		if (!research || research.status !== 'researching') return;
 
@@ -256,12 +273,16 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 	// Source filter handler
 	const handleSourceFiltersChange = (filters: SourceFilters) => {
 		setSourceFilters(filters);
+		setSourcePage(1);
+		setSelectedSourceIds(new Set());
 		loadSources(filters);
 	};
 
 	// Finding filter handler
 	const handleFindingFiltersChange = (filters: FindingFilters) => {
 		setFindingFilters(filters);
+		setFindingPage(1);
+		setSelectedFindingIds(new Set());
 		loadFindings(filters);
 	};
 
@@ -404,6 +425,105 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 			);
 			setFindingDeleteConfirmOpen(false);
 			setFindingToDelete(null);
+		}
+	};
+
+	// Bulk selection helpers — sources
+	const toggleSourceSelection = (id: number) => {
+		setSelectedSourceIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) {
+				next.delete(id);
+			} else {
+				next.add(id);
+			}
+			return next;
+		});
+	};
+
+	const toggleAllSources = () => {
+		const allIds = new Set(sources.map((s) => s.id));
+		if (selectedSourceIds.size === allIds.size) {
+			setSelectedSourceIds(new Set());
+		} else {
+			setSelectedSourceIds(allIds);
+		}
+	};
+
+	const clearSourceSelection = () => setSelectedSourceIds(new Set());
+
+	const handleBulkDeleteSources = () => {
+		setBulkDeleteType('source');
+		setBulkDeleteConfirmOpen(true);
+	};
+
+	const executeBulkDeleteSources = async () => {
+		const ids = Array.from(selectedSourceIds);
+		try {
+			await Promise.all(ids.map((id) => api.deleteSource(researchId, id)));
+			setSources((prev) => prev.filter((s) => !selectedSourceIds.has(s.id)));
+			setAllSources((prev) => prev.filter((s) => !selectedSourceIds.has(s.id)));
+			setFilteredSources((prev) => prev.filter((s) => !selectedSourceIds.has(s.id)));
+			setSelectedSourceIds(new Set());
+			setBulkDeleteConfirmOpen(false);
+			setBulkDeleteType(null);
+			showToast(`Deleted ${ids.length} source${ids.length !== 1 ? 's' : ''}`, 'success');
+		} catch (err) {
+			showToast(
+				err instanceof Error ? err.message : 'Failed to delete sources',
+				'error'
+			);
+			setBulkDeleteConfirmOpen(false);
+			setBulkDeleteType(null);
+		}
+	};
+
+	// Bulk selection helpers — findings
+	const toggleFindingSelection = (id: number) => {
+		setSelectedFindingIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) {
+				next.delete(id);
+			} else {
+				next.add(id);
+			}
+			return next;
+		});
+	};
+
+	const toggleAllFindings = () => {
+		const allIds = new Set(findings.map((f) => f.id));
+		if (selectedFindingIds.size === allIds.size) {
+			setSelectedFindingIds(new Set());
+		} else {
+			setSelectedFindingIds(allIds);
+		}
+	};
+
+	const clearFindingSelection = () => setSelectedFindingIds(new Set());
+
+	const handleBulkDeleteFindings = () => {
+		setBulkDeleteType('finding');
+		setBulkDeleteConfirmOpen(true);
+	};
+
+	const executeBulkDeleteFindings = async () => {
+		const ids = Array.from(selectedFindingIds);
+		try {
+			await Promise.all(ids.map((id) => api.deleteFinding(researchId, id)));
+			setFindings((prev) => prev.filter((f) => !selectedFindingIds.has(f.id)));
+			setFilteredFindings((prev) => prev.filter((f) => !selectedFindingIds.has(f.id)));
+			setSelectedFindingIds(new Set());
+			setBulkDeleteConfirmOpen(false);
+			setBulkDeleteType(null);
+			showToast(`Deleted ${ids.length} finding${ids.length !== 1 ? 's' : ''}`, 'success');
+		} catch (err) {
+			showToast(
+				err instanceof Error ? err.message : 'Failed to delete findings',
+				'error'
+			);
+			setBulkDeleteConfirmOpen(false);
+			setBulkDeleteType(null);
 		}
 	};
 
@@ -645,9 +765,28 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				{activeTab === 'sources' && (
 					<div>
 						<div className="flex justify-between items-center mb-4">
-							<h3 className="text-lg font-semibold text-gray-900">
-								Sources
-							</h3>
+							<div className="flex items-center gap-3">
+								{sources.length > 0 && (
+									<label className="flex items-center gap-1 cursor-pointer select-none">
+										<input
+											type="checkbox"
+											checked={selectedSourceIds.size === sources.length && sources.length > 0}
+											ref={(el) => {
+												if (el) {
+													el.indeterminate =
+														selectedSourceIds.size > 0 &&
+														selectedSourceIds.size < sources.length;
+												}
+											}}
+											onChange={toggleAllSources}
+											className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+										/>
+									</label>
+								)}
+								<h3 className="text-lg font-semibold text-gray-900">
+									Sources
+								</h3>
+							</div>
 							<div className="flex gap-2">
 								<ExportMenu researchId={researchId} type="sources" />
 								<button
@@ -665,6 +804,28 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 							totalSources={filteredSources.length}
 						/>
 
+						{selectedSourceIds.size > 0 && sources.length > 0 && (
+							<div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-3">
+								<span className="text-sm font-medium text-blue-800">
+									{selectedSourceIds.size} selected
+								</span>
+								<div className="flex gap-2">
+									<button
+										onClick={handleBulkDeleteSources}
+										className="px-3 py-1 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 transition-colors"
+									>
+										Delete Selected
+									</button>
+									<button
+										onClick={clearSourceSelection}
+										className="px-3 py-1 border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50 transition-colors"
+									>
+										Clear Selection
+									</button>
+								</div>
+							</div>
+						)}
+
 						<div className="space-y-3">
 							{sources.length === 0 ? (
 								<div className="text-center py-12">
@@ -677,20 +838,28 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 									</button>
 								</div>
 							) : (
-								sources.map((source) => {
+								filteredSources.slice((sourcePage - 1) * PAGE_SIZE, sourcePage * PAGE_SIZE).map((source) => {
 									const isEditingNotes = editingNotes[source.id] !== undefined;
 									return (
 										<div key={source.id} className="border rounded-lg p-4 hover:bg-gray-50">
 											<div className="flex items-start justify-between">
 												<div className="flex-1 min-w-0">
-													<a
-														href={source.url}
-														target="_blank"
-														rel="noopener noreferrer"
-														className="text-blue-600 hover:underline font-medium break-words"
-													>
-														{source.title}
-													</a>
+													<div className="flex items-start gap-2">
+														<input
+															type="checkbox"
+															checked={selectedSourceIds.has(source.id)}
+															onChange={() => toggleSourceSelection(source.id)}
+															className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+														/>
+														<div className="min-w-0">
+															<a
+																href={source.url}
+																target="_blank"
+																rel="noopener noreferrer"
+																className="text-blue-600 hover:underline font-medium break-words"
+															>
+																{source.title}
+															</a>
 													<div className="flex items-center gap-2 mt-2 text-xs text-gray-500 flex-wrap">
 														<span className="px-2 py-1 bg-gray-100 rounded">
 															{source.source_type}
@@ -760,6 +929,8 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 																)}
 															</>
 														)}
+													</div>
+														</div>
 													</div>
 												</div>
 
@@ -832,15 +1003,69 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								})
 							)}
 						</div>
+
+						{/* Sources Pagination */}
+						{filteredSources.length > PAGE_SIZE && (
+							<div className="flex items-center justify-between pt-4 border-t border-gray-100">
+								<button
+									onClick={() => setSourcePage((p) => Math.max(1, p - 1))}
+									disabled={sourcePage === 1}
+									className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+										sourcePage === 1
+											? 'text-gray-400 cursor-not-allowed'
+											: 'text-blue-600 hover:bg-blue-50'
+									}`}
+								>
+									Previous
+								</button>
+								<span className="text-sm text-gray-600">
+									Page {sourcePage} of {Math.ceil(filteredSources.length / PAGE_SIZE)}
+								</span>
+								<button
+									onClick={() =>
+										setSourcePage((p) =>
+											Math.min(Math.ceil(filteredSources.length / PAGE_SIZE), p + 1)
+										)
+									}
+									disabled={sourcePage >= Math.ceil(filteredSources.length / PAGE_SIZE)}
+									className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+										sourcePage >= Math.ceil(filteredSources.length / PAGE_SIZE)
+											? 'text-gray-400 cursor-not-allowed'
+											: 'text-blue-600 hover:bg-blue-50'
+									}`}
+								>
+									Next
+								</button>
+							</div>
+						)}
 					</div>
 				)}
 
 				{activeTab === 'findings' && (
 					<div>
 						<div className="flex justify-between items-center mb-4">
-							<h3 className="text-lg font-semibold text-gray-900">
-								Findings
-							</h3>
+							<div className="flex items-center gap-3">
+								{findings.length > 0 && (
+									<label className="flex items-center gap-1 cursor-pointer select-none">
+										<input
+											type="checkbox"
+											checked={selectedFindingIds.size === findings.length && findings.length > 0}
+											ref={(el) => {
+												if (el) {
+													el.indeterminate =
+														selectedFindingIds.size > 0 &&
+														selectedFindingIds.size < findings.length;
+												}
+											}}
+											onChange={toggleAllFindings}
+											className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+										/>
+									</label>
+								)}
+								<h3 className="text-lg font-semibold text-gray-900">
+									Findings
+								</h3>
+							</div>
 							<div className="flex gap-2">
 								<ExportMenu researchId={researchId} type="findings" />
 								<button
@@ -859,6 +1084,28 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 							sources={allSources}
 						/>
 
+						{selectedFindingIds.size > 0 && findings.length > 0 && (
+							<div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-3">
+								<span className="text-sm font-medium text-blue-800">
+									{selectedFindingIds.size} selected
+								</span>
+								<div className="flex gap-2">
+									<button
+										onClick={handleBulkDeleteFindings}
+										className="px-3 py-1 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 transition-colors"
+									>
+										Delete Selected
+									</button>
+									<button
+										onClick={clearFindingSelection}
+										className="px-3 py-1 border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50 transition-colors"
+									>
+										Clear Selection
+									</button>
+								</div>
+							</div>
+						)}
+
 						<div className="space-y-3">
 							{findings.length === 0 ? (
 								<div className="text-center py-12">
@@ -871,7 +1118,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 									</button>
 								</div>
 							) : (
-								findings.map((finding) => {
+								filteredFindings.slice((findingPage - 1) * PAGE_SIZE, findingPage * PAGE_SIZE).map((finding) => {
 									const isEditingContent = editingFindingContent[finding.id] !== undefined;
 									return (
 										<div key={finding.id} className="border rounded-lg p-4 hover:bg-gray-50">
@@ -908,34 +1155,44 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 														</div>
 													) : (
 														<>
-															<p className="text-sm text-gray-900 whitespace-pre-wrap">
-																{finding.content}
-															</p>
-															{finding.category && (
-																<span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
-																	{finding.category}
-																</span>
-															)}
-															{finding.user_notes && (
-																<p className="mt-2 text-xs text-gray-600 italic bg-yellow-50 border border-yellow-200 rounded p-2">
-																	Note: {finding.user_notes}
-																</p>
-															)}
-															{finding.source_ids && finding.source_ids.length > 0 && (
-																<div className="mt-2">
-																	<p className="text-xs text-gray-500">
-																		Linked to {finding.source_ids.length} source
-																		{finding.source_ids.length !== 1 ? 's' : ''}
+															<div className="flex items-start gap-2">
+																<input
+																	type="checkbox"
+																	checked={selectedFindingIds.has(finding.id)}
+																	onChange={() => toggleFindingSelection(finding.id)}
+																	className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+																/>
+																<div className="min-w-0">
+																	<p className="text-sm text-gray-900 whitespace-pre-wrap">
+																		{finding.content}
 																	</p>
+																	{finding.category && (
+																		<span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
+																			{finding.category}
+																		</span>
+																	)}
+																	{finding.user_notes && (
+																		<p className="mt-2 text-xs text-gray-600 italic bg-yellow-50 border border-yellow-200 rounded p-2">
+																			Note: {finding.user_notes}
+																		</p>
+																	)}
+																	{finding.source_ids && finding.source_ids.length > 0 && (
+																		<div className="mt-2">
+																			<p className="text-xs text-gray-500">
+																				Linked to {finding.source_ids.length} source
+																				{finding.source_ids.length !== 1 ? 's' : ''}
+																			</p>
+																		</div>
+																	)}
+																	<div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+																		{finding.created_by && (
+																			<span className="px-2 py-0.5 bg-gray-100 rounded">
+																				by {finding.created_by}
+																			</span>
+																		)}
+																		<span>{new Date(finding.created_at).toLocaleString()}</span>
+																	</div>
 																</div>
-															)}
-															<div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-																{finding.created_by && (
-																	<span className="px-2 py-0.5 bg-gray-100 rounded">
-																		by {finding.created_by}
-																	</span>
-																)}
-																<span>{new Date(finding.created_at).toLocaleString()}</span>
 															</div>
 														</>
 													)}
@@ -1012,6 +1269,41 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								})
 							)}
 						</div>
+
+						{/* Findings Pagination */}
+						{filteredFindings.length > PAGE_SIZE && (
+							<div className="flex items-center justify-between pt-4 border-t border-gray-100">
+								<button
+									onClick={() => setFindingPage((p) => Math.max(1, p - 1))}
+									disabled={findingPage === 1}
+									className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+										findingPage === 1
+											? 'text-gray-400 cursor-not-allowed'
+											: 'text-blue-600 hover:bg-blue-50'
+									}`}
+								>
+									Previous
+								</button>
+								<span className="text-sm text-gray-600">
+									Page {findingPage} of {Math.ceil(filteredFindings.length / PAGE_SIZE)}
+								</span>
+								<button
+									onClick={() =>
+										setFindingPage((p) =>
+											Math.min(Math.ceil(filteredFindings.length / PAGE_SIZE), p + 1)
+										)
+									}
+									disabled={findingPage >= Math.ceil(filteredFindings.length / PAGE_SIZE)}
+									className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+										findingPage >= Math.ceil(filteredFindings.length / PAGE_SIZE)
+											? 'text-gray-400 cursor-not-allowed'
+											: 'text-blue-600 hover:bg-blue-50'
+									}`}
+								>
+									Next
+								</button>
+							</div>
+						)}
 					</div>
 				)}
 
@@ -1097,6 +1389,30 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				onCancel={() => {
 					setFindingDeleteConfirmOpen(false);
 					setFindingToDelete(null);
+				}}
+			/>
+
+			<ConfirmDialog
+				isOpen={bulkDeleteConfirmOpen}
+				title={bulkDeleteType === 'source' ? 'Delete Sources' : 'Delete Findings'}
+				message={
+					bulkDeleteType === 'source'
+						? `Are you sure you want to delete ${selectedSourceIds.size} source${selectedSourceIds.size !== 1 ? 's' : ''}? This action cannot be undone.`
+						: `Are you sure you want to delete ${selectedFindingIds.size} finding${selectedFindingIds.size !== 1 ? 's' : ''}? This action cannot be undone.`
+				}
+				confirmLabel="Delete"
+				cancelLabel="Cancel"
+				confirmStyle="danger"
+				onConfirm={() => {
+					if (bulkDeleteType === 'source') {
+						executeBulkDeleteSources();
+					} else if (bulkDeleteType === 'finding') {
+						executeBulkDeleteFindings();
+					}
+				}}
+				onCancel={() => {
+					setBulkDeleteConfirmOpen(false);
+					setBulkDeleteType(null);
 				}}
 			/>
 		</div>

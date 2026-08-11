@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Read the documentation
+    url: https://github.com/lfarroco/llm-researcher/blob/main/README.md
+    about: Check the README and the docs/ folder before opening an issue — setup,
+      API endpoints, and architecture are documented there.
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/lfarroco/llm-researcher/blob/main/SECURITY.md
+    about: Please do NOT open a public issue for security vulnerabilities —
+      report them privately per our Security Policy.
+  - name: 💬 Code of Conduct
+    url: https://github.com/lfarroco/llm-researcher/blob/main/CODE_OF_CONDUCT.md
+    about: All contributors are expected to follow our Code of Conduct. Be kind
+      and constructive.

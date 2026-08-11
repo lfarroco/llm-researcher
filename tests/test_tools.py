@@ -46,6 +46,35 @@ class TestBaseTypes:
         assert response.error.message == "Rate limit exceeded"
         assert response.error.details == {"retry_after": 60}
 
+    def test_tool_response_unparameterized_generic(self):
+        """
+        Regression test for the generic bug: ok()/fail() must work when
+        invoked on the bare generic class (no type parameters). Some pydantic
+        versions raise ValidationError when instantiating an unparameterized
+        generic model, which previously broke BibTeX parsing of empty input.
+        """
+        ok_response = ToolResponse.ok(
+            [{"title": "T", "url": "http://example.com"}])
+        assert ok_response.success is True
+        assert ok_response.data == [{"title": "T", "url": "http://example.com"}]
+        assert ok_response.error is None
+
+        fail_response = ToolResponse.fail(
+            ToolErrorType.PARSE_ERROR,
+            "No valid BibTeX entries found in string",
+            details={"error": "boom"},
+        )
+        assert fail_response.success is False
+        assert fail_response.data is None
+        assert fail_response.error is not None
+        assert fail_response.error.error_type == ToolErrorType.PARSE_ERROR
+        assert fail_response.error.details == {"error": "boom"}
+
+        # Parameterized invocation must keep working as well.
+        typed = ToolResponse[int].ok([1, 2, 3])
+        assert typed.success is True
+        assert typed.data == [1, 2, 3]
+
     def test_get_setting_explicit_value(self):
         """Test that explicit values take precedence."""
         result = get_setting("my-api-key", "some_setting")
@@ -53,14 +82,18 @@ class TestBaseTypes:
 
     def test_get_setting_fallback_to_settings(self):
         """Test fallback to app settings when value is None."""
-        # The get_setting function does a lazy import, so we patch the import
-        with patch.dict("sys.modules", {"app.config": MagicMock(settings=MagicMock(tavily_api_key="settings-key"))}):
-            # Clear any cached import
-            import importlib
-            import app.tools.base
-            importlib.reload(app.tools.base)
-
-            result = app.tools.base.get_setting(None, "tavily_api_key")
+        # get_setting lazily imports app.config.settings, so swapping the
+        # module in sys.modules is enough to exercise the fallback path.
+        # Do NOT importlib.reload(app.tools.base) here: that recreates the
+        # pydantic ToolResponse/ToolError classes and leaves every module that
+        # already imported them (e.g. bibtex_parser via the app package)
+        # holding stale classes whose validators no longer match, which breaks
+        # later tests with ValidationError.
+        with patch.dict(
+            "sys.modules",
+            {"app.config": MagicMock(settings=MagicMock(tavily_api_key="settings-key"))},
+        ):
+            result = get_setting(None, "tavily_api_key")
             assert result == "settings-key"
 
 

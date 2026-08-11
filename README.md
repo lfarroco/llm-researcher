@@ -1,5 +1,9 @@
 # llm-researcher
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/lfarroco/llm-researcher/actions/workflows/ci.yml/badge.svg)](https://github.com/lfarroco/llm-researcher/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
+
 An open-source, self-hostable **academic research assistant**. Submit a
 research question and llm-researcher decomposes it, searches scholarly and web
 sources in parallel, and produces a cited research document — while building a
@@ -170,6 +174,12 @@ curl -X POST http://localhost:8000/research \
 const ws = new WebSocket('ws://localhost:8000/ws/research/1');
 ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```
+
+## Security
+
+Found a security vulnerability? Please report it privately — see
+[SECURITY.md](SECURITY.md) for our reporting policy and expected response
+times. **Do not open a public issue.**
 
 ## License
 

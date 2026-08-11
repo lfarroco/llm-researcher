@@ -685,17 +685,12 @@ async def test_intent_router_with_mocked_llm():
             "entities": {},
         }
 
-        # Create a mock runnable that will be returned by the pipe operator
-        mock_runnable = AsyncMock()
-        mock_runnable.ainvoke = AsyncMock(return_value=mock_llm_output)
+        mock_chain = AsyncMock()
+        mock_chain.ainvoke = AsyncMock(return_value=mock_llm_output)
 
-        # Mock the prompt template's __or__ method (pipe operator)
-        with patch.object(
-            intent_router.INTENT_ROUTER_PROMPT,
-            "__or__",
-            return_value=MagicMock(
-                __or__=MagicMock(return_value=mock_runnable)
-            )
+        with patch(
+            "app.agents.intent_router.get_intent_router_chain",
+            return_value=mock_chain,
         ):
             result = await intent_router.route_user_intent(message)
 

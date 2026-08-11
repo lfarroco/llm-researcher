@@ -22,35 +22,35 @@ Status legend:
 
 ### License & community
 - [x] Add `LICENSE` (MIT)
-- [ ] Add `CONTRIBUTING.md`
-- [ ] Add `CODE_OF_CONDUCT.md`
-- [ ] Add `SECURITY.md`
-- [ ] Add GitHub issue templates (bug report, feature request)
-- [ ] Add GitHub pull request template
+- [x] Add `CONTRIBUTING.md`
+- [x] Add `CODE_OF_CONDUCT.md`
+- [x] Add `SECURITY.md`
+- [x] Add GitHub issue templates (bug report, feature request)
+- [x] Add GitHub pull request template
 
 ### Test & CI health
-- [ ] Fix `ToolResponse.fail()` / `ToolResponse.ok()` generic bug
+- [x] Fix `ToolResponse.fail()` / `ToolResponse.ok()` generic bug
       (`app/tools/base.py`) — constructing an unparameterized generic
       `ToolResponse` raises a pydantic `ValidationError`. Currently breaks
       BibTeX parsing of empty/invalid input.
-- [ ] Fix `test_intent_router_with_mocked_llm` — the mock patches the prompt's
+- [x] Fix `test_intent_router_with_mocked_llm` — the mock patches the prompt's
       `__or__` on the instance, which Python never consults for special
       methods, so the test makes a real OpenAI API call and fails with a 401.
-- [ ] Fix app-level test DB setup — `SessionLocal` is bound at import time to
+- [x] Fix app-level test DB setup — `SessionLocal` is bound at import time to
       `settings.database_url`, so `sqlite:///:memory:` (used by CI) produces
       `no such table: research` errors in `tests/test_main.py` and
       `tests/test_integration.py`. Use a shared SQLite file fixture or a
       Postgres test service.
-- [ ] Make GitHub Actions CI green (lint + full test suite).
-- [ ] Remove or deprecate root-level legacy test scripts
+- [x] Make GitHub Actions CI green (lint + full test suite).
+- [x] Remove or deprecate root-level legacy test scripts
       (`test_api.py`, `test_websocket.py`, `test_finding_crud.py`,
       `test_source_crud.py`, `test_research_filtering.py`).
 
 ### Release hygiene
-- [ ] Add `CHANGELOG.md` with v2.0.0 notes.
-- [ ] Add README badges (license, CI status, Python version).
-- [ ] Confirm no secrets/API keys in git history.
-- [ ] Tag `v2.0.0` release.
+- [x] Add `CHANGELOG.md` with v2.0.0 notes.
+- [x] Add README badges (license, CI status, Python version).
+- [x] Confirm no secrets/API keys in git history.
+- [~] Tag `v2.0.0` release.
 
 ---
 
@@ -58,13 +58,13 @@ Status legend:
 
 > **Goal**: Finish the last user-facing gaps and make the frontend testable.
 
-- [ ] Wire `SettingsPage` into app navigation (component exists, not routed).
-- [ ] Bulk operations for sources/findings (deferred Phase 20 Sprint 3).
-- [ ] Pagination for sources/findings lists (backend already supports
+- [x] Wire `SettingsPage` into app navigation (component exists, not routed).
+- [x] Bulk operations for sources/findings (deferred Phase 20 Sprint 3).
+- [x] Pagination for sources/findings lists (backend already supports
       `skip`/`limit`).
-- [ ] Tag input component with autocomplete (currently handled inline in the
+- [x] Tag input component with autocomplete (currently handled inline in the
       research header).
-- [ ] Frontend unit tests (Vitest + React Testing Library).
+- [x] Frontend unit tests (Vitest + React Testing Library).
 - [ ] Playwright smoke test for core flows (create → monitor → export).
 - [ ] Stabilize the timing-sensitive `TokenBucket` rate-limiter test.
 

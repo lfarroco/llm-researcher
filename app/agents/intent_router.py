@@ -130,6 +130,22 @@ Respond with JSON in this exact format:
 ])
 
 
+def get_intent_router_chain():
+    """Create the intent router chain."""
+    provider = LLMProviderFactory.create_provider(
+        provider_type=settings.llm_provider,
+        model=settings.llm_model,
+        temperature=0.1,  # Low temperature for consistent classification
+        api_key=settings.llm_api_key,
+        base_url=settings.llm_base_url,
+    )
+
+    llm = provider.get_llm()
+    parser = JsonOutputParser(pydantic_object=IntentRouterOutput)
+
+    return INTENT_ROUTER_PROMPT | llm | parser
+
+
 async def route_user_intent(message: str) -> IntentRouterOutput:
     """
     Analyze user message and determine intent.
@@ -142,22 +158,8 @@ async def route_user_intent(message: str) -> IntentRouterOutput:
     """
     logger.debug(f"Routing intent for message: {message[:100]}...")
 
-    # Get LLM provider
-    provider = LLMProviderFactory.create_provider(
-        provider_type=settings.llm_provider,
-        model=settings.llm_model,
-        temperature=0.1,  # Low temperature for consistent classification
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url,
-    )
-
-    llm = provider.get_llm()
-
-    # Create parser
-    parser = JsonOutputParser(pydantic_object=IntentRouterOutput)
-
     # Create chain
-    chain = INTENT_ROUTER_PROMPT | llm | parser
+    chain = get_intent_router_chain()
 
     try:
         result = await chain.ainvoke({"message": message})

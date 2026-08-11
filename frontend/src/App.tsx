@@ -4,6 +4,7 @@ import { api } from './api/client';
 import type { Research } from './types';
 import ResearchForm from './components/ResearchForm';
 import ResearchDetail from './components/ResearchDetail';
+import SettingsPage from './components/SettingsPage';
 
 function App() {
 	const navigate = useNavigate();
@@ -11,7 +12,6 @@ function App() {
 	const [researches, setResearches] = useState<Research[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [activeTab] = useState<'research'>('research');
 	const [showResearchForm, setShowResearchForm] = useState(false);
 
 	const openResearch = (id: number) => {
@@ -172,6 +172,8 @@ function App() {
 		);
 	};
 
+	const SettingsRoute = () => <SettingsPage />;
+
 	return (
 		<div className="min-h-screen bg-gray-50">
 			<header className="bg-white shadow-sm">
@@ -187,12 +189,23 @@ function App() {
 					<nav className="flex items-end gap-1 border-b border-gray-200">
 						<button
 							type="button"
-							className={`-mb-px px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'research'
+							onClick={() => navigate('/')}
+							className={`-mb-px px-4 py-2 text-sm font-medium border-b-2 transition-colors ${location.pathname === '/' || location.pathname.startsWith('/research')
 								? 'border-blue-600 text-blue-700'
 								: 'border-transparent text-gray-500'
 								}`}
 						>
 							Research
+						</button>
+						<button
+							type="button"
+							onClick={() => navigate('/settings')}
+							className={`-mb-px px-4 py-2 text-sm font-medium border-b-2 transition-colors ${location.pathname === '/settings'
+								? 'border-blue-600 text-blue-700'
+								: 'border-transparent text-gray-500'
+								}`}
+						>
+							Settings
 						</button>
 					</nav>
 				</div>
@@ -208,6 +221,7 @@ function App() {
 				<Routes>
 					<Route path="/" element={<ResearchTableRoute />} />
 					<Route path="/research/:researchId" element={<ResearchDetailRoute />} />
+					<Route path="/settings" element={<SettingsRoute />} />
 					<Route path="*" element={<Navigate to="/" replace />} />
 				</Routes>
 			</main>

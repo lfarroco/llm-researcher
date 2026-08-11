@@ -42,7 +42,7 @@ test:
 
 ## Run WebSocket and real-time features test
 ws:
-	docker compose exec app python test_websocket.py
+	docker compose exec app python -m pytest tests/test_websocket_researcher.py -v
 
 ## Run linter inside the app container
 lint:

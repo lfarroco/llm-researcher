@@ -1,7 +1,5 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from unittest.mock import patch
 
 from app.main import app
@@ -9,17 +7,9 @@ from app.database import Base, get_db
 import app.database as db_module
 import app.rate_limiter as rate_limiter_module
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-
-test_engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-TestingSessionLocal = sessionmaker(
-    autocommit=False, autoflush=False, bind=test_engine)
-
 
 def override_get_db():
-    db = TestingSessionLocal()
+    db = db_module.SessionLocal()
     try:
         yield db
     finally:
@@ -31,18 +21,18 @@ app.dependency_overrides[get_db] = override_get_db
 
 @pytest.fixture()
 def client():
-    # Patch the engine used by the startup event to use SQLite
-    original_engine = db_module.engine
-    db_module.engine = test_engine
-    Base.metadata.create_all(bind=test_engine)
+    # Create all tables on the SAME engine the app uses (app.database.engine).
+    # Under CI (DATABASE_URL=sqlite:///:memory:) that engine is a shared
+    # in-memory DB, so SessionLocal users (background worker, settings proxy)
+    # see the same tables as the endpoints.
+    Base.metadata.create_all(bind=db_module.engine)
     # Reset rate limiters between tests to prevent cross-test interference
     rate_limiter_module._research_rate_limiter = rate_limiter_module.RateLimiter(
         requests_per_minute=10, burst_size=100
     )
     with TestClient(app) as c:
         yield c
-    Base.metadata.drop_all(bind=test_engine)
-    db_module.engine = original_engine
+    Base.metadata.drop_all(bind=db_module.engine)
 
 
 def test_health_check(client):

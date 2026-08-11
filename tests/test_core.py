@@ -299,15 +299,20 @@ class TestTokenBucket:
 
     def test_token_refill_over_time(self):
         """Test that tokens refill over time."""
+        fake_time = 0
+
+        def clock():
+            return fake_time
+
         bucket = TokenBucket(
-            tokens=10, refill_rate=20.0)  # 20 tokens/sec (faster)
+            tokens=10, refill_rate=20.0, clock=clock)  # 20 tokens/sec
 
         # Consume all tokens first
         bucket.consume(10)
         assert bucket.tokens == 0
 
-        # Wait 1 second (should refill ~20 tokens, capped at capacity 10)
-        time.sleep(1.0)
+        # Advance fake clock by 1 second (should refill ~20 tokens, capped at capacity 10)
+        fake_time = 1.0
 
         # Refill is called automatically by consume
         # Try to consume just 5 tokens (well below what should be refilled)
@@ -318,10 +323,15 @@ class TestTokenBucket:
 
     def test_token_refill_caps_at_capacity(self):
         """Test that refill doesn't exceed capacity."""
-        bucket = TokenBucket(tokens=10, refill_rate=100.0)
+        fake_time = 0
 
-        # Wait a bit and refill
-        time.sleep(0.5)
+        def clock():
+            return fake_time
+
+        bucket = TokenBucket(tokens=10, refill_rate=100.0, clock=clock)
+
+        # Advance time and refill
+        fake_time = 0.5
         bucket._refill()
 
         # Should not exceed capacity
@@ -337,7 +347,12 @@ class TestTokenBucket:
 
     def test_get_wait_time_without_tokens(self):
         """Test wait time when tokens are needed."""
-        bucket = TokenBucket(tokens=0, refill_rate=2.0)  # 2 tokens/sec
+        fake_time = 0
+
+        def clock():
+            return fake_time
+
+        bucket = TokenBucket(tokens=0, refill_rate=2.0, clock=clock)  # 2 tokens/sec
 
         # Need 4 tokens, rate is 2/sec, so wait time should be ~2 seconds
         wait_time = bucket.get_wait_time(4)
@@ -426,8 +441,8 @@ class TestRateLimiter:
         # Mock old timestamp
         limiter.buckets["client1"].last_refill = time.time() - 700  # Old
 
-        # Trigger cleanup
-        time.sleep(0.2)
+        # Force cleanup by setting last_cleanup far in the past
+        limiter.last_cleanup = 0
         limiter.check_rate_limit("client2")  # This triggers cleanup
 
         # Old bucket should be removed
@@ -499,8 +514,8 @@ class TestRateLimiterIntegration:
         allowed, _ = limiter.check_rate_limit("client1")
         assert allowed is False
 
-        # Wait for refill (1+ second)
-        time.sleep(1.1)
+        # Simulate time passing by advancing the bucket's last_refill
+        limiter.buckets["client1"].last_refill = time.time() - 2.0
 
         # Should be allowed again
         allowed, _ = limiter.check_rate_limit("client1")

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Source } from '../types';
+import TagInput from './TagInput';
 
 interface Props {
 	isOpen: boolean;
@@ -28,7 +29,6 @@ export default function SourceFormModal({ isOpen, source, onClose, onSubmit }: P
 		user_notes: '',
 		tags: [] as string[],
 	});
-	const [tagInput, setTagInput] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -95,31 +95,6 @@ export default function SourceFormModal({ isOpen, source, onClose, onSubmit }: P
 			setError(err instanceof Error ? err.message : 'Failed to save source');
 		} finally {
 			setIsSubmitting(false);
-		}
-	};
-
-	const handleAddTag = () => {
-		const tag = tagInput.trim();
-		if (tag && !formData.tags.includes(tag)) {
-			setFormData((prev) => ({
-				...prev,
-				tags: [...prev.tags, tag],
-			}));
-			setTagInput('');
-		}
-	};
-
-	const handleRemoveTag = (tagToRemove: string) => {
-		setFormData((prev) => ({
-			...prev,
-			tags: prev.tags.filter((tag) => tag !== tagToRemove),
-		}));
-	};
-
-	const handleTagInputKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key === 'Enter') {
-			e.preventDefault();
-			handleAddTag();
 		}
 	};
 
@@ -255,42 +230,13 @@ export default function SourceFormModal({ isOpen, source, onClose, onSubmit }: P
 						<label className="block text-sm font-medium text-gray-700 mb-1">
 							Tags
 						</label>
-						<div className="flex gap-2 mb-2">
-							<input
-								type="text"
-								value={tagInput}
-								onChange={(e) => setTagInput(e.target.value)}
-								onKeyDown={handleTagInputKeyDown}
-								className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-								placeholder="Add tag..."
-							/>
-							<button
-								type="button"
-								onClick={handleAddTag}
-								className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-							>
-								Add
-							</button>
-						</div>
-						{formData.tags.length > 0 && (
-							<div className="flex flex-wrap gap-2">
-								{formData.tags.map((tag) => (
-									<span
-										key={tag}
-										className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-sm rounded"
-									>
-										{tag}
-										<button
-											type="button"
-											onClick={() => handleRemoveTag(tag)}
-											className="text-blue-600 hover:text-blue-800"
-										>
-											×
-										</button>
-									</span>
-								))}
-							</div>
-						)}
+						<TagInput
+							tags={formData.tags}
+							onTagsChange={(newTags) =>
+								setFormData((prev) => ({ ...prev, tags: newTags }))
+							}
+							suggestions={[]}
+						/>
 					</div>
 
 					<div className="flex gap-3 pt-4 border-t">

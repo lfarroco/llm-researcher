@@ -11,37 +11,26 @@ the full integration of components.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
-from app.models import Research, ResearchSource, ResearchFinding
-
-
-# Test database setup
-TEST_DATABASE_URL = "sqlite:///:memory:"
+import app.database as db_module
 
 
 @pytest.fixture(scope="function")
 def test_db():
-    """Create a fresh test database for each test."""
-    engine = create_engine(
-        TEST_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    TestingSessionLocal = sessionmaker(
-        autocommit=False, autoflush=False, bind=engine
-    )
+    """Create a fresh test database for each test.
 
-    yield TestingSessionLocal
-
-    Base.metadata.drop_all(bind=engine)
+    Tables are created on the SAME engine the app uses (app.database.engine).
+    Under CI (DATABASE_URL=sqlite:///:memory:) that engine is a shared
+    in-memory DB, so SessionLocal users (background worker, settings proxy)
+    see the same tables as the endpoints.
+    """
+    Base.metadata.create_all(bind=db_module.engine)
+    yield db_module.SessionLocal
+    Base.metadata.drop_all(bind=db_module.engine)
 
 
 @pytest.fixture(scope="function")
@@ -59,8 +48,12 @@ def client(test_db):
     # Disable rate limiting for tests
     with patch("app.routers.research.check_research_rate_limit"):
         with patch("app.rate_limiter.check_research_rate_limit"):
-            with TestClient(app) as test_client:
-                yield test_client
+            # Never run the real background research workflow: it performs
+            # live LLM + search API calls. Tests only assert on the HTTP
+            # responses, so a no-op keeps them fast, offline and deterministic.
+            with patch("app.routers.research.process_research"):
+                with TestClient(app) as test_client:
+                    yield test_client
 
     app.dependency_overrides.clear()
 
@@ -224,12 +217,19 @@ class TestResearchWorkflow:
 class TestSourceManagement:
     """Test source management operations."""
 
-    @patch("app.agents.search_agent.web_search")
-    @patch("app.agents.search_agent.arxiv_search")
+    @patch("app.tools.plugins.arxiv_search")
+    @patch("app.tools.plugins.web_search")
     def test_get_sources(
-        self, mock_arxiv, mock_web, client, mock_search_results
+        self, mock_web, mock_arxiv, client, mock_search_results
     ):
         """Test retrieving sources for a research project."""
+        # Searches are executed through the plugin registry: the plugins in
+        # app/tools/plugins.py wrap the raw tool functions, so patch those
+        # wrappers' underlying calls (the search agent itself has no
+        # module-level web_search/arxiv_search attributes to patch).
+        mock_web.return_value = mock_search_results["web"]
+        mock_arxiv.return_value = mock_search_results["arxiv"]
+
         # Create a project
         create_response = client.post(
             "/research",

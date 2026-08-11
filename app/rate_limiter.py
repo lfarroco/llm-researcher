@@ -17,18 +17,21 @@ logger = logging.getLogger(__name__)
 class TokenBucket:
     """Token bucket for rate limiting."""
 
-    def __init__(self, tokens: int, refill_rate: float):
+    def __init__(self, tokens: int, refill_rate: float, clock=None):
         """
         Initialize token bucket.
 
         Args:
             tokens: Maximum number of tokens (requests)
             refill_rate: Tokens per second refill rate
+            clock: Optional callable that returns current time (default: time.time).
+                   Intended for testing with fake clocks.
         """
         self.capacity = tokens
         self.tokens = tokens
         self.refill_rate = refill_rate
-        self.last_refill = time.time()
+        self.clock = clock or time.time
+        self.last_refill = self.clock()
 
     def consume(self, tokens: int = 1) -> bool:
         """
@@ -46,7 +49,7 @@ class TokenBucket:
 
     def _refill(self):
         """Refill tokens based on time elapsed."""
-        now = time.time()
+        now = self.clock()
         elapsed = now - self.last_refill
         refill_amount = elapsed * self.refill_rate
 
