@@ -13,8 +13,9 @@ See [docs/PLAN.md](../docs/PLAN.md) for the full architecture plan, implementati
 - **Backend**: FastAPI + Uvicorn
 - **LLM Framework**: LangChain + LangGraph
 - **Database**: PostgreSQL + SQLAlchemy
-- **LLM Providers**: OpenAI (GPT-4o) or Ollama (local models)
-- **Search**: Tavily API, DuckDuckGo, ArXiv, Wikipedia
+- **LLM Providers**: OpenAI, Ollama (local), Groq, DeepSeek
+- **Search**: Tavily/DuckDuckGo, ArXiv, Wikipedia, Crossref, OpenAlex, PubMed,
+  Semantic Scholar, Springer, Elsevier
 
 ## Key Concepts
 
@@ -37,7 +38,15 @@ Search tools in `app/tools/`:
 - `web_search.py` - Tavily/DuckDuckGo web search
 - `arxiv_search.py` - Academic papers
 - `wikipedia.py` - Encyclopedia lookups
+- `crossref_search.py`, `openalex_search.py`, `pubmed_search.py`,
+  `semantic_scholar.py`, `springer_search.py`, `elsevier_search.py` - Scholarly
+  metadata providers
 - `web_scraper.py` - Full page content extraction
+- `pdf_download.py`, `pdf_parser.py`, `document_chunker.py`,
+  `bibtex_parser.py` - PDF/BibTeX pipeline
+
+New search sources implement the `SearchPlugin` protocol in
+`app/tools/registry.py` and are registered in `app/tools/plugins.py`.
 
 ## Code Conventions
 
@@ -60,12 +69,18 @@ make lint        # Run ruff linter
 
 Required in `.env`:
 ```
-OPENAI_API_KEY=sk-...
-TAVILY_API_KEY=tvly-...
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o
+LLM_PROVIDER=openai|ollama|groq|deepseek
+LLM_MODEL=<model name>
+OPENAI_API_KEY=sk-...        # only for openai
+GROQ_API_KEY=...             # only for groq
+DEEPSEEK_API_KEY=...         # only for deepseek
+TAVILY_API_KEY=tvly-...      # for web search (DuckDuckGo fallback works without it)
 ```
+
+Optional academic keys: `SPRINGER_API_KEY`, `ELSEVIER_API_KEY`,
+`SEMANTIC_SCHOLAR_API_KEY`, `NCBI_API_KEY` (PubMed).
 
 ## Current Implementation Status
 
-Refer to the checkboxes in [docs/PLAN.md](../docs/PLAN.md) for current progress.
+See `docs/ROADMAP.md` for the current task list, `docs/STATUS_REPORT.md` for
+implementation status and known issues, and `docs/PLAN.md` for architecture.

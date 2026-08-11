@@ -1,41 +1,74 @@
 # llm-researcher
-An autonomous researcher agent powered by FastAPI, LangChain, and PostgreSQL.
+
+An open-source, self-hostable **academic research assistant**. Submit a
+research question and llm-researcher decomposes it, searches scholarly and web
+sources in parallel, and produces a cited research document — while building a
+**persistent knowledge base** (sources, findings, notes, AI state) you can
+explore, edit, and refine across sessions.
+
+Built with FastAPI, LangGraph/LangChain, React, and PostgreSQL.
+
+## ✨ Features
+
+- **Multi-agent research pipeline**: plan → search → chase references →
+  hypothesize → synthesize → format, with checkpointing, cancellation, and
+  resume
+- **10+ search sources**: web (Tavily/DuckDuckGo), ArXiv, Wikipedia, Crossref,
+  OpenAlex, PubMed, Semantic Scholar, Springer Nature, Elsevier Scopus
+- **PDF pipeline**: download + cache, GROBID parsing, chunking, BibTeX parsing
+- **Persistent knowledge base**: sources/findings/notes CRUD with filtering,
+  tags, and per-item notes
+- **Real-time UI**: WebSocket progress, 10-tab detail view, plan + AI-state
+  inspectors, entity extraction, chat
+- **Exports**: PDF, HTML, DOCX, Markdown documents; BibTeX, CSV, JSON data
+- **Bring your own model**: OpenAI, Ollama (local), Groq, or DeepSeek
 
 ## 📚 Documentation
 
-- **[STATUS_REPORT.md](docs/STATUS_REPORT.md)** - Implementation status and feature summary
-- **[PLAN.md](docs/PLAN.md)** - Complete architecture plan and roadmap
-- **[PHASE16_SUMMARY.md](docs/PHASE16_SUMMARY.md)** - Real-time WebSocket features guide
-- **[FRONTEND_GUIDE.md](docs/FRONTEND_GUIDE.md)** - Frontend architecture and development
-- **[FRONTEND_IMPLEMENTATION.md](docs/FRONTEND_IMPLEMENTATION.md)** - UI implementation summary
+- **[ROADMAP.md](docs/ROADMAP.md)** — next tasks (milestone-based)
+- **[STATUS_REPORT.md](docs/STATUS_REPORT.md)** — implementation status
+- **[PLAN.md](docs/PLAN.md)** — architecture and implementation history
+- **[PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)** — practical re-entry guide
+- **[FRONTEND_GUIDE.md](docs/FRONTEND_GUIDE.md)** — frontend architecture
+- **[TEST_COVERAGE.md](docs/TEST_COVERAGE.md)** — test suite details
+- **[PHASE16_SUMMARY.md](docs/PHASE16_SUMMARY.md)** — real-time/WebSocket features
+- **[QUERY_EXPANSION.md](docs/QUERY_EXPANSION.md)** — query expansion feature
 
-## Stack
+## 🚦 Project Status
 
-- **Backend**: FastAPI + LangChain + LangGraph
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **Database**: PostgreSQL
-- **Deployment**: Docker + Docker Compose
+**Beta.** The self-hosted research workflow is operational end-to-end
+(research pipeline, knowledge base, real-time UI, exports). The repository is
+being prepared for public open-source release: known test-suite issues and
+community files (CONTRIBUTING, etc.) are tracked in Milestone 0 of the
+[roadmap](docs/ROADMAP.md).
+
+## 🛠 Stack
+
+- **Backend**: FastAPI + LangChain + LangGraph + SQLAlchemy
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS
+- **Database**: PostgreSQL + Alembic migrations
+- **Deployment**: Docker + Docker Compose (app, db, frontend, grobid)
 
 ## LLM Providers
 
-This project supports multiple LLM providers:
+Configure your preferred provider in the `.env` file:
 
-- **OpenAI** – GPT-4o, GPT-4, GPT-3.5-turbo, etc.
-- **Ollama** – Local models like qwen3:4b, llama2, mistral, etc.
-- **Groq** – Fast hosted models like llama-3.3-70b-versatile.
-- **DeepSeek** – OpenAI-compatible DeepSeek API models.
+| Provider | `.env` example |
+|---|---|
+| **OpenAI** | `LLM_PROVIDER=openai` · `LLM_MODEL=gpt-4o` · `OPENAI_API_KEY=...` |
+| **Ollama** (local) | `LLM_PROVIDER=ollama` · `LLM_MODEL=qwen3:4b` · `OLLAMA_BASE_URL=http://localhost:11434` |
+| **Groq** | `LLM_PROVIDER=groq` · `LLM_MODEL=llama-3.3-70b-versatile` · `GROQ_API_KEY=...` |
+| **DeepSeek** | `LLM_PROVIDER=deepseek` · `LLM_MODEL=deepseek-chat` · `DEEPSEEK_API_KEY=...` |
 
-Configure your preferred provider in the `.env` file.
+Optional academic API keys enable additional search plugins:
+`SPRINGER_API_KEY` (Springer Nature) and `ELSEVIER_API_KEY` (Elsevier Scopus).
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/)
-- **For OpenAI**: An [OpenAI API key](https://platform.openai.com/api-keys)
-- **For Ollama**: [Ollama installed](https://ollama.ai/) with your desired model pulled
-- **For Groq**: A [Groq API key](https://console.groq.com/keys)
-- **For DeepSeek**: A DeepSeek API key
+- Docker + Docker Compose
+- An LLM API key (OpenAI/Groq/DeepSeek) **or** a local Ollama installation
 
 ### Setup
 
@@ -44,172 +77,87 @@ cp .env.example .env
 # Edit .env and configure your LLM provider
 ```
 
-#### Using Ollama (Local Models)
+### Start
 
 ```bash
-# In your .env file:
-LLM_PROVIDER=ollama
-LLM_MODEL=qwen3:4b
-OLLAMA_BASE_URL=http://localhost:11434
+make up        # start app, db, frontend, grobid
+make migrate   # run Alembic migrations (first time / after upgrades)
 ```
 
-Make sure Ollama is running and the model is pulled:
-```bash
-ollama pull qwen3:4b
-ollama serve
-```
+Then open:
 
-#### Using OpenAI
+- **Web UI**: http://localhost:3000
+- **API docs**: http://localhost:8000/docs (Swagger) / `/redoc` (ReDoc)
 
-```bash
-# In your .env file:
-LLM_PROVIDER=openai
-LLM_MODEL=gpt-4o
-OPENAI_API_KEY=your_api_key_here
-```
+## Make Commands
 
-#### Using Groq
+| Command | Description |
+|---|---|
+| `make up` / `make down` / `make build` / `make restart` | Compose lifecycle |
+| `make logs svc=<service>` | Follow logs (`app`, `db`, `frontend`, `grobid`) |
+| `make shell` / `make db-shell` | Shell into app / psql |
+| `make test` | Run the test suite in the app container |
+| `make lint` | Run ruff |
+| `make migrate` / `make migration msg=...` / `make migrate-down` | Alembic |
+| `make frontend-dev` | Frontend dev server (hot reload) |
+| `make frontend-build` / `make frontend-install` | Frontend build/install |
 
-```bash
-# In your .env file:
-LLM_PROVIDER=groq
-LLM_MODEL=llama-3.3-70b-versatile
-GROQ_API_KEY=your_groq_api_key_here
-```
+## API Endpoints
 
-#### Using DeepSeek
+Interactive docs at http://localhost:8000/docs.
 
-```bash
-# In your .env file:
-LLM_PROVIDER=deepseek
-LLM_MODEL=deepseek-chat
-DEEPSEEK_API_KEY=your_deepseek_api_key_here
-# Optional (default shown):
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-```
+### Research lifecycle
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | Health check |
+| POST | `/research` | Create a research query |
+| POST | `/research/batch` | Create multiple research queries |
+| GET | `/research` | List (filters: `status`, `search`; pagination: `skip`, `limit`) |
+| GET | `/research/{id}` | Get a research result |
+| PATCH | `/research/{id}` | Update query / notes / tags |
+| POST | `/research/{id}/cancel` | Cancel a running task |
+| POST | `/research/{id}/resume` | Resume from last checkpoint |
+| DELETE | `/research/{id}` | Delete |
 
-#### Optional Academic Provider Keys
+### Knowledge base
+| Method | Path | Description |
+|---|---|---|
+| GET/POST | `/research/{id}/sources` | List / add sources (filter by `source_type`, `tag`, `search`, `sort_by`) |
+| PATCH/DELETE | `/research/{id}/sources/{source_id}` | Update / delete a source |
+| GET/POST | `/research/{id}/findings` | List / create findings |
+| PATCH/DELETE | `/research/{id}/findings/{finding_id}` | Update / delete a finding |
+| GET/POST | `/research/{id}/notes` | List / create notes |
+| PATCH/DELETE | `/research/{id}/notes/{note_id}` | Update / delete a note |
 
-```bash
-# Springer Nature metadata API (enables Springer search plugin)
-SPRINGER_API_KEY=your_springer_api_key_here
+### AI state & chat
+| Method | Path | Description |
+|---|---|---|
+| GET | `/research/{id}/state` | LangGraph agent state |
+| GET | `/research/{id}/steps` | Agent execution steps |
+| GET | `/research/{id}/knowledge-base` | Sources grouped by sub-query |
+| GET | `/research/{id}/entities` | Extracted entities |
+| GET/PATCH | `/research/{id}/plan` | View / edit the research plan |
+| GET | `/research/{id}/document` | Final document |
+| POST | `/research/{id}/chat` | Chat with the research results |
+| GET | `/research/{id}/chat/history` | Chat history |
+| WS | `/ws/research/{id}` | Real-time progress stream |
 
-# Elsevier Scopus API (enables Elsevier search plugin)
-ELSEVIER_API_KEY=your_elsevier_api_key_here
-```
+### Exports
+| Method | Path | Description |
+|---|---|---|
+| GET | `/research/{id}/export/pdf` · `html` · `docx` · `markdown` | Document exports (pandoc) |
+| GET | `/research/{id}/export/sources/bibtex` | Sources as BibTeX |
+| GET | `/research/{id}/export/findings/csv` · `json` | Findings data |
+| GET | `/research/{id}/export/data` | Full research data backup (JSON) |
 
-### Start the Application
+### Runtime settings
+| Method | Path | Description |
+|---|---|---|
+| GET | `/settings` | List effective settings (env + DB overrides) |
+| PUT | `/settings/{key}` | Set a runtime override |
+| DELETE | `/settings/{key}` | Clear a runtime override |
 
-```bash
-# Start all services (backend, frontend, database)
-make up
-
-# View logs
-make logs
-
-# Or filter by service
-make logs svc=frontend
-```
-
-Once started, access:
-- **Web UI**: http://localhost:3000 (React frontend)
-- **API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-
-### Frontend Development
-
-For frontend development with hot-reload:
-
-```bash
-# Install dependencies (first time only)
-cd frontend && npm install
-
-# Start dev server
-npm run dev
-```
-
-The dev server runs on port 3000 with automatic proxy to the backend API.
-
-See [frontend/README.md](frontend/README.md) for more details.
-
-### Makefile Commands
-
-#### Core Commands
-| Command        | Description                           |
-|----------------|---------------------------------------|
-| `make up`      | Start all services in the background  |
-| `make down`    | Stop all services                     |
-| `make build`   | Build Docker images                   |
-| `make restart` | Rebuild and restart all services      |
-| `make logs`    | Follow logs (use `svc=app` to filter) |
-| `make help`    | Show all available commands           |
-
-#### Backend Commands  
-| Command      | Description                               |
-|--------------|-------------------------------------------|
-| `make shell` | Open a shell in the app container         |
-| `make test`  | Run the test suite inside the container   |
-| `make ws`    | Run WebSocket and real-time features test |
-| `make lint`  | Run the linter inside the container       |
-
-#### Frontend Commands
-| Command                 | Description                            |
-|-------------------------|----------------------------------------|
-| `make frontend-dev`     | Start frontend dev server (hot reload) |
-| `make frontend-build`   | Build frontend for production          |
-| `make frontend-install` | Install frontend dependencies          |
-
-#### Database Commands
-| Command         | Description                           |
-|-----------------|---------------------------------------|
-| `make db-shell` | Open a psql shell in the db container |
-| `make migrate`  | Run pending migrations                |
-
-### API Endpoints
-
-Once running, the API is available at `http://localhost:8000`.
-
-**Interactive API Documentation**: 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
-#### Core Research Endpoints
-| Method | Path                    | Description                      |
-|--------|-------------------------|----------------------------------|
-| GET    | `/`                     | Health check                     |
-| POST   | `/research`             | Create a new research query      |
-| POST   | `/research/batch`       | Create multiple research queries |
-| GET    | `/research`             | List all research results        |
-| GET    | `/research/{id}`        | Get a specific research result   |
-| POST   | `/research/{id}/cancel` | Cancel a running research task   |
-| POST   | `/research/{id}/resume` | Resume a paused research task    |
-| DELETE | `/research/{id}`        | Delete a research result         |
-
-#### Sources & Findings
-| Method | Path                            | Description                  |
-|--------|---------------------------------|------------------------------|
-| GET    | `/research/{id}/sources`        | Get all sources for research |
-| POST   | `/research/{id}/sources`        | Add a source manually        |
-| GET    | `/research/{id}/findings`       | Get all findings             |
-| POST   | `/research/{id}/findings`       | Create a finding manually    |
-| PUT    | `/research/{id}/findings/{fid}` | Update a finding             |
-| DELETE | `/research/{id}/findings/{fid}` | Delete a finding             |
-
-#### AI State & Chat
-| Method | Path                   | Description                    |
-|--------|------------------------|--------------------------------|
-| GET    | `/research/{id}/state` | View LangGraph agent state     |
-| GET    | `/research/{id}/plan`  | View research plan/sub-queries |
-| POST   | `/research/{id}/chat`  | Chat with the research results |
-
-#### Real-time Updates
-| Protocol  | Path                | Description                       |
-|-----------|---------------------|-----------------------------------|
-| WebSocket | `/ws/research/{id}` | Stream real-time progress updates |
-
-See [PHASE16_SUMMARY.md](docs/PHASE16_SUMMARY.md) for WebSocket event details.
-
-### Example
+## Example
 
 ```bash
 # Create a research query
@@ -221,3 +169,8 @@ curl -X POST http://localhost:8000/research \
 const ws = new WebSocket('ws://localhost:8000/ws/research/1');
 ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+

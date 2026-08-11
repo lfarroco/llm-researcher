@@ -1,6 +1,6 @@
 # LLM Researcher - Returning Overview
 
-Last updated: 2026-06-30
+Last updated: 2026-08-10
 
 This document is a practical guide for the project.
 It complements:
@@ -86,11 +86,13 @@ Search/plugin system:
 
 - `app/tools/registry.py` defines `SearchPlugin` protocol + registry
 - `app/tools/plugins.py` registers built-ins at startup:
-  - web
+  - web (Tavily, DuckDuckGo fallback)
   - arxiv
   - wikipedia
   - springer (if key present)
   - elsevier (if key present)
+- Additional tools exist for Crossref, OpenAlex, PubMed, Semantic Scholar,
+  PDF download/parse (GROBID), document chunking, BibTeX parsing
 
 ## 4. Data Model Snapshot
 
@@ -113,11 +115,12 @@ Routers live in `app/routers/` and are mounted in `app/main.py`.
 
 Most-used endpoints:
 
-- Research lifecycle: create/list/get/update/cancel/resume
-- Sources and findings CRUD
-- State and plan inspection
-- Chat against a research item
-- Export endpoints (PDF/HTML/DOCX/Markdown + data exports)
+- Research lifecycle: create/batch/list/get/update/cancel/resume/delete
+- Sources, findings, and notes CRUD (with filtering/sorting)
+- State inspection: state, steps, knowledge-base, entities, plan, document
+- Chat against a research item (+ history)
+- Export endpoints (PDF/HTML/DOCX/Markdown + BibTeX/CSV/JSON data exports)
+- Runtime settings overrides (`/settings`)
 - WebSocket progress stream at `/ws/research/{research_id}`
 
 Tip: use `/docs` as the source of truth for request/response shapes.
@@ -126,10 +129,12 @@ Tip: use `/docs` as the source of truth for request/response shapes.
 
 Frontend app lives in `frontend/` and provides:
 
-- research creation/list/detail
-- sources/findings views
-- progress monitoring
-- chat interface
+- research creation/list/filter/edit/delete
+- a 10-tab research detail view (Overview, Plan, Sources, Findings,
+  Entities, Result, Knowledge Base, Notes, Agent Steps, Chat)
+- full CRUD for sources, findings, and notes
+- real-time progress monitoring (WebSocket) and plan/state inspectors
+- exports (documents + data) and chat
 
 Important frontend entry points:
 
@@ -137,20 +142,27 @@ Important frontend entry points:
 - `frontend/src/components/ResearchDetail.tsx`
 - `frontend/src/components/ResearchList.tsx`
 
+A `SettingsPage.tsx` component exists but is not yet wired into navigation.
+
 ## 7. Project Status: Practical View
 
 From code and docs combined:
 
-- Core research pipeline is operational.
-- Web UI is operational.
-- Real-time progress and cancellation/resume paths exist.
-- Search has a plugin architecture and multiple providers.
+- Core research pipeline is operational (plan → search → chase refs →
+  hypothesize → synthesize → format).
+- Web UI is operational with full CRUD, filtering, and exports.
+- Real-time progress, cancellation, and resume paths exist.
+- Search has a plugin architecture and multiple providers (web + 9 academic
+  sources).
 - Export routes are implemented (pandoc-dependent for PDF/HTML/DOCX).
+- NLP module has baseline rule-based entity/relation extraction.
 
 Important nuance:
 
-- `docs/PLAN.md` and `docs/STATUS_REPORT.md` are not fully synchronized on every phase label.
-- The `app/nlp/` module already contains baseline implementations (not empty stubs), including rule-based extraction.
+- Docs are now aligned with code: see `docs/ROADMAP.md` for remaining work
+  and `docs/STATUS_REPORT.md` for current status and known test issues.
+- The test suite has known failures (DB setup + two bugs) tracked in ROADMAP
+  Milestone 0.
 
 ## 8. Recommended Re-Entry Work Plan
 
@@ -163,11 +175,14 @@ If you are coming back after months away, this is the fastest path to productive
    - watch WebSocket progress
    - confirm sources/findings persist
    - test one export format
-3. Reconcile docs
-   - align `docs/STATUS_REPORT.md` with current code reality
-4. Pick one focused next milestone
-   - either frontend productivity polish
-   - or deeper NLP/knowledge extraction quality
+3. Read the roadmap
+   - `docs/ROADMAP.md` is the current task list (Milestone 0 = OSS release
+     readiness + green CI)
+4. Pick one focused next task
+   - either Milestone 0 fixes (test DB strategy, ToolResponse bug,
+     intent-router test)
+   - or Milestone 1 frontend gaps (settings page routing, bulk ops,
+     pagination)
 
 ## 9. Where To Read Next (In Order)
 

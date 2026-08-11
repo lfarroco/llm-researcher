@@ -17,3 +17,4 @@ htmlcov/
 .ruff_cache/
 *.log
 test.db
+test_entities.db

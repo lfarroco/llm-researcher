@@ -19,7 +19,7 @@ Successfully implemented all real-time update features for future UI integration
 
 **Files**:
 - `app/websocket_manager.py` - Connection manager with broadcast methods
-- `app/main.py` - WebSocket endpoint handler
+- `app/routers/chat.py` - WebSocket endpoint handler
 
 ### 2. Research Cancellation
 **Endpoint**: `POST /research/{research_id}/cancel`
@@ -243,7 +243,7 @@ All new endpoints are automatically documented in FastAPI's OpenAPI schema:
 - `test_websocket.py` (190 lines)
 
 ### Modified Files:
-- `app/main.py` - Added WebSocket endpoint, cancellation, resumption, batch
+- `app/routers/chat.py` - Added WebSocket endpoint, cancellation, resumption, batch
 - `app/schemas.py` - Added `BatchResearchCreate`, `BatchResearchResponse`
 - `Makefile` - Added `ws` command
 - `docs/PLAN.md` - Marked Phase 16 as completed

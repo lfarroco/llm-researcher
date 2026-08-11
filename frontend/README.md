@@ -4,11 +4,14 @@ React + TypeScript frontend for the LLM Researcher system.
 
 ## Features
 
-- 📝 Create and manage research queries
-- 📊 Real-time progress updates via WebSocket
-- 📚 View sources and findings
-- 💬 Chat with research results
-- 🎨 Clean, modern UI with Tailwind CSS
+- Create, list, filter, edit, and delete research queries
+- Real-time progress updates via WebSocket
+- 10-tab research detail view (Overview, Plan, Sources, Findings, Entities,
+  Result, Knowledge Base, Notes, Agent Steps, Chat)
+- Full CRUD for sources, findings, and notes
+- Exports (PDF/HTML/DOCX/Markdown, BibTeX/CSV/JSON)
+- Plan visualization and AI state inspector
+- Toast notifications and confirmation dialogs
 
 ## Development
 
@@ -16,48 +19,42 @@ React + TypeScript frontend for the LLM Researcher system.
 # Install dependencies
 npm install
 
-# Start development server (with API proxy)
+# Start dev server (hot reload, proxies API to :8000)
 npm run dev
 
-# Build for production
+# Type-check + production build
 npm run build
 
 # Preview production build
 npm run preview
+
+# Lint
+npm run lint
 ```
 
-The dev server runs on `http://localhost:3000` with automatic proxy to the backend API at `http://localhost:8000`.
+The dev server runs at http://localhost:3000.
 
 ## Tech Stack
 
-- **React 18** - UI library
-- **TypeScript** - Type safety
-- **Vite** - Fast build tool
-- **Tailwind CSS** - Utility-first styling
-- **WebSocket** - Real-time updates
+- **React 18** · **TypeScript** · **Vite** · **Tailwind CSS** · **WebSocket**
 
 ## Project Structure
 
 ```
 src/
-├── api/
-│   └── client.ts         # API client and WebSocket
-├── components/
-│   ├── ChatInterface.tsx    # Chat with research
-│   ├── ProgressMonitor.tsx  # WebSocket progress viewer
-│   ├── ResearchDetail.tsx   # Main detail view with tabs
-│   ├── ResearchForm.tsx     # Create new research
-│   └── ResearchList.tsx     # List of research queries
-├── types.ts              # TypeScript interfaces
-├── App.tsx               # Main app component
-├── main.tsx              # Entry point
-└── index.css             # Global styles
+├── api/client.ts          # API client + WebSocket helper
+├── components/            # UI components (ResearchList, ResearchDetail,
+│                          #   KnowledgeBase, ResearchNotes, AgentSteps,
+│                          #   ResearchPlanTab, StateInspector, modals, ...)
+├── context/               # React context (toasts)
+├── hooks/                 # Custom hooks (useToast)
+├── types.ts               # TypeScript interfaces
+├── App.tsx                # App shell + routing
+└── main.tsx               # Entry point
 ```
 
-## API Proxy Configuration
+## API Proxy
 
-The Vite dev server proxies API requests:
+The Vite dev server proxies requests to avoid CORS:
 - `/api/*` → `http://localhost:8000/*`
 - `/ws/*` → `ws://localhost:8000/*`
-
-This avoids CORS issues during development.
