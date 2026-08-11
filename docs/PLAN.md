@@ -180,9 +180,9 @@ Remaining work is tracked in [ROADMAP.md](ROADMAP.md).
 - **RAG pipeline**: chunk papers into embeddings for semantic retrieval and
   grounding of LLM outputs.
 - **GROBID full-text**: wire parsed full text into the synthesis grounding
-  path (see ROADMAP Milestone 2).
+  path (see ROADMAP Milestone 3).
 - **Multi-instance**: Redis-backed WebSocket manager and rate limiter
-  (see ROADMAP Milestone 4).
+  (see ROADMAP Milestone 5).
 
 ## Where To Read Next
 

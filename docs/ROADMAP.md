@@ -70,15 +70,40 @@ Status legend:
 
 ---
 
-## Milestone 2 — Academic Trust & Quality (P1)
+## Milestone 2 — Open / Operation-Oriented Workflow (P1)
+
+> **Goal**: Make iterative research the primary interaction model — a
+> knowledge base with composable, user-triggerable operations instead of one
+> monolithic pipeline. Full design: [WORKFLOW.md](WORKFLOW.md).
+
+- [ ] Extract `find_sources` (search & merge into KB, no synthesis) from the
+      orchestrator into a standalone `collect_sources(research_id, query)`
+      service.
+- [ ] Extract `chase_references` as a standalone operation (follow citations
+      from KB sources, merge).
+- [ ] Add `fact_check` operation: extract claims from notes/draft, verify
+      against KB sources, write a verification note with per-claim verdicts.
+- [ ] Wire new chat intents (`find_sources`, `chase_references`,
+      `fact_check`) + dispatcher entries.
+- [ ] Add research-detail action bar buttons: "Find sources", "Chase
+      references", "Fact-check", "Generate report", "Full research".
+- [ ] Make pipeline phases individually invokable and **incremental** (merge,
+      never reset state); rename the full run to "autonomous mode".
+- [ ] Extend `ResearchState` with `open_questions`, `gaps`, `verification`
+      (KB-shaped state).
+- [ ] Add a "Verification" tab in the research detail view.
+
+---
+
+## Milestone 3 — Academic Trust & Quality (P1)
 
 > **Goal**: Make outputs verifiable and grounded so the tool is credible for
 > academic use.
 
 - [ ] Wire PDF full-text parsing (GROBID + `document_chunker`) into the
       synthesis grounding path.
-- [ ] Claim-level verification: check cited sources exist and are reachable;
-      flag unsupported claims.
+- [ ] Deepen claim-level verification (confidence scores, source credibility
+      signals) — builds on the `fact_check` operation from Milestone 2.
 - [ ] Citation-existence guardrail before finalizing the reference list.
 - [ ] Source credibility scoring (venue/journal/peer-review signals).
 - [ ] Evaluation harness + sample evaluation set for research quality.
@@ -88,7 +113,7 @@ Status legend:
 
 ---
 
-## Milestone 3 — Advanced Research Features (P2)
+## Milestone 4 — Advanced Research Features (P2)
 
 > **Goal**: Move from a research *collector* to a research *analyst*.
 
@@ -101,7 +126,7 @@ Status legend:
 
 ---
 
-## Milestone 4 — Production Hardening (P2)
+## Milestone 5 — Production Hardening (P2)
 
 > **Goal**: Support multi-user, multi-instance deployments.
 

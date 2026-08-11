@@ -33,6 +33,7 @@ Built with FastAPI, LangGraph/LangChain, React, and PostgreSQL.
 - **[TEST_COVERAGE.md](docs/TEST_COVERAGE.md)** — test suite details
 - **[PHASE16_SUMMARY.md](docs/PHASE16_SUMMARY.md)** — real-time/WebSocket features
 - **[QUERY_EXPANSION.md](docs/QUERY_EXPANSION.md)** — query expansion feature
+- **[WORKFLOW.md](docs/WORKFLOW.md)** — open/operation-oriented workflow proposal
 
 ## 🚦 Project Status
 
