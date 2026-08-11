@@ -66,7 +66,7 @@ Status legend:
       research header).
 - [x] Frontend unit tests (Vitest + React Testing Library).
 - [ ] Playwright smoke test for core flows (create → monitor → export).
-- [ ] Stabilize the timing-sensitive `TokenBucket` rate-limiter test.
+- [x] Stabilize the timing-sensitive `TokenBucket` rate-limiter test.
 
 ---
 
