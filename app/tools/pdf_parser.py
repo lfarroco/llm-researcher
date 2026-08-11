@@ -16,7 +16,6 @@ from pydantic import BaseModel, Field
 from grobid_client.grobid_client import GrobidClient
 import pdfplumber
 from PyPDF2 import PdfReader
-import bibtexparser
 
 from app.tools.base import ToolResponse, ToolErrorType, get_setting
 from app.tools.pdf_download import download_pdf

@@ -36,7 +36,6 @@ class EntityExtractor:
         self._ruler_added = False
         try:
             import spacy
-            from spacy.language import Language
 
             try:
                 self._nlp = spacy.load(model_name)

@@ -106,6 +106,34 @@ class RelationExtractor:
             return []
         return [s.strip() for s in cls._SENTENCE_SPLIT.split(text) if s.strip()]
 
+    @staticmethod
+    def _resolve_bucket_key(
+        buckets: dict[tuple[str, str, str], dict[str, Any]],
+        subject: str,
+        relation: str,
+        obj: str,
+    ) -> tuple[str, str, str]:
+        """Return the bucket key a relation should be aggregated into.
+
+        Relations sharing the same subject and relation type whose objects
+        overlap as a prefix/superstring (e.g. ``"hypothesis Y"`` and
+        ``"hypothesis Y in replication"``) describe the same claim and are
+        merged into one bucket, keeping the first-seen object as canonical.
+        """
+        subject_l = subject.lower()
+        obj_l = obj.lower()
+        exact_key = (subject_l, relation, obj_l)
+        if exact_key in buckets:
+            return exact_key
+        for (subj_key, rel_key, obj_key) in buckets:
+            if (
+                subj_key == subject_l
+                and rel_key == relation
+                and (obj_l.startswith(obj_key) or obj_key.startswith(obj_l))
+            ):
+                return (subj_key, rel_key, obj_key)
+        return exact_key
+
     def extract_with_mentions(
         self,
         documents: list[dict[str, str]],
@@ -126,7 +154,9 @@ class RelationExtractor:
                         if not (self._is_valid_span(subject) and self._is_valid_span(obj)):
                             continue
 
-                        key = (subject.lower(), rule.relation, obj.lower())
+                        key = self._resolve_bucket_key(
+                            buckets, subject, rule.relation, obj
+                        )
                         item = buckets.get(key)
                         if item is None:
                             item = {

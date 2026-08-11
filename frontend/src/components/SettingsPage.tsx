@@ -5,6 +5,7 @@ import type { AppSetting } from '../types';
 const LABELS: Record<string, string> = {
 	openai_api_key: 'OpenAI API Key',
 	groq_api_key: 'Groq API Key',
+	deepseek_api_key: 'DeepSeek API Key',
 	tavily_api_key: 'Tavily API Key',
 	semantic_scholar_api_key: 'Semantic Scholar API Key',
 	springer_api_key: 'Springer API Key',
@@ -16,6 +17,7 @@ const LABELS: Record<string, string> = {
 	llm_model: 'LLM Model',
 	llm_temperature: 'LLM Temperature',
 	ollama_base_url: 'Ollama Base URL',
+	deepseek_base_url: 'DeepSeek Base URL',
 	research_max_sources: 'Research Max Sources',
 	research_timeout: 'Research Timeout (sec)',
 	research_relevance_threshold: 'Research Relevance Threshold',

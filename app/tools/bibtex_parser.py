@@ -9,8 +9,7 @@ Provides utilities for:
 """
 
 import logging
-from typing import Optional, List, Dict, Any
-from datetime import datetime
+from typing import Optional, List, Dict
 
 import bibtexparser
 from bibtexparser.bparser import BibTexParser
@@ -156,14 +155,18 @@ def parse_bibtex_string(bibtex_str: str) -> ToolResponse[BibTeXEntry]:
                     logger.warning(f"[BibTeX] Invalid year format: {year_str}")
 
             # Parse keywords
-            keyword_str = entry_dict.get("keywords", "")
+            # bibtexparser's field homogenization normalizes "keywords" to
+            # "keyword", so accept both spellings.
+            keyword_str = (
+                entry_dict.get("keywords") or entry_dict.get("keyword") or ""
+            )
             keywords = _parse_keywords(keyword_str)
 
             # Collect extra fields (non-standard or additional)
             standard_fields = {
                 "ENTRYTYPE", "ID", "author", "title", "year", "journal",
                 "volume", "number", "pages", "publisher", "booktitle",
-                "doi", "url", "abstract", "keywords"
+                "doi", "url", "abstract", "keywords", "keyword"
             }
             extra_fields = {
                 k: v for k, v in entry_dict.items()

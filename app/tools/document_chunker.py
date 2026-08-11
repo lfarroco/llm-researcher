@@ -16,7 +16,7 @@ Implements smart chunking strategies that:
 
 import logging
 import re
-from typing import List, Optional
+from typing import List
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -209,11 +209,12 @@ def chunk_text_fixed_size(
 
         # Move start position with overlap
         overlap_words = int(chunk_overlap / 1.3)
-        start_word_idx = end_word_idx - overlap_words
+        next_start_word_idx = end_word_idx - overlap_words
 
         # Ensure we make progress
-        if start_word_idx <= chunk_index * int(chunk_size / 1.3):
-            start_word_idx = end_word_idx
+        if next_start_word_idx <= start_word_idx:
+            next_start_word_idx = end_word_idx
+        start_word_idx = next_start_word_idx
 
     logger.info(f"[Chunker] Created {len(chunks)} chunks")
     return chunks

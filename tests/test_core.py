@@ -121,15 +121,21 @@ class TestOpenAIProvider:
             api_key="sk-test-key",
         )
 
+        # Pin the retry count so the assertion does not depend on .env or DB
+        # overrides for llm_max_retries.
         with patch("app.llm_provider.ChatOpenAI") as mock_chat:
-            llm = provider.get_llm()
+            with patch("app.config.settings.llm_max_retries", 3):
+                llm = provider.get_llm()
 
-            # Verify ChatOpenAI was called with correct parameters
-            mock_chat.assert_called_once_with(
-                model="gpt-4o",
-                api_key="sk-test-key",
-                temperature=0.2,
-            )
+                # Verify ChatOpenAI was called with correct parameters
+                mock_chat.assert_called_once_with(
+                    model="gpt-4o",
+                    api_key="sk-test-key",
+                    temperature=0.2,
+                    max_retries=3,
+                    timeout=180,
+                    request_timeout=180,
+                )
 
 
 class TestOllamaProvider:

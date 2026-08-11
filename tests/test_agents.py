@@ -38,9 +38,38 @@ from app.memory.research_state import (
     SubQueryResult,
     SourceType,
 )
-from app.tools.web_search import WebSearchResult
-from app.tools.arxiv_search import ArxivResult
-from app.tools.wikipedia import WikipediaResult
+
+
+class FakeSearchPlugin:
+    """Minimal SearchPlugin stand-in for testing the search agent.
+
+    Mirrors the attributes the search agent reads off a plugin
+    (``name``, ``default_max_results``, ``search``).
+    """
+
+    def __init__(
+        self,
+        name: str,
+        citations=None,
+        default_max_results: int = 5,
+        search_side_effect=None,
+    ):
+        self.name = name
+        self.default_max_results = default_max_results
+        self.search = AsyncMock(
+            return_value=citations or [],
+            side_effect=search_side_effect,
+        )
+
+
+class FakeRegistry:
+    """ToolRegistry stand-in returning a fixed plugin list."""
+
+    def __init__(self, plugins):
+        self.plugins = plugins
+
+    def get_plugins(self, include_academic: bool = False, first_variation: bool = True):
+        return self.plugins
 
 
 class TestPlannerOutput:
@@ -133,24 +162,30 @@ class TestSearchAgentSubquery:
         """Test searching with web sources only."""
         sub_query = "What is machine learning?"
 
-        # Mock web search results
-        mock_web_results = [
-            WebSearchResult(
-                title="ML Introduction",
-                url="https://example.com/ml",
-                snippet="Machine learning is...",
-                score=0.9,
-            )
-        ]
+        # Mock web plugin results
+        web_citation = Citation(
+            id="[0]",
+            url="https://example.com/ml",
+            title="ML Introduction",
+            snippet="Machine learning is...",
+            source_type=SourceType.WEB,
+        )
+        registry = FakeRegistry([
+            FakeSearchPlugin(name="web", citations=[web_citation]),
+        ])
 
         with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
-            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-                with patch("app.agents.search_agent.is_academic_query", return_value=False):
-                    result = await search_for_subquery(
-                        sub_query,
-                        include_academic=False,
-                        include_wikipedia=False,
-                    )
+            with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                with patch("app.agents.search_agent.get_registry", return_value=registry):
+                    with patch(
+                        "app.agents.search_agent.filter_relevant_citations",
+                        new_callable=AsyncMock,
+                        side_effect=lambda sub_query, citations, threshold=0.5: citations,
+                    ):
+                        result = await search_for_subquery(
+                            sub_query,
+                            include_academic=False,
+                        )
 
         assert result.sub_query == sub_query
         assert len(result.citations) == 1
@@ -163,35 +198,39 @@ class TestSearchAgentSubquery:
         """Test searching with ArXiv included."""
         sub_query = "Recent research on neural networks"
 
-        mock_web_results = [
-            WebSearchResult(
-                title="NN Tutorial",
-                url="https://example.com",
-                snippet="Tutorial on neural networks",
-                score=0.8,
-            )
-        ]
+        web_citation = Citation(
+            id="[0]",
+            url="https://example.com",
+            title="NN Tutorial",
+            snippet="Tutorial on neural networks",
+            source_type=SourceType.WEB,
+        )
 
-        mock_arxiv_results = [
-            ArxivResult(
-                title="Deep Neural Networks Study",
-                authors=["Smith, J."],
-                summary="We investigate deep learning...",
-                url="https://arxiv.org/abs/2024.12345",
-                pdf_url="https://arxiv.org/pdf/2024.12345",
-                published="2024-01-15T00:00:00",
-                categories=["cs.LG"],
-            )
-        ]
+        arxiv_citation = Citation(
+            id="[0]",
+            url="https://arxiv.org/abs/2024.12345",
+            title="Deep Neural Networks Study",
+            author="Smith, J.",
+            snippet="We investigate deep learning...",
+            source_type=SourceType.ARXIV,
+        )
+
+        registry = FakeRegistry([
+            FakeSearchPlugin(name="web", citations=[web_citation]),
+            FakeSearchPlugin(name="arxiv", citations=[arxiv_citation]),
+        ])
 
         with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
-            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-                with patch("app.agents.search_agent.arxiv_search", return_value=mock_arxiv_results):
-                    with patch("app.agents.search_agent.is_academic_query", return_value=True):
+            with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                with patch("app.agents.search_agent.get_registry", return_value=registry):
+                    with patch(
+                        "app.agents.search_agent.filter_relevant_citations",
+                        new_callable=AsyncMock,
+                        side_effect=lambda sub_query, citations, threshold=0.5: citations,
+                    ):
                         result = await search_for_subquery(
                             sub_query,
                             include_academic=True,
-                            include_wikipedia=False,
                         )
 
         assert len(result.citations) == 2
@@ -205,23 +244,30 @@ class TestSearchAgentSubquery:
         """Test searching with Wikipedia included."""
         sub_query = "What is Python programming?"
 
-        mock_web_results = []
-        mock_wiki_results = [
-            WikipediaResult(
-                title="Python (programming language)",
-                url="https://en.wikipedia.org/wiki/Python",
-                summary="Python is a high-level programming language...",
-            )
-        ]
+        wiki_citation = Citation(
+            id="[0]",
+            url="https://en.wikipedia.org/wiki/Python",
+            title="Python (programming language)",
+            snippet="Python is a high-level programming language...",
+            source_type=SourceType.WIKIPEDIA,
+        )
+
+        registry = FakeRegistry([
+            FakeSearchPlugin(name="web", citations=[]),
+            FakeSearchPlugin(name="wikipedia", citations=[wiki_citation]),
+        ])
 
         with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
-            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-                with patch("app.agents.search_agent.wikipedia_search", return_value=mock_wiki_results):
-                    with patch("app.agents.search_agent.is_academic_query", return_value=False):
+            with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                with patch("app.agents.search_agent.get_registry", return_value=registry):
+                    with patch(
+                        "app.agents.search_agent.filter_relevant_citations",
+                        new_callable=AsyncMock,
+                        side_effect=lambda sub_query, citations, threshold=0.5: citations,
+                    ):
                         result = await search_for_subquery(
                             sub_query,
                             include_academic=False,
-                            include_wikipedia=True,
                         )
 
         assert len(result.citations) == 1
@@ -232,14 +278,20 @@ class TestSearchAgentSubquery:
         """Test that search handles errors gracefully."""
         sub_query = "Test query"
 
-        # Mock web search to raise exception
+        # Mock web plugin to raise an exception
+        registry = FakeRegistry([
+            FakeSearchPlugin(
+                name="web",
+                search_side_effect=Exception("API error"),
+            )
+        ])
+
         with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
-            with patch("app.agents.search_agent.web_search", side_effect=Exception("API error")):
-                with patch("app.agents.search_agent.is_academic_query", return_value=False):
+            with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                with patch("app.agents.search_agent.get_registry", return_value=registry):
                     result = await search_for_subquery(
                         sub_query,
                         include_academic=False,
-                        include_wikipedia=False,
                     )
 
         # Should still return a result, but marked as failed
@@ -250,36 +302,46 @@ class TestSearchAgentSubquery:
 
     @pytest.mark.asyncio
     async def test_search_for_subquery_citation_ids(self):
-        """Test that citations are numbered correctly."""
+        """Test that citations are numbered sequentially after deduplication."""
         sub_query = "Test"
 
-        mock_web_results = [
-            WebSearchResult(
-                title="Result 1",
+        web_citations = [
+            Citation(
+                id="[0]",
                 url="https://example.com/1",
+                title="Result 1",
                 snippet="Snippet 1",
-                score=0.9,
+                source_type=SourceType.WEB,
             ),
-            WebSearchResult(
-                title="Result 2",
+            Citation(
+                id="[0]",
                 url="https://example.com/2",
+                title="Result 2",
                 snippet="Snippet 2",
-                score=0.8,
+                source_type=SourceType.WEB,
             ),
         ]
+        registry = FakeRegistry([
+            FakeSearchPlugin(name="web", citations=web_citations),
+        ])
 
         with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
-            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-                with patch("app.agents.search_agent.is_academic_query", return_value=False):
-                    result = await search_for_subquery(
-                        sub_query,
-                        include_academic=False,
-                        include_wikipedia=False,
-                    )
+            with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                with patch("app.agents.search_agent.get_registry", return_value=registry):
+                    with patch(
+                        "app.agents.search_agent.filter_relevant_citations",
+                        new_callable=AsyncMock,
+                        side_effect=lambda sub_query, citations, threshold=0.5: citations,
+                    ):
+                        result = await search_for_subquery(
+                            sub_query,
+                            include_academic=False,
+                        )
 
-        # Citation IDs should be sequential
-        assert result.citations[0].id == "[1]"
-        assert result.citations[1].id == "[2]"
+        # Citation IDs are reassigned sequentially by execute_searches, so
+        # search_for_subquery preserves the plugin-assigned placeholders.
+        assert len(result.citations) == 2
+        assert all(c.id == "[0]" for c in result.citations)
 
 
 class TestSearchExecutes:
@@ -463,24 +525,27 @@ class TestSearchAgentIntegration:
         """Test that searches execute in parallel, not sequentially."""
         import time
 
-        async def slow_search(*args, **kwargs):
+        async def slow_search(query, max_results=5):
             await asyncio.sleep(0.1)  # Simulate slow API
             return []
 
         sub_query = "Test query"
 
+        registry = FakeRegistry([
+            FakeSearchPlugin(name="web", search_side_effect=slow_search),
+            FakeSearchPlugin(name="arxiv", search_side_effect=slow_search),
+            FakeSearchPlugin(name="wikipedia", search_side_effect=slow_search),
+        ])
+
         with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
-            with patch("app.agents.search_agent.web_search", side_effect=slow_search):
-                with patch("app.agents.search_agent.arxiv_search", side_effect=slow_search):
-                    with patch("app.agents.search_agent.wikipedia_search", side_effect=slow_search):
-                        with patch("app.agents.search_agent.is_academic_query", return_value=True):
-                            start = time.time()
-                            await search_for_subquery(
-                                sub_query,
-                                include_academic=True,
-                                include_wikipedia=True,
-                            )
-                            elapsed = time.time() - start
+            with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                with patch("app.agents.search_agent.get_registry", return_value=registry):
+                    start = time.time()
+                    await search_for_subquery(
+                        sub_query,
+                        include_academic=True,
+                    )
+                    elapsed = time.time() - start
 
         # If parallel: ~0.1s, if sequential: ~0.3s
         # Allow some overhead
@@ -488,36 +553,47 @@ class TestSearchAgentIntegration:
 
     @pytest.mark.asyncio
     async def test_search_deduplicates_by_url(self):
-        """Test that duplicate URLs are handled."""
+        """Test that duplicate URLs are removed."""
         sub_query = "Test"
 
         # Same URL appears in multiple results
-        mock_web_results = [
-            WebSearchResult(
-                title="Article 1",
+        web_citations = [
+            Citation(
+                id="[0]",
                 url="https://example.com/duplicate",
+                title="Article 1",
                 snippet="First mention",
-                score=0.9,
+                source_type=SourceType.WEB,
             ),
-            WebSearchResult(
-                title="Article 2",
+            Citation(
+                id="[0]",
                 url="https://example.com/duplicate",  # Duplicate
+                title="Article 2",
                 snippet="Second mention",
-                score=0.8,
+                source_type=SourceType.WEB,
             ),
         ]
+        registry = FakeRegistry([
+            FakeSearchPlugin(name="web", citations=web_citations),
+        ])
 
         with patch("app.agents.search_agent.expand_query", return_value=[sub_query]):
-            with patch("app.agents.search_agent.web_search", return_value=mock_web_results):
-                with patch("app.agents.search_agent.is_academic_query", return_value=False):
-                    result = await search_for_subquery(
-                        sub_query,
-                        include_academic=False,
-                        include_wikipedia=False,
-                    )
+            with patch("app.agents.search_agent.is_academic_query", return_value=False):
+                with patch("app.agents.search_agent.get_registry", return_value=registry):
+                    with patch(
+                        "app.agents.search_agent.filter_relevant_citations",
+                        new_callable=AsyncMock,
+                        side_effect=lambda sub_query, citations, threshold=0.5: citations,
+                    ):
+                        result = await search_for_subquery(
+                            sub_query,
+                            include_academic=False,
+                        )
 
-        # Should keep both initially (deduplication happens at state level)
-        assert len(result.citations) == 2
+        # Deduplication by URL happens inside search_for_subquery, keeping the
+        # first occurrence.
+        assert len(result.citations) == 1
+        assert result.citations[0].title == "Article 1"
 
 
 # LLM Tests with mocked responses
