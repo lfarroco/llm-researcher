@@ -45,6 +45,7 @@ frontend/
 ├── src/
 │   ├── api/client.ts        # API client + WebSocket helper
 │   ├── components/          # UI components (see below)
+│   │   └── __tests__/       # Vitest unit tests
 │   ├── context/             # React context (toasts)
 │   ├── hooks/               # Custom hooks (useToast)
 │   ├── types.ts             # TypeScript interfaces mirroring the API
@@ -58,12 +59,14 @@ frontend/
 ## Key Components
 
 ### App-level
-- `App.tsx` — routing (`/` research list, `/research/:researchId` detail)
+- `App.tsx` — routing (`/` research list, `/research/:researchId` detail,
+  `/settings`)
 - `api/client.ts` — typed wrappers around every backend endpoint
 - `types.ts` — `Research`, `Source`, `Finding`, `ResearchNote`, etc.
 
 ### Research list
-- `ResearchList.tsx` — paginated table with status badges and filtering
+- `App.tsx` — research list table with status badges and filtering (rendered
+  inline on the `/` route; polls every 10s while on the list page)
 - `ResearchForm.tsx` — create a new research query (with optional notes)
 
 ### Research detail (10 tabs)
@@ -86,8 +89,8 @@ frontend/
 - `ConfirmDialog.tsx` — reusable confirmation dialog
 - `Toast.tsx` + `toastContext.ts` + `useToast.ts` — notifications
 - `SearchInput.tsx` — debounced search input
-- `SettingsPage.tsx` — runtime settings editor (implemented; not yet wired
-  into navigation)
+- `SettingsPage.tsx` — runtime settings editor (reachable via the Settings
+  navigation tab at `/settings`)
 
 ## Development
 
@@ -98,6 +101,7 @@ npm run dev       # dev server with hot reload
 npm run build     # type-check (tsc) + production build
 npm run preview   # preview the production build
 npm run lint      # ESLint
+npm test          # unit tests (Vitest + React Testing Library)
 ```
 
 ### Adding a new feature

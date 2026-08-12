@@ -1,6 +1,6 @@
 # Frontend UI Implementation Summary
 
-**Last updated**: 2026-08-10
+**Last updated**: 2026-08-11
 
 ## Overview
 
@@ -47,7 +47,8 @@ Result · Knowledge Base · Notes · Agent Steps · Chat
 
 ### Settings
 - `SettingsPage.tsx` implements runtime settings editing (list/update/clear
-  overrides against `/settings`). **Note**: not yet wired into navigation.
+  overrides against `/settings`); reachable via the Settings navigation tab
+  at `/settings`.
 
 ## Production Architecture
 
@@ -72,18 +73,18 @@ npm run dev   # hot reload on :3000, proxied to :8000
 
 ## Known Limitations
 
-1. Research list polls every 10 seconds instead of using WebSocket push.
-2. No pagination in the sources/findings UI (backend supports `skip`/`limit`).
-3. No bulk operations (select multiple → batch delete/tag/export).
-4. `SettingsPage.tsx` exists but isn't reachable from navigation.
-5. No frontend unit tests or E2E tests yet (see ROADMAP Milestone 1).
-6. No dark mode / i18n / PWA.
+1. The research list still polls every 10 seconds instead of using WebSocket
+   push (polling is now limited to the list page only).
+2. No dark mode / i18n / PWA.
+
+Pagination, bulk operations, tag autocomplete, settings navigation, and
+frontend unit tests were all added in the v2.0 frontend refresh.
 
 ## Testing
 
-The UI is validated by manual smoke checks (create → monitor → edit →
-export). Automated frontend tests are planned — see
-[ROADMAP.md](ROADMAP.md) Milestone 1.
+Frontend unit tests run with Vitest + React Testing Library via `npm test`
+(covering `App`, `SearchInput`, and `TagInput`). A Playwright smoke test for
+the core flows is planned — see [ROADMAP.md](ROADMAP.md) Milestone 1.
 
 ## Docs
 

@@ -1,6 +1,6 @@
 # LLM Researcher — Implementation Status Report
 
-**Last updated**: 2026-08-10
+**Last updated**: 2026-08-11
 
 ## Executive Summary
 
@@ -8,9 +8,9 @@ LLM Researcher is an open-source, autonomous **academic research assistant**.
 The core research pipeline, plugin-based search, real-time progress UI,
 persistent knowledge base (sources / findings / notes), exports, and runtime
 settings are all functional. The repository is in **beta**: feature-complete
-for self-hosted research use, and being prepared for public open-source
-release. The test suite and CI need attention before a clean `v2.0.0` tag
-(see [ROADMAP.md](ROADMAP.md), Milestone 0).
+for self-hosted research use, and prepared for public open-source release
+(community files and green CI are in place; only the `v2.0.0` tag remains —
+see [ROADMAP.md](ROADMAP.md), Milestone 0).
 
 ## System Capabilities
 
@@ -58,34 +58,25 @@ release. The test suite and CI need attention before a clean `v2.0.0` tag
   Result, Knowledge Base, Notes, Agent Steps, Chat
 - ✅ Full CRUD for research / sources / findings / notes
 - ✅ Real-time progress, export menu, toast notifications
-- 🟡 Settings page implemented but not yet wired into navigation
+- ✅ Settings page wired into navigation (runtime settings editor)
+- ✅ Sources/findings pagination, bulk delete, and tag autocomplete
+- ✅ Frontend unit tests (Vitest + React Testing Library)
 
 ### LLM providers
 - ✅ OpenAI, Ollama (local), Groq, DeepSeek
 
 ## Test Suite Health
 
-Current result for a clean checkout with CI-like settings
-(`DATABASE_URL=sqlite:///:memory:`):
+A clean checkout with CI-like settings
+(`DATABASE_URL=sqlite:///:memory:`) passes the full suite:
 
 ```
-7 failed, 273 passed, 24 errors, 1 deselected
+282 passed
 ```
 
-### Known failures
-1. **App-level tests** (`tests/test_main.py`, `tests/test_integration.py`):
-   `sqlite3.OperationalError: no such table: research`. The app's
-   `SessionLocal` is bound at import time to `settings.database_url`, and the
-   in-memory SQLite database cannot be shared across connections. Requires a
-   test-DB strategy fix (ROADMAP Milestone 0).
-2. **`test_intent_router_with_mocked_llm`**: makes a real OpenAI API call
-   (the mock patches `__or__` on the instance, which Python never consults for
-   special methods) and fails with a 401.
-3. **`TestBibTeXParser::test_parse_empty/invalid_bibtex_string`**: real code
-   bug — `ToolResponse.fail()` raises a pydantic `ValidationError` when called
-   on an unparameterized generic model.
-
-All three are tracked in [ROADMAP.md](ROADMAP.md) Milestone 0.
+The Milestone 0 test blockers (app-level test-DB setup, intent-router mock
+seam, `ToolResponse` generic bug) were resolved, and the legacy root-level
+test scripts were removed. The frontend Vitest suite also passes.
 
 ## Not Implemented Yet
 
@@ -106,5 +97,6 @@ All three are tracked in [ROADMAP.md](ROADMAP.md) Milestone 0.
 
 ## Next Steps
 
-See [ROADMAP.md](ROADMAP.md). Short term: **Milestone 0** — OSS release
-readiness (community files, green CI, release hygiene).
+See [ROADMAP.md](ROADMAP.md). Short term: tag `v2.0.0` (Milestone 0), then the
+Playwright smoke test (Milestone 1) and the open / operation-oriented workflow
+(Milestone 2).

@@ -1,14 +1,14 @@
 # Test Coverage — LLM Researcher
 
-**Last updated**: 2026-08-10
+**Last updated**: 2026-08-11
 
 ## Overview
 
 The backend has a substantial pytest suite (~280 test functions across
 `tests/`), covering state models, agents, tools, output formatting, API
 routers, rate limiting, and WebSocket/researcher modules. LLM calls and
-external APIs are mocked in unit tests; optional integration tests are marked
-`@pytest.mark.integration`.
+external APIs are mocked in unit tests, so the whole suite runs without
+external services.
 
 ## Running Tests
 
@@ -18,9 +18,6 @@ pytest tests/ -v
 
 # With a coverage report
 pytest tests/ --cov=app --cov-report=html
-
-# Only integration tests
-pytest -m integration
 ```
 
 For the Dockerized flow: `make test` (runs inside the app container) and
@@ -43,41 +40,22 @@ For the Dockerized flow: `make test` (runs inside the app container) and
 ## Current Health
 
 A clean-checkout run with CI-like settings
-(`DATABASE_URL=sqlite:///:memory:`) currently reports:
+(`DATABASE_URL=sqlite:///:memory:`) passes the full suite:
 
 ```
-7 failed, 273 passed, 24 errors, 1 deselected
+282 passed
 ```
 
-### Known failures (tracked in ROADMAP Milestone 0)
-
-1. **`tests/test_main.py` + `tests/test_integration.py`** — app-level tests
-   fail with `sqlite3.OperationalError: no such table: research` because the
-   app's `SessionLocal` is bound at import time to `settings.database_url`,
-   and in-memory SQLite cannot be shared across connections.
-2. **`tests/test_agents.py::test_intent_router_with_mocked_llm`** — mock is
-   ineffective for the `__or__` special method, so the test hits the real
-   OpenAI API and fails with a 401.
-3. **`tests/test_tools.py::TestBibTeXParser::test_parse_empty/invalid_bibtex_string`**
-   — real code bug: `ToolResponse.fail()` raises a pydantic `ValidationError`
-   on unparameterized generic models.
-
-### Notes
-
-- The rate-limiter token-bucket test is timing-sensitive and may flake.
-- Root-level legacy scripts (`test_api.py`, `test_websocket.py`,
-  `test_finding_crud.py`, `test_source_crud.py`,
-  `test_research_filtering.py`) predate the `tests/` layout and are scheduled
-  for removal (ROADMAP Milestone 0).
+The three failures tracked in ROADMAP Milestone 0 (app-level test-DB setup,
+intent-router mock seam, `ToolResponse` generic bug) were resolved, the
+timing-sensitive rate-limiter test was stabilized, and the root-level legacy
+scripts (`test_api.py`, `test_websocket.py`, `test_finding_crud.py`,
+`test_source_crud.py`, `test_research_filtering.py`) were removed.
 
 ## Next Steps (Testing)
 
-See [ROADMAP.md](ROADMAP.md) Milestone 0 and Milestone 1:
+See [ROADMAP.md](ROADMAP.md) Milestone 1:
 
-1. Fix the test-DB strategy so `tests/test_main.py` and
-   `tests/test_integration.py` pass in CI.
-2. Fix the intent-router test to mock at the correct seam.
-3. Fix the `ToolResponse` generic bug.
-4. Add frontend unit tests (Vitest + Testing Library) and a Playwright smoke
-   test.
-5. Target ≥80% coverage for core modules (orchestrator, synthesis, routers).
+1. Add a Playwright smoke test for the core flows (create → monitor →
+   export).
+2. Target ≥80% coverage for core modules (orchestrator, synthesis, routers).

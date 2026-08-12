@@ -1,6 +1,6 @@
 # LLM Researcher — Architecture Plan
 
-**Last updated**: 2026-08-10
+**Last updated**: 2026-08-11
 
 ## Overview
 
@@ -158,7 +158,7 @@ Status legend: ✅ complete · 🟡 partial · ⏳ planned.
 | 12 | Hypothesis generation | 🟡 agent integrated into orchestrator; UI management pending |
 | 16 | Real-time updates (WebSocket, cancel, resume, batch, rate limits) | ✅ |
 | 19 | Web UI v1.0 | ✅ |
-| 20 | Frontend v2.0 (CRUD, filtering, exports, plan/state visualization) | 🟡 bulk ops deferred; settings page unwired |
+| 20 | Frontend v2.0 (CRUD, filtering, exports, plan/state visualization) | ✅ |
 
 **System status**: self-hosted research workflow is operational end-to-end.
 Remaining work is tracked in [ROADMAP.md](ROADMAP.md).

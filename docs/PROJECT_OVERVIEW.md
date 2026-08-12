@@ -1,6 +1,6 @@
 # LLM Researcher - Returning Overview
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 This document is a practical guide for the project.
 It complements:
@@ -139,10 +139,10 @@ Frontend app lives in `frontend/` and provides:
 Important frontend entry points:
 
 - `frontend/src/api/client.ts`
+- `frontend/src/App.tsx` (research list + routing)
 - `frontend/src/components/ResearchDetail.tsx`
-- `frontend/src/components/ResearchList.tsx`
 
-A `SettingsPage.tsx` component exists but is not yet wired into navigation.
+A `SettingsPage.tsx` component is wired into navigation at `/settings`.
 
 ## 7. Project Status: Practical View
 
@@ -160,9 +160,9 @@ From code and docs combined:
 Important nuance:
 
 - Docs are now aligned with code: see `docs/ROADMAP.md` for remaining work
-  and `docs/STATUS_REPORT.md` for current status and known test issues.
-- The test suite has known failures (DB setup + two bugs) tracked in ROADMAP
-  Milestone 0.
+  and `docs/STATUS_REPORT.md` for current status.
+- The full backend test suite passes with CI-like settings
+  (`sqlite:///:memory:`), and the frontend has unit tests.
 
 ## 8. Recommended Re-Entry Work Plan
 
@@ -176,13 +176,12 @@ If you are coming back after months away, this is the fastest path to productive
    - confirm sources/findings persist
    - test one export format
 3. Read the roadmap
-   - `docs/ROADMAP.md` is the current task list (Milestone 0 = OSS release
-     readiness + green CI)
+   - `docs/ROADMAP.md` is the current task list (Milestone 0 = tag `v2.0.0`;
+     Milestone 1 = Playwright smoke test)
 4. Pick one focused next task
-   - either Milestone 0 fixes (test DB strategy, ToolResponse bug,
-     intent-router test)
-   - or Milestone 1 frontend gaps (settings page routing, bulk ops,
-     pagination)
+   - Milestone 1: add a Playwright smoke test for the core flows
+   - Milestone 2: open / operation-oriented workflow (standalone
+     `find_sources`, `chase_references`, `fact_check` operations)
 
 ## 9. Where To Read Next (In Order)
 

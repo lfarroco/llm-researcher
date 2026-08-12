@@ -1,6 +1,6 @@
 # LLM Researcher — Roadmap
 
-**Last updated**: 2026-08-10
+**Last updated**: 2026-08-11
 
 This document is the living task list for LLM Researcher. It replaces the
 incremental phase numbering of the past with milestone-oriented work organized

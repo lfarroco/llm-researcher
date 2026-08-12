@@ -43,9 +43,9 @@ Built with FastAPI, LangGraph/LangChain, React, and PostgreSQL.
 
 **Beta.** The self-hosted research workflow is operational end-to-end
 (research pipeline, knowledge base, real-time UI, exports). The repository is
-being prepared for public open-source release: known test-suite issues and
-community files (CONTRIBUTING, etc.) are tracked in Milestone 0 of the
-[roadmap](docs/ROADMAP.md).
+prepared for public open-source release: community files (CONTRIBUTING, etc.)
+are in place and the full test suite passes with CI-like settings. Remaining
+work is tracked in the [roadmap](docs/ROADMAP.md).
 
 ## 🛠 Stack
 
