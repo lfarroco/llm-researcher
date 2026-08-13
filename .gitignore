@@ -18,3 +18,4 @@ htmlcov/
 *.log
 test.db
 test_entities.db
+smoke_artifacts/

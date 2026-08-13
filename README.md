@@ -30,6 +30,8 @@ Built with FastAPI, LangGraph/LangChain, React, and PostgreSQL.
 ## 📚 Documentation
 
 - **[ROADMAP.md](docs/ROADMAP.md)** — next tasks (milestone-based)
+- **[LLM_TESTING.md](docs/LLM_TESTING.md)** — end-to-end testing guide for humans and LLM agents
+- **[tasks.md](tasks.md)** — high-priority issue tracker
 - **[STATUS_REPORT.md](docs/STATUS_REPORT.md)** — implementation status
 - **[PLAN.md](docs/PLAN.md)** — architecture and implementation history
 - **[PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)** — practical re-entry guide

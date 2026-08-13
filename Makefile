@@ -90,3 +90,16 @@ frontend-shell:
 ## Show migration history
 migrate-history:
 	docker compose exec app alembic history
+
+## Run an end-to-end smoke test (in-process, no server needed)
+## Usage: make e2e query="my research question"
+e2e:
+	.venv/bin/python scripts/smoke_research.py "$(query)"
+
+## Start the local dev server (SQLite, no Docker) on http://127.0.0.1:8000
+local-dev:
+	.venv/bin/python scripts/dev_server.py
+
+## Stop the local dev server
+local-down:
+	@pkill -f "scripts/dev_server.py" || echo "No dev server running."
