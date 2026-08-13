@@ -75,8 +75,11 @@ async def lifespan(application: FastAPI):
     # Register built-in search plugins into the global ToolRegistry
     register_default_plugins()
 
-    # Database tables are now managed by Alembic migrations
-    # Run: docker compose exec app alembic upgrade head
+    # Database schema is managed by Alembic migrations.
+    # In Docker the container runs `alembic upgrade head` before starting
+    # uvicorn (see Dockerfile CMD), so a fresh `docker compose up` is ready
+    # automatically. For other environments run:
+    #   docker compose exec app alembic upgrade head
 
     # Start background worker
     _background_worker_running = True

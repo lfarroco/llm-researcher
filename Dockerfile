@@ -15,4 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run pending Alembic migrations on every container start, then launch the
+# API. `alembic upgrade head` is idempotent (no-op when up to date), and the
+# `exec` ensures uvicorn becomes PID 1 so it receives signals directly.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]

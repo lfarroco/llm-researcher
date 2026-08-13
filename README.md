@@ -87,9 +87,14 @@ cp .env.example .env
 ### Start
 
 ```bash
-make up        # start app, db, frontend, grobid
-make migrate   # run Alembic migrations (first time / after upgrades)
+make up   # start app, db, frontend, grobid
 ```
+
+Pending Alembic migrations run automatically when the `app` container starts
+(see the `Dockerfile` CMD), so a fresh `docker compose up` is ready to use —
+no manual step required. If the DB is already running and you prefer to apply
+migrations explicitly, use `make migrate` (equivalent to
+`docker compose exec app alembic upgrade head`).
 
 Then open:
 

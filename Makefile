@@ -36,13 +36,22 @@ shell:
 db-shell:
 	docker compose exec db psql -U postgres -d researcher
 
-## Run tests inside the app container
+## Run tests inside the app container (isolated in-memory SQLite DB — the real
+## PostgreSQL database is never touched, and dummy LLM keys make any real
+## background-worker API calls fail fast). Matches the CI workflow settings.
 test:
-	docker compose exec app pytest tests/ -v
+	docker compose exec -e DATABASE_URL=sqlite:///:memory: \
+		-e LLM_PROVIDER=openai -e LLM_MODEL=gpt-4o -e OPENAI_API_KEY=sk-test \
+		-e GROQ_API_KEY= -e TAVILY_API_KEY= -e DEEPSEEK_API_KEY= \
+		-e SEMANTIC_SCHOLAR_API_KEY= -e SPRINGER_API_KEY= -e ELSEVIER_API_KEY= \
+		-e NCBI_API_KEY= \
+		app pytest tests/ -v
 
 ## Run WebSocket and real-time features test
 ws:
-	docker compose exec app python -m pytest tests/test_websocket_researcher.py -v
+	docker compose exec -e DATABASE_URL=sqlite:///:memory: \
+		-e LLM_PROVIDER=openai -e LLM_MODEL=gpt-4o -e OPENAI_API_KEY=sk-test \
+		app python -m pytest tests/test_websocket_researcher.py -v
 
 ## Run linter inside the app container
 lint:
