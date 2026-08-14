@@ -44,6 +44,12 @@ class TestSettings:
         assert settings.llm_temperature <= 1.0
         assert settings.research_max_sources > 0
         assert settings.research_timeout > 0
+        assert settings.research_report_word_target > 0
+        assert settings.research_synthesis_excerpt_chars > 0
+        assert settings.llm_max_output_tokens > 0
+        assert isinstance(settings.llm_thinking_enabled, bool)
+        assert settings.llm_thinking_effort in [
+            "low", "high", "max"]
 
     def test_settings_from_environment(self):
         """Test loading settings from environment variables."""
@@ -121,21 +127,94 @@ class TestOpenAIProvider:
             api_key="sk-test-key",
         )
 
-        # Pin the retry count so the assertion does not depend on .env or DB
-        # overrides for llm_max_retries.
+        # Pin the retry count and output token cap so the assertion does not
+        # depend on .env or DB overrides for these settings.
         with patch("app.llm_provider.ChatOpenAI") as mock_chat:
             with patch("app.config.settings.llm_max_retries", 3):
-                llm = provider.get_llm()
+                with patch(
+                        "app.config.settings.llm_max_output_tokens", 8192):
+                    llm = provider.get_llm()
 
-                # Verify ChatOpenAI was called with correct parameters
-                mock_chat.assert_called_once_with(
-                    model="gpt-4o",
-                    api_key="sk-test-key",
-                    temperature=0.2,
-                    max_retries=3,
-                    timeout=180,
-                    request_timeout=180,
-                )
+                    # Verify ChatOpenAI was called with correct parameters
+                    mock_chat.assert_called_once_with(
+                        model="gpt-4o",
+                        api_key="sk-test-key",
+                        temperature=0.2,
+                        max_tokens=8192,
+                        max_retries=3,
+                        timeout=180,
+                        request_timeout=180,
+                    )
+
+
+class TestDeepSeekProvider:
+    """Tests for DeepSeek provider."""
+
+    def test_create_deepseek_provider(self):
+        """Test creating a DeepSeek provider."""
+        provider = DeepSeekProvider(
+            model="deepseek-v4-flash",
+            api_key="sk-deepseek-test",
+            temperature=0.3,
+        )
+
+        assert provider.model == "deepseek-v4-flash"
+        assert provider.api_key == "sk-deepseek-test"
+        assert provider.base_url == "https://api.deepseek.com/v1"
+        assert provider.temperature == 0.3
+
+    def test_deepseek_get_llm_with_thinking(self):
+        """Test DeepSeek get_llm passes thinking mode params."""
+        provider = DeepSeekProvider(
+            model="deepseek-v4-flash",
+            api_key="sk-deepseek-test",
+        )
+
+        with patch("app.llm_provider.DeepSeekChatOpenAI") as mock_chat:
+            with patch("app.config.settings.llm_max_retries", 3):
+                with patch(
+                        "app.config.settings.llm_max_output_tokens", 8192):
+                    with patch(
+                            "app.config.settings.llm_thinking_enabled", True):
+                        with patch(
+                                "app.config.settings.llm_thinking_effort",
+                                "high"):
+                            llm = provider.get_llm()
+
+                    mock_chat.assert_called_once_with(
+                        model="deepseek-v4-flash",
+                        api_key="sk-deepseek-test",
+                        base_url="https://api.deepseek.com/v1",
+                        temperature=0.2,
+                        max_tokens=8192,
+                        max_retries=3,
+                        timeout=180,
+                        request_timeout=180,
+                        reasoning_effort="high",
+                        extra_body={"thinking": {"type": "enabled"}},
+                    )
+
+    def test_deepseek_get_llm_thinking_disabled(self):
+        """Test DeepSeek get_llm with thinking mode disabled."""
+        provider = DeepSeekProvider(
+            model="deepseek-v4-flash",
+            api_key="sk-deepseek-test",
+        )
+
+        with patch("app.llm_provider.DeepSeekChatOpenAI") as mock_chat:
+            with patch("app.config.settings.llm_max_retries", 3):
+                with patch(
+                        "app.config.settings.llm_max_output_tokens", 8192):
+                    with patch(
+                            "app.config.settings.llm_thinking_enabled",
+                            False):
+                        llm = provider.get_llm()
+
+                    mock_chat.assert_called_once()
+                    _, kwargs = mock_chat.call_args
+                    assert kwargs["extra_body"] == {
+                        "thinking": {"type": "disabled"}}
+                    assert kwargs["reasoning_effort"] is None
 
 
 class TestOllamaProvider:

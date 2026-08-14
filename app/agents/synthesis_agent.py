@@ -30,12 +30,14 @@ Guidelines:
 3. Each major claim should be supported by at least one citation
 4. Write in a formal, academic tone
 5. Include an introduction and conclusion
-6. Be thorough but concise - aim for clarity
+6. Be thorough and detailed. Expand every section with multiple paragraphs, specific data points, and concrete examples drawn from the sources. Prioritize depth and completeness over brevity.
 7. Synthesize information across sources, don't just summarize each one
 8. Write as an authoritative research document. Do NOT refer to "provided sources", "the sources", "the provided corpus", "the available evidence", or similar meta-references to the material you were given. Instead, present findings directly and cite them naturally.
-9. Only cite sources that are directly relevant to the claims you are making. Do NOT cite every source - skip sources that are off-topic or irrelevant to the query.
+9. Only cite sources that are directly relevant to the claims you are making. Prioritize sources with higher relevance scores; skip sources with low relevance scores or that are off-topic. It is fine not to cite every source.
+10. Write a report of approximately {word_target} words - aim for at least 80% of this target and do not finish early. Structure the report as follows: an Introduction (~150 words); one dedicated section per sub-question investigated (5 sections, each ~350-450 words); a cross-cutting analysis section (~200 words); and a Conclusion (~150 words). Inside each section, write several paragraphs that cover key findings with inline citations, supporting data points, concrete examples, and implications. Before finishing, estimate how many words you have written; if you are short of the target, keep expanding sections with additional analysis and detail until you reach it.
+11. Cite at least 12 distinct sources. For each source you cite, include at least one sentence describing what that source specifically contributes, so cited sources are meaningfully discussed rather than merely listed.
 
-IMPORTANT: Use ONLY the citation numbers provided in the sources. Do not invent citations."""),
+IMPORTANT: Use ONLY the citation numbers provided in the sources. Do not invent citations. Do NOT include a "References" section in your response - the reference list is appended separately."""),
     ("human", """Research Query: {query}
 
 Sub-questions investigated:
@@ -51,17 +53,52 @@ Write a comprehensive research document that answers the query. Present your fin
 
 
 def format_sources_for_prompt(citations: list[Citation]) -> str:
-    """Format citations for the synthesis prompt."""
+    """Format citations for the synthesis prompt.
+
+    Each source is annotated with its relevance score (0-1) so the writer
+    can prioritize the most relevant material. Excerpts are capped at
+    ``research_synthesis_excerpt_chars`` characters.
+    """
+    excerpt_chars = settings.research_synthesis_excerpt_chars
     formatted = []
     for citation in citations:
         source_info = f"{citation.id} {citation.title}"
         if citation.author:
             source_info += f" by {citation.author}"
         source_info += f"\nURL: {citation.url}"
-        source_info += f"\nExcerpt: {citation.snippet[:400]}..."
+        source_info += (
+            f"\nRelevance score: {citation.relevance_score:.2f}"
+            " (0-1, higher = more relevant)"
+        )
+        snippet = (citation.snippet or "").strip()
+        if snippet:
+            source_info += f"\nExcerpt: {snippet[:excerpt_chars]}..."
         formatted.append(source_info)
 
     return "\n\n---\n\n".join(formatted)
+
+
+_REFERENCES_HEADING_RE = re.compile(
+    r"^\s*(?:#{1,6}\s+references?|\*\*references?\*\*|references?:)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def strip_model_written_references(draft: str) -> tuple[str, bool]:
+    """Remove a "References" section the LLM may have written.
+
+    The formatter appends the canonical reference list separately, so any
+    references written by the model are stripped to avoid duplication.
+
+    Returns:
+        The cleaned draft and whether a references section was removed.
+    """
+    match = _REFERENCES_HEADING_RE.search(draft)
+    if not match:
+        return draft, False
+    cleaned = draft[:match.start()].rstrip()
+    logger.info("[FORMAT] Removed LLM-written References section from draft")
+    return cleaned, True
 
 
 def get_synthesis_chain():
@@ -141,13 +178,23 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         "sub_queries": sub_queries_text,
         "sources": sources_text,
         "notes_context": notes_context,
+        "word_target": settings.research_report_word_target,
     })
 
     draft = response.content if hasattr(
         response, 'content') else str(response)
 
+    # DeepSeek thinking mode returns its chain-of-thought in
+    # reasoning_content (preserved into additional_kwargs by the
+    # DeepSeekChatOpenAI subclass). Surface it for transparency.
+    reasoning = ""
+    if hasattr(response, "additional_kwargs"):
+        reasoning = response.additional_kwargs.get(
+            "reasoning_content") or ""
+
     logger.info("[SYNTHESIS] Draft document generated successfully")
     logger.info(f"[SYNTHESIS] Draft length: {len(draft)} characters")
+    logger.info(f"[SYNTHESIS] Model reasoning length: {len(reasoning)} chars")
     logger.debug(f"[SYNTHESIS] Draft preview: {draft[:200]}...")
 
     step = AgentStep(
@@ -161,6 +208,8 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         metadata={
             "draft_length": len(draft),
             "sources_used": len(state.citations),
+            "model_reasoning_chars": len(reasoning),
+            "model_reasoning": reasoning[:2000] if reasoning else "",
         },
     )
 
@@ -208,8 +257,13 @@ async def format_final_document(state: ResearchState) -> dict[str, Any]:
     logger.debug(
         "[FORMAT] Building final document with header and references")
 
+    # Remove any "References" section the model wrote itself - the canonical
+    # reference list is appended below, so a model-written one would duplicate.
+    draft, removed_model_references = strip_model_written_references(
+        state.draft)
+
     # Parse which citation IDs are actually used in the draft text
-    cited_ids = set(re.findall(r'\[(\d+)\]', state.draft))
+    cited_ids = set(re.findall(r'\[(\d+)\]', draft))
     logger.info(
         f"[FORMAT] Found {len(cited_ids)} unique citation IDs used in draft: {sorted(cited_ids)}")
     logger.info(
@@ -237,7 +291,7 @@ async def format_final_document(state: ResearchState) -> dict[str, Any]:
         f"# Research Report: {state.query}\n",
         f"*Generated on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}*\n",
         "\n---\n\n",
-        state.draft,
+        draft,
         "\n\n---\n\n",
         "## References\n\n",
     ]
@@ -268,12 +322,17 @@ async def format_final_document(state: ResearchState) -> dict[str, Any]:
         description=(
             f"Formatted final document with {len(cited_citations)} cited references. "
             f"Filtered out {len(skipped_citations)} uncited sources."
+            + (
+                " Removed a References section written by the model."
+                if removed_model_references else ""
+            )
         ),
         status="completed",
         metadata={
             "cited_references": len(cited_citations),
             "filtered_references": len(skipped_citations),
             "document_length": len(final_document),
+            "removed_model_references": removed_model_references,
             "skipped_titles": [
                 sc.title[:60] for sc in skipped_citations
             ],

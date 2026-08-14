@@ -2,6 +2,8 @@ import logging
 import asyncio
 from abc import ABC, abstractmethod
 from typing import Optional
+
+import openai
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
@@ -99,6 +101,7 @@ class OpenAIProvider(LLMProvider):
             model=self.model,
             api_key=self.api_key,
             temperature=self.temperature,
+            max_tokens=settings.llm_max_output_tokens,
             max_retries=settings.llm_max_retries,
             timeout=180,  # 3 minute timeout
             request_timeout=180,
@@ -163,6 +166,7 @@ class GroqProvider(LLMProvider):
             model=self.model,
             api_key=self.api_key,
             temperature=self.temperature,
+            max_tokens=settings.llm_max_output_tokens,
             max_retries=settings.llm_max_retries,
             timeout=180,  # 3 minute timeout
         )
@@ -171,6 +175,34 @@ class GroqProvider(LLMProvider):
             f"exponential backoff enabled"
         )
         return llm
+
+
+class DeepSeekChatOpenAI(ChatOpenAI):
+    """ChatOpenAI variant that preserves DeepSeek's ``reasoning_content``.
+
+    DeepSeek thinking mode returns its chain-of-thought in the
+    ``reasoning_content`` field of the assistant message. langchain drops
+    that field by default; this subclass stashes it in ``additional_kwargs``
+    so agents can log or surface the model's reasoning.
+    """
+
+    def _create_chat_result(
+        self,
+        response,
+        generation_info=None,
+    ):
+        result = super()._create_chat_result(response, generation_info)
+        if isinstance(response, openai.BaseModel):
+            try:
+                message = response.choices[0].message
+            except (AttributeError, IndexError):
+                return result
+            reasoning = getattr(message, "reasoning_content", None)
+            if reasoning and result.generations:
+                result.generations[0].message.additional_kwargs[
+                    "reasoning_content"
+                ] = reasoning
+        return result
 
 
 class DeepSeekProvider(LLMProvider):
@@ -196,18 +228,36 @@ class DeepSeekProvider(LLMProvider):
             f"Creating DeepSeek ChatOpenAI instance with model={self.model}")
         from app.config import settings
 
-        # DeepSeek exposes an OpenAI-compatible API.
-        llm = ChatOpenAI(
+        # DeepSeek exposes an OpenAI-compatible API. DeepSeek v4 models
+        # support a "thinking mode" (chain-of-thought). It is enabled by
+        # default at the API level; we send the params explicitly so the
+        # toggle and effort are configurable. While thinking mode is
+        # enabled, temperature is ignored by the API.
+        thinking_enabled = settings.llm_thinking_enabled
+        extra_body = {
+            "thinking": {
+                "type": "enabled" if thinking_enabled else "disabled"
+            }
+        }
+
+        llm = DeepSeekChatOpenAI(
             model=self.model,
             api_key=self.api_key,
             base_url=self.base_url,
             temperature=self.temperature,
+            max_tokens=settings.llm_max_output_tokens,
             max_retries=settings.llm_max_retries,
             timeout=180,  # 3 minute timeout
             request_timeout=180,
+            reasoning_effort=(
+                settings.llm_thinking_effort if thinking_enabled else None
+            ),
+            extra_body=extra_body,
         )
         logger.debug(
             f"DeepSeek ChatOpenAI configured with {settings.llm_max_retries} retries, "
+            f"thinking_enabled={settings.llm_thinking_enabled}, "
+            f"thinking_effort={settings.llm_thinking_effort}, "
             f"exponential backoff enabled"
         )
         return llm

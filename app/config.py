@@ -46,10 +46,27 @@ class Settings(BaseSettings):
     # Max depth for reference chasing (1 = follow refs from initial sources,
     # 2 = also follow refs from those refs, etc.)
     research_reference_chase_depth: int = 2
+    # Target minimum word count for the synthesized report. The synthesis
+    # prompt asks the model to write at least this many words.
+    research_report_word_target: int = 2500
+    # How many characters of each source's snippet are passed to the
+    # synthesis model. Longer excerpts give the writer more material to
+    # work with when producing a detailed report.
+    research_synthesis_excerpt_chars: int = 1200
 
     # LLM Rate Limiting & Backoff
     llm_max_retries: int = 10  # Max retry attempts for LLM API calls
     llm_max_concurrent_requests: int = 2  # Max concurrent LLM requests
+    # Explicit max output tokens per LLM response. Setting this allows
+    # long-form outputs (e.g. the research report) instead of relying on
+    # each provider's often-smaller server-side default.
+    llm_max_output_tokens: int = 8192
+    # DeepSeek thinking mode (chain-of-thought). DeepSeek v4 models reason
+    # before answering; this is enabled by default at the API level too.
+    # Effort is one of "low", "high", "max". Note: temperature is ignored
+    # while thinking mode is enabled.
+    llm_thinking_enabled: bool = True
+    llm_thinking_effort: str = "high"
     llm_retry_min_wait: float = 4.0  # Min seconds between retries
     llm_retry_max_wait: float = 120.0  # Max seconds between retries
     llm_base_delay: float = 0.5  # Base delay between all LLM calls
