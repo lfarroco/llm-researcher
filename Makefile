@@ -100,10 +100,11 @@ frontend-shell:
 migrate-history:
 	docker compose exec app alembic history
 
-## Run an end-to-end smoke test (in-process, no server needed)
-## Usage: make e2e query="my research question"
+## Run an end-to-end smoke test (in-process). Defaults to the docker-compose
+## Postgres DB (research items persist there; needs `docker compose up -d db`).
+## Usage: make e2e query="my research question"   [dburl="sqlite:///:memory:"]
 e2e:
-	.venv/bin/python scripts/smoke_research.py "$(query)"
+	.venv/bin/python scripts/smoke_research.py "$(query)" $(if $(dburl),--db-url $(dburl))
 
 ## Start the local dev server (SQLite, no Docker) on http://127.0.0.1:8000
 local-dev:

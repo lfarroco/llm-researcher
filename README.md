@@ -108,7 +108,8 @@ Then open:
 | `make up` / `make down` / `make build` / `make restart` | Compose lifecycle |
 | `make logs svc=<service>` | Follow logs (`app`, `db`, `frontend`, `grobid`) |
 | `make shell` / `make db-shell` | Shell into app / psql |
-| `make test` | Run the test suite in the app container |
+| `make test` | Run the test suite in the app container (isolated SQLite DB) |
+| `make e2e query="..."` | End-to-end smoke test → writes to the docker-compose Postgres (`dburl` overrides) |
 | `make lint` | Run ruff |
 | `make migrate` / `make migration msg=...` / `make migrate-down` | Alembic |
 | `make frontend-dev` | Frontend dev server (hot reload) |

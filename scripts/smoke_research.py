@@ -7,14 +7,23 @@ against either:
 * an in-process FastAPI app (default; no server or ports needed), or
 * a running llm-researcher server over HTTP (``--live --base-url ...``).
 
+By default the in-process app connects to the **docker-compose PostgreSQL**
+database (``postgresql://postgres:postgres@localhost:5432/researcher``) and
+applies pending Alembic migrations first, so the resulting research items
+persist in the same DB the deployed app uses and can be reused in real work.
+Pass ``--db-url sqlite:///:memory:`` for an ephemeral, throwaway run.
+
 Designed for humans AND automated LLM agents: it prints a machine-readable
 JSON summary, writes artifacts (``summary.json``, the document, and the
 markdown export) into ``--outdir``, and exits non-zero on any failure.
 
 Usage:
-    # In-process (recommended — boots the app on an in-memory SQLite DB and
-    # uses the provider/search keys from .env):
+    # In-process against the docker-compose DB (recommended — persists the
+    # research item; requires `docker compose up -d db`):
     python scripts/smoke_research.py "What is citizen reporting in smart cities?"
+
+    # In-process but ephemeral (in-memory SQLite, nothing persists):
+    python scripts/smoke_research.py --db-url sqlite:///:memory: "query"
 
     # Against a live server (e.g. `make local-dev` or `docker compose up`):
     python scripts/smoke_research.py --live --base-url http://localhost:8000 \\
@@ -29,6 +38,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import subprocess
 import sys
 import time
 from contextlib import contextmanager
@@ -36,6 +47,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
+# docker-compose.yml publishes the db service on localhost:5432. This is what
+# an in-process run uses by default so research items land in the real DB.
+COMPOSE_DB_URL = "postgresql://postgres:postgres@localhost:5432/researcher"
 DEFAULT_TIMEOUT = 600  # seconds
 DEFAULT_POLL_INTERVAL = 5  # seconds
 
@@ -48,19 +62,76 @@ class SmokeTestError(RuntimeError):
 
 
 # ---------------------------------------------------------------------------
-# In-process app bootstrapping (TestClient + in-memory SQLite)
+# In-process app bootstrapping (TestClient + configurable database)
 # ---------------------------------------------------------------------------
 
 
-@contextmanager
-def make_test_client():
-    """Boot the real app in-process on a shared in-memory SQLite database.
+def _resolve_db_url(db_url: str | None) -> str:
+    """Pick the database URL for an in-process run.
 
-    Mirrors ``tests/conftest.py`` + ``tests/test_main.py``: the engine is the
-    app's own (StaticPool for ``:memory:``), so endpoints, the background
-    worker, and the settings proxy all see the same database.
+    Priority: explicit ``--db-url`` > ``DATABASE_URL`` env var > the
+    docker-compose PostgreSQL (``COMPOSE_DB_URL``). This mirrors
+    ``tests/conftest.py``'s rule that an explicitly provided URL always wins.
     """
-    os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+    if db_url:
+        return db_url
+    return os.environ.get("DATABASE_URL") or COMPOSE_DB_URL
+
+
+def _run_migrations(db_url: str) -> None:
+    """Apply pending Alembic migrations to ``db_url`` (idempotent)."""
+    env = {**os.environ, "DATABASE_URL": db_url}
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=str(REPO_ROOT),
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise SmokeTestError(
+            f"`alembic upgrade head` failed against {db_url}: "
+            f"{e.stderr.strip()[-800:]}"
+        ) from e
+
+
+def _ensure_postgres_reachable(db_url: str) -> None:
+    """Give a friendly error when the compose database is not running."""
+    try:
+        import psycopg2
+
+        # psycopg2 does not understand SQLAlchemy "+driver" URL schemes.
+        psycopg_url = re.sub(r"^postgresql\+[^:]+://", "postgresql://", db_url)
+        conn = psycopg2.connect(psycopg_url, connect_timeout=5)
+        conn.close()
+    except Exception as e:  # noqa: BLE001 — surface any connection failure
+        raise SmokeTestError(
+            f"Cannot connect to database {db_url}: {e}\n"
+            "The in-process e2e run defaults to the docker-compose Postgres.\n"
+            "Start it with `docker compose up -d db`, or pass an explicit URL, "
+            "e.g. `--db-url sqlite:///:memory:` for an ephemeral run."
+        ) from e
+
+
+@contextmanager
+def make_test_client(db_url: str | None = None):
+    """Boot the real app in-process on the resolved database.
+
+    The engine is the app's own, so endpoints, the background worker, and the
+    settings proxy all see the same database. For PostgreSQL URLs, pending
+    Alembic migrations are applied first so the schema is always up to date.
+    """
+    db_url = _resolve_db_url(db_url)
+
+    if db_url.startswith("postgres"):
+        _ensure_postgres_reachable(db_url)
+        _run_migrations(db_url)
+
+    # Must be set before importing app.* modules so app.database binds to the
+    # resolved URL (app.config reads DATABASE_URL from the environment).
+    os.environ["DATABASE_URL"] = db_url
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
@@ -159,6 +230,7 @@ def run_smoke(
     poll_interval: int,
     live: bool,
     base_url: str,
+    db_url: str | None,
     verbose: bool,
 ) -> int:
     out_dir = Path(outdir)
@@ -169,9 +241,10 @@ def run_smoke(
         print(f"[smoke] live mode -> {base_url}")
         return _run_smoke(api, query, out_dir, timeout, poll_interval, verbose)
 
-    with make_test_client() as client:
+    with make_test_client(db_url) as client:
         api = Api(client=client)
-        print("[smoke] in-process mode (in-memory SQLite, provider from .env)")
+        effective = _resolve_db_url(db_url)
+        print(f"[smoke] in-process mode -> {effective} (provider from .env)")
         return _run_smoke(api, query, out_dir, timeout, poll_interval, verbose)
 
 
@@ -275,6 +348,13 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Live server base URL (default: {DEFAULT_BASE_URL})",
     )
     parser.add_argument(
+        "--db-url",
+        default=None,
+        help="Database URL for in-process mode. Default: the docker-compose "
+             f"Postgres ({COMPOSE_DB_URL}); use sqlite:///:memory: for an "
+             "ephemeral run that persists nothing.",
+    )
+    parser.add_argument(
         "--outdir",
         default="smoke_artifacts",
         help="Directory for exported artifacts and summary.json",
@@ -302,6 +382,7 @@ def main(argv: list[str] | None = None) -> int:
             poll_interval=args.poll_interval,
             live=args.live,
             base_url=args.base_url,
+            db_url=args.db_url,
             verbose=args.verbose,
         )
     except SmokeTestError as e:
