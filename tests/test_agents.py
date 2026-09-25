@@ -16,9 +16,12 @@ from app.agents.planner import (
     get_planner_chain,
 )
 from app.agents.search_agent import (
+    RELEVANCE_PROMPT,
+    filter_relevant_citations,
     search_for_subquery,
     execute_searches,
 )
+from app.config import settings
 from app.agents import intent_router
 from app.agents.intent_router import IntentRouterOutput
 from app.agents.query_expander import (
@@ -1040,3 +1043,179 @@ class TestHypothesisFeedbackLoop:
         ]
         assert len(feedback_steps) == 1
         assert feedback_steps[0].metadata.get("feedback_notes_used") == 1
+
+
+class TestRelevanceFiltering:
+    """The relevance filter must be cheap and must not starve a sub-query.
+
+    It used to make one LLM call per citation with a "when in doubt, mark as
+    irrelevant" instruction, which both dominated the search phase's runtime
+    and rejected directly on-topic sources (2/17 and 5/14 in a live run), so
+    two of five sub-questions ended with no sources at all.
+    """
+
+    def _citations(self, count: int) -> list[Citation]:
+        return [
+            Citation(
+                id=f"[{i + 1}]",
+                url=f"https://example.com/{i}",
+                title=f"Source {i}",
+                snippet=f"Snippet {i}",
+                source_type=SourceType.WEB,
+                relevance_score=0.1 * i,
+            )
+            for i in range(count)
+        ]
+
+    def _batch_response(self, first_index: int, count: int, relevant: bool):
+        return {
+            "assessments": [
+                {
+                    "index": first_index + offset,
+                    "is_relevant": relevant,
+                    "confidence": 0.9,
+                    "reason": "because",
+                }
+                for offset in range(count)
+            ]
+        }
+
+    @pytest.mark.asyncio
+    async def test_assesses_in_batches_not_per_citation(self):
+        """20 citations at batch size 5 issue 4 calls, not 20."""
+        citations = self._citations(20)
+        calls: list[int] = []
+
+        async def fake_llm(chain, payload):
+            first = int(payload["sources"].split("[", 1)[1].split("]")[0])
+            count = payload["sources"].count("URL:")
+            calls.append(first)
+            return self._batch_response(first, count, relevant=True)
+
+        with patch("app.agents.search_agent._build_relevance_chain",
+                   return_value=MagicMock()):
+            with patch("app.agents.search_agent.rate_limited_llm_call",
+                       side_effect=fake_llm):
+                with patch.object(settings, "research_relevance_batch_size", 5):
+                    kept = await filter_relevant_citations("q", citations)
+
+        assert kept == citations
+        assert calls == [0, 5, 10, 15]
+
+    @pytest.mark.asyncio
+    async def test_rejected_citations_are_dropped(self):
+        citations = self._citations(4)
+
+        async def fake_llm(chain, payload):
+            first = int(payload["sources"].split("[", 1)[1].split("]")[0])
+            count = payload["sources"].count("URL:")
+            return {
+                "assessments": [
+                    {
+                        "index": first + offset,
+                        "is_relevant": offset != 1,
+                        "confidence": 0.9,
+                        "reason": "off topic",
+                    }
+                    for offset in range(count)
+                ]
+            }
+
+        with patch("app.agents.search_agent._build_relevance_chain",
+                   return_value=MagicMock()):
+            with patch("app.agents.search_agent.rate_limited_llm_call",
+                       side_effect=fake_llm):
+                kept = await filter_relevant_citations("q", citations)
+
+        assert [c.title for c in kept] == ["Source 0", "Source 2", "Source 3"]
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_keeps_every_citation(self):
+        citations = self._citations(3)
+
+        with patch("app.agents.search_agent._build_relevance_chain",
+                   return_value=MagicMock()):
+            with patch("app.agents.search_agent.rate_limited_llm_call",
+                       new_callable=AsyncMock,
+                       side_effect=RuntimeError("boom")):
+                kept = await filter_relevant_citations("q", citations)
+
+        assert kept == citations
+
+    @pytest.mark.asyncio
+    async def test_omitted_assessments_keep_their_citation(self):
+        citations = self._citations(3)
+
+        async def fake_llm(chain, payload):
+            # The model only judges the first source.
+            return self._batch_response(0, 1, relevant=False)
+
+        with patch("app.agents.search_agent._build_relevance_chain",
+                   return_value=MagicMock()):
+            with patch("app.agents.search_agent.rate_limited_llm_call",
+                       side_effect=fake_llm):
+                kept = await filter_relevant_citations("q", citations)
+
+        assert [c.title for c in kept] == ["Source 1", "Source 2"]
+
+    @pytest.mark.asyncio
+    async def test_all_rejected_falls_back_to_best_sources(self):
+        """A sub-question is never left with zero sources."""
+        citations = self._citations(5)
+
+        async def fake_llm(chain, payload):
+            first = int(payload["sources"].split("[", 1)[1].split("]")[0])
+            count = payload["sources"].count("URL:")
+            return self._batch_response(first, count, relevant=False)
+
+        with patch("app.agents.search_agent._build_relevance_chain",
+                   return_value=MagicMock()):
+            with patch("app.agents.search_agent.rate_limited_llm_call",
+                       side_effect=fake_llm):
+                with patch.object(
+                    settings, "research_relevance_fallback_keep", 2
+                ):
+                    kept = await filter_relevant_citations("q", citations)
+
+        # Highest search relevance scores win (0.5, then 0.4).
+        assert [c.title for c in kept] == ["Source 4", "Source 3"]
+
+    @pytest.mark.asyncio
+    async def test_disabled_filter_keeps_everything(self):
+        citations = self._citations(2)
+        with patch.object(settings, "research_enable_relevance_filter", False):
+            assert await filter_relevant_citations("q", citations) == citations
+
+    def test_prompt_asks_for_recall_not_strictness(self):
+        """Regression guard for the rejected-on-topic-sources bug."""
+        rendered = RELEVANCE_PROMPT.format_prompt(
+            sub_query="q", sources="[0] t"
+        ).to_string().lower()
+        assert "when in doubt, mark as irrelevant" not in rendered
+        assert "could contribute evidence" in rendered
+        assert "partial matches count" in rendered
+
+    @pytest.mark.asyncio
+    async def test_execute_searches_honours_planner_flag(self):
+        """The planner's include_academic decision is no longer discarded."""
+        state = ResearchState(
+            research_id=1,
+            query="a plain product question",
+            sub_queries=["what is X"],
+            include_academic=True,
+        )
+        captured = {}
+
+        async def fake_search(sub_query, include_academic=False):
+            captured["include_academic"] = include_academic
+            return SubQueryResult(
+                sub_query=sub_query, citations=[], status="failed"
+            )
+
+        with patch("app.agents.search_agent.search_for_subquery",
+                   side_effect=fake_search):
+            with patch("app.agents.search_agent.is_academic_query",
+                       return_value=False):
+                await execute_searches(state)
+
+        assert captured["include_academic"] is True

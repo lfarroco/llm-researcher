@@ -9,11 +9,18 @@ These tests demonstrate how to test tools in isolation by:
 
 import pytest
 import httpx
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.tools.base import ToolError, ToolErrorType, ToolResponse, get_setting
+from app.config import settings
 from app.tools.web_search import WebSearchResult, web_search
-from app.tools.arxiv_search import ArxivResult, arxiv_search, is_academic_query
+from app.tools.arxiv_search import (
+    ArxivResult,
+    arxiv_search,
+    build_arxiv_query,
+    is_academic_query,
+)
 from app.tools.elsevier_search import elsevier_search
 from app.tools.springer_search import springer_search
 from app.tools.wikipedia import WikipediaResult, wikipedia_search
@@ -221,6 +228,155 @@ class TestArxivSearch:
         assert is_academic_query("how to cook pasta") is False
         assert is_academic_query("weather in new york") is False
         assert is_academic_query("best restaurants nearby") is False
+
+    def test_is_academic_query_ignores_generic_engineering_words(self):
+        """Web-dev questions are not academic just for saying "framework".
+
+        The old keyword list contained "framework", "model", "method" and
+        "approach", so nearly every product question enabled the academic
+        plugins (and arXiv's rate limit) for no benefit.
+        """
+        assert is_academic_query(
+            "functional programming in web development in 2026"
+        ) is False
+        assert is_academic_query(
+            "which frameworks and libraries are most prominent in 2026"
+        ) is False
+        assert is_academic_query(
+            "best approach to model a data pipeline"
+        ) is False
+        assert is_academic_query(
+            "benchmark of web frameworks"
+        ) is True
+
+
+class TestArxivQueryBuilding:
+    """arXiv needs field-prefixed syntax, not a natural-language question."""
+
+    def test_strips_query_syntax_and_years(self):
+        query = build_arxiv_query(
+            "Which functional programming languages, frameworks, and "
+            "libraries are most prominent in web development in 2026?"
+        )
+        assert query.startswith("all:")
+        for char in ",?\"()":
+            assert char not in query
+        # The publication year is not part of a paper's indexed text.
+        assert "2026" not in query
+        assert "functional" in query and "programming" in query
+        assert "which" not in query and "the" not in query
+
+    def test_keeps_hyphenated_terms(self):
+        assert "meta-analysis" in build_arxiv_query("meta-analysis of diets")
+
+    def test_limits_the_number_of_terms(self):
+        query = build_arxiv_query(
+            "alpha beta gamma delta epsilon zeta eta theta iota kappa"
+        )
+        assert len(query.removeprefix("all:").split()) <= 6
+
+    def test_never_returns_an_empty_query(self):
+        assert build_arxiv_query("") == "all:"
+        assert build_arxiv_query("the and of in 2026") .startswith("all:")
+
+    def test_prefixes_every_query(self):
+        assert build_arxiv_query("neural networks").startswith("all:")
+
+
+class TestArxivRateLimiting:
+    """arXiv answers request bursts with HTTP 406; that must not break a run."""
+
+    @pytest.fixture(autouse=True)
+    def quiet_arxiv(self, monkeypatch):
+        """Reset module-level pacing/cooldown state between tests."""
+        arxiv_module = sys.modules["app.tools.arxiv_search"]
+        monkeypatch.setattr(arxiv_module, "_last_request_at", 0.0)
+        monkeypatch.setattr(arxiv_module, "_cooldown_until", 0.0)
+        with patch.object(settings, "arxiv_min_interval_seconds", 0), \
+                patch.object(
+                    settings, "arxiv_rate_limit_cooldown_seconds", 300.0
+                ):
+            yield
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_returns_empty_instead_of_raising(self):
+        import arxiv as real_arxiv
+
+        with patch("app.tools.arxiv_search.arxiv.Client") as mock_client_cls:
+            mock_client_cls.return_value.results.side_effect = (
+                real_arxiv.HTTPError("https://export.arxiv.org/api/query", 0, 406)
+            )
+            results = await arxiv_search("functional programming", max_results=3)
+
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_trips_a_cooldown(self):
+        """A throttled arXiv is not asked again for the cooldown period."""
+        import arxiv as real_arxiv
+
+        with patch("app.tools.arxiv_search.arxiv.Client") as mock_client_cls:
+            mock_client_cls.return_value.results.side_effect = (
+                real_arxiv.HTTPError("https://export.arxiv.org/api/query", 0, 406)
+            )
+            first = await arxiv_search("functional programming", max_results=3)
+            second = await arxiv_search("another query", max_results=3)
+
+        assert first == [] and second == []
+        # The second call was skipped before any client was constructed.
+        assert mock_client_cls.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_no_internal_retry_doubles_the_request_rate(self):
+        """One logical call puts exactly one request on the wire."""
+        with patch("app.tools.arxiv_search.arxiv.Client") as mock_client_cls:
+            mock_client_cls.return_value.results.return_value = []
+            await arxiv_search("functional programming", max_results=3)
+
+        assert mock_client_cls.call_args.kwargs["num_retries"] == 0
+
+    @pytest.mark.asyncio
+    async def test_sanitized_query_is_sent_to_the_api(self):
+        with patch("app.tools.arxiv_search.arxiv.Client") as mock_client_cls:
+            mock_client_cls.return_value.results.return_value = []
+            with patch("app.tools.arxiv_search.arxiv.Search") as mock_search:
+                await arxiv_search(
+                    "Which frameworks, libraries and languages matter in 2026?",
+                    max_results=3,
+                )
+
+        sent = mock_search.call_args.kwargs["query"]
+        assert sent.startswith("all:")
+        assert "," not in sent and "?" not in sent and "2026" not in sent
+
+    def test_requests_are_paced(self, monkeypatch):
+        """Concurrent callers queue instead of hammering the API."""
+        # ``app.tools.arxiv_search`` resolves to the re-exported function, so
+        # the module object itself is fetched from sys.modules.
+        arxiv_module = sys.modules["app.tools.arxiv_search"]
+
+        slept: list[float] = []
+        monkeypatch.setattr(arxiv_module, "_last_request_at", 100.0)
+        monkeypatch.setattr(arxiv_module.time, "monotonic", lambda: 101.0)
+        monkeypatch.setattr(arxiv_module.time, "sleep", slept.append)
+
+        with patch.object(settings, "arxiv_min_interval_seconds", 3.0):
+            arxiv_module._wait_for_arxiv_slot()
+
+        assert slept and abs(slept[0] - 2.0) < 0.01
+
+    def test_pacing_can_be_disabled(self, monkeypatch):
+        arxiv_module = sys.modules["app.tools.arxiv_search"]
+
+        slept: list[float] = []
+        monkeypatch.setattr(arxiv_module, "_last_request_at", 100.0)
+        monkeypatch.setattr(arxiv_module.time, "monotonic", lambda: 100.1)
+        monkeypatch.setattr(arxiv_module.time, "sleep", slept.append)
+
+        with patch.object(settings, "arxiv_min_interval_seconds", 0):
+            arxiv_module._wait_for_arxiv_slot()
+
+        assert slept == []
 
 
 class TestWikipediaSearch:

@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     research_enable_query_expansion: bool = True
     # Number of query variations to generate per sub-query
     research_query_variations: int = 2
+    # How many citations are assessed per relevance-filter LLM call. Batching
+    # keeps the filter to a handful of calls instead of one call per citation.
+    research_relevance_batch_size: int = 20
+    # When relevance filtering would remove every candidate for a sub-query,
+    # keep at least this many of the highest-scoring ones instead of leaving
+    # the sub-question with no sources at all.
+    research_relevance_fallback_keep: int = 3
     # Enable/disable reference chasing (following citations from sources)
     research_reference_chase_enabled: bool = True
     # Max depth for reference chasing (1 = follow refs from initial sources,
@@ -78,6 +85,14 @@ class Settings(BaseSettings):
     grobid_server: str = "http://grobid:8070"
     # Seconds to wait for a GROBID parse before falling back to local parsers.
     grobid_timeout_seconds: float = 30.0
+
+    # Minimum seconds between arXiv API requests, process-wide. arXiv asks for
+    # no more than one request every three seconds and answers bursts with
+    # HTTP 406; set to 0 to disable pacing (tests).
+    arxiv_min_interval_seconds: float = 3.0
+    # How long to stop calling arXiv after it answers with a rate-limit
+    # status, so a throttled API does not consume the run's time budget.
+    arxiv_rate_limit_cooldown_seconds: float = 300.0
 
     # LLM Rate Limiting & Backoff
     llm_max_retries: int = 10  # Max retry attempts for LLM API calls

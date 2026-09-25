@@ -62,7 +62,10 @@ class ArxivPlugin:
     name = "arxiv"
     source_type = SourceType.ARXIV
     requires_academic_context = True
-    first_variation_only = False
+    # arXiv rate-limits to roughly one request every three seconds and answers
+    # bursts with HTTP 406. One well-formed query per sub-query is the budget;
+    # the expanded query variations are covered by the other plugins.
+    first_variation_only = True
     default_max_results = 3
 
     def is_available(self) -> bool:

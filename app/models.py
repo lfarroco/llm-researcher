@@ -98,6 +98,10 @@ class ResearchSource(Base):
     content_snippet = Column(Text, nullable=True)
     source_type = Column(String(50), default="web")  # web|arxiv|wikipedia
     relevance_score = Column(Float, default=0.0)
+    # Marker this source carries in the generated document ("[3]" -> 3) when
+    # the report cites it. Assigned when the document is finalized so the API
+    # and the report agree on which source a citation number points to.
+    citation_marker = Column(Integer, nullable=True)
     accessed_at = Column(DateTime(timezone=True), default=utcnow)
     user_notes = Column(Text, nullable=True)  # User's notes on this source
     tags = Column(JSON, nullable=True)  # List of tags for categorization

@@ -150,6 +150,7 @@ async def plan_research(state: ResearchState) -> dict[str, Any]:
 
     return {
         "sub_queries": sub_queries,
+        "include_academic": include_academic,
         "status": "searching",
         "current_step": f"Planning complete. Searching {len(sub_queries)} sub-topics.",
         "agent_steps": [step],

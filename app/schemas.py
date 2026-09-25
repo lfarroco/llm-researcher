@@ -57,6 +57,13 @@ class ResearchSourceResponse(BaseModel):
     content_snippet: Optional[str] = None
     source_type: str
     relevance_score: float
+    citation_marker: Optional[int] = Field(
+        default=None,
+        description=(
+            "Number this source carries in the generated document when it is "
+            "cited (3 means the report refers to it as [3])."
+        ),
+    )
     accessed_at: datetime
     user_notes: Optional[str] = None
     tags: Optional[list[str]] = None

@@ -17,6 +17,10 @@ from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 from app.memory.research_state import (
     AgentStep, EvidenceSpan, ResearchNote, ResearchState, Citation,
 )
+from app.services.citation_numbering import (
+    format_reference_line,
+    marker_number,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -391,18 +395,16 @@ async def format_final_document(state: ResearchState) -> dict[str, Any]:
         "## References\n\n",
     ]
 
-    # Add only cited references
+    # Add only cited references. Markers here are still the pipeline's
+    # collection markers; the service rewrites them to a contiguous 1..N
+    # sequence (and persists that number on each source) once the knowledge
+    # base merge has happened.
     logger.debug(f"[FORMAT] Adding {len(cited_citations)} cited references")
-    for i, citation in enumerate(cited_citations):
-        ref_line = f"{citation.id} "
-        if citation.author:
-            ref_line += f"{citation.author}. "
-        ref_line += f'"{citation.title}." '
-        ref_line += f"Retrieved from {citation.url} "
-        ref_line += f"on {citation.date_accessed[:10]}.\n\n"
-        document_parts.append(ref_line)
+    for position, citation in enumerate(cited_citations, start=1):
+        marker = marker_number(citation.id) or position
+        document_parts.append(format_reference_line(citation, marker))
         logger.debug(
-            f"[FORMAT] Added reference {i+1}: {citation.title[:40]}...")
+            f"[FORMAT] Added reference {position}: {citation.title[:40]}...")
 
     final_document = "".join(document_parts)
 

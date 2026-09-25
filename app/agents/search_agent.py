@@ -39,72 +39,130 @@ class RelevanceScore(BaseModel):
         description="Brief explanation of relevance assessment")
 
 
+class CitationRelevance(RelevanceScore):
+    """A relevance assessment tagged with the index of the source it judges."""
+    index: int = Field(
+        description="Index of the source in the numbered list provided")
+
+
+class RelevanceBatch(BaseModel):
+    """Batch relevance assessment for a page of citations."""
+    assessments: list[CitationRelevance] = Field(
+        description="One assessment per source in the list")
+
+
 RELEVANCE_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", """You are a research quality control expert. Your job is to
-assess whether a search result is relevant to a research sub-query.
+    ("system", """You are screening search results for a research
+sub-question. Your job is to drop sources that are clearly about a different
+topic, and to keep everything that could contribute evidence.
 
 Guidelines:
-1. A source is RELEVANT if it directly addresses the sub-query topic
-2. A source is IRRELEVANT if it's about a completely different topic,
-   even if it shares some keywords
-3. Consider the title and snippet content
-4. Be strict - when in doubt, mark as irrelevant
+1. A source is RELEVANT if it could contribute evidence about ANY part of the
+   sub-question - not just if it covers every clause of it.
+2. Partial matches count. A source about functional programming languages is
+   relevant to a question about functional programming languages in web
+   development, even if the excerpt never says "web".
+3. Titles and excerpts are short and often imperfect. Some excerpts begin with
+   navigation or sign-in boilerplate; judge from the title, the URL, and any
+   substantive text that is present.
+4. Prefer keeping a plausible source over dropping it: a later synthesis step
+   ignores material it cannot use, but nothing can recover a source that was
+   discarded here.
+5. Mark a source IRRELEVANT only when it is clearly about a different subject
+   (for example a generic "best programming languages" listicle that never
+   mentions the sub-question's topic at all).
 
 Respond with JSON in this exact format:
 {{
-    "is_relevant": true/false,
-    "confidence": 0.0-1.0,
-    "reason": "brief explanation"
-}}"""),
+    "assessments": [
+        {{"index": 0, "is_relevant": true, "confidence": 0.0-1.0,
+          "reason": "brief explanation"}}
+    ]
+}}
+
+Include exactly one entry for EVERY numbered source."""),
     ("human", """Sub-query: {sub_query}
 
-Source to evaluate:
-Title: {title}
-Snippet: {snippet}
+Sources to evaluate:
+{sources}
 
-Is this source relevant to the sub-query?""")
+Which of these sources could contribute evidence for the sub-query?""")
 ])
 
 
-async def assess_relevance(
-    sub_query: str, citation: Citation
-) -> RelevanceScore:
-    """
-    Use LLM to assess if a citation is relevant to the sub-query.
+def _format_relevance_candidates(
+    citations: list[Citation],
+    first_index: int,
+) -> str:
+    """Render a numbered source list for the batch relevance prompt."""
+    blocks = []
+    for offset, citation in enumerate(citations):
+        snippet = " ".join((citation.snippet or "").split())[:400]
+        block = (
+            f"[{first_index + offset}] {citation.title}\n"
+            f"URL: {citation.url}"
+        )
+        if snippet:
+            block += f"\nExcerpt: {snippet}"
+        blocks.append(block)
+    return "\n\n".join(blocks)
+
+
+async def assess_relevance_batch(
+    sub_query: str,
+    citations: list[Citation],
+    first_index: int = 0,
+) -> dict[int, RelevanceScore]:
+    """Assess a page of citations in a single LLM call.
 
     Args:
-        sub_query: The research question
-        citation: Citation to evaluate
+        sub_query: The research question the sources are judged against.
+        citations: Sources to assess.
+        first_index: Index of the first citation, used to key the results so
+            several batches can be merged without ambiguity.
 
     Returns:
-        RelevanceScore indicating if citation is relevant
+        Mapping of source index to its assessment. Indices the model omitted
+        are absent from the mapping; callers keep those sources.
     """
-    try:
-        provider = LLMProviderFactory.create_provider(
-            provider_type=settings.llm_provider,
-            model=settings.llm_model,
-            temperature=0.1,  # Low temperature for consistent judgments
-            api_key=settings.llm_api_key,
-            base_url=settings.llm_base_url,
+    chain = _build_relevance_chain()
+    result = await rate_limited_llm_call(chain, {
+        "sub_query": sub_query,
+        "sources": _format_relevance_candidates(citations, first_index),
+    })
+
+    assessments: dict[int, RelevanceScore] = {}
+    for item in (result or {}).get("assessments", []):
+        if not isinstance(item, dict):
+            continue
+        index = item.get("index")
+        if not isinstance(index, int):
+            continue
+        try:
+            confidence = float(item.get("confidence", 0.0))
+        except (TypeError, ValueError):
+            confidence = 0.0
+        assessments[index] = RelevanceScore(
+            is_relevant=bool(item.get("is_relevant", False)),
+            confidence=confidence,
+            reason=str(item.get("reason", "")),
         )
+    return assessments
 
-        llm = provider.get_llm()
-        parser = JsonOutputParser(pydantic_object=RelevanceScore)
-        chain = RELEVANCE_PROMPT | llm | parser
 
-        result = await rate_limited_llm_call(chain, {
-            "sub_query": sub_query,
-            "title": citation.title,
-            "snippet": citation.snippet[:500]  # Limit snippet size
-        })
+def _build_relevance_chain():
+    """Create the retrieval chain used to batch-assess citations."""
+    provider = LLMProviderFactory.create_provider(
+        provider_type=settings.llm_provider,
+        model=settings.llm_model,
+        temperature=0.1,  # Low temperature for consistent judgments
+        api_key=settings.llm_api_key,
+        base_url=settings.llm_base_url,
+    )
 
-        return RelevanceScore(**result)
-    except Exception as e:
-        logger.warning(f"[RELEVANCE] Failed to assess relevance: {e}")
-        # On error, assume relevant to avoid false negatives
-        return RelevanceScore(
-            is_relevant=True, confidence=0.5, reason="Assessment failed"
-        )
+    llm = provider.get_llm()
+    parser = JsonOutputParser(pydantic_object=RelevanceBatch)
+    return RELEVANCE_PROMPT | llm | parser
 
 
 async def filter_relevant_citations(
@@ -114,6 +172,17 @@ async def filter_relevant_citations(
 ) -> list[Citation]:
     """
     Filter citations by relevance to the sub-query using LLM assessment.
+
+    Citations are assessed in batches (``research_relevance_batch_size`` per
+    call) instead of one call each, which keeps the phase to a handful of
+    requests. A citation is kept when the model marks it relevant with
+    confidence at or above ``threshold``; citations the model skipped, or that
+    could not be assessed at all, are kept so a model or parsing failure never
+    silently shrinks the evidence base.
+
+    If filtering would remove *every* candidate for a sub-query, the
+    highest-scoring few are kept instead (``research_relevance_fallback_keep``)
+    so no sub-question is ever left with zero sources.
 
     Args:
         sub_query: The research question
@@ -130,48 +199,78 @@ async def filter_relevant_citations(
     if not citations:
         return []
 
-    logger.info(
-        f"[RELEVANCE] Assessing relevance of {len(citations)} citations"
-    )
-    logger.debug(f"[RELEVANCE] Threshold: {threshold}")
-
-    # Assess all citations in parallel
-    assessment_tasks = [
-        assess_relevance(sub_query, citation) for citation in citations
+    batch_size = max(1, int(settings.research_relevance_batch_size))
+    # (first_index, batch)
+    batches = [
+        (start, citations[start:start + batch_size])
+        for start in range(0, len(citations), batch_size)
     ]
-    assessments = await asyncio.gather(
-        *assessment_tasks, return_exceptions=True
+    logger.info(
+        f"[RELEVANCE] Assessing {len(citations)} citations in "
+        f"{len(batches)} batched call(s) (batch size {batch_size})"
     )
 
-    # Filter based on relevance
-    filtered = []
-    for citation, assessment in zip(citations, assessments):
+    results = await asyncio.gather(
+        *(
+            assess_relevance_batch(sub_query, batch, first_index=start)
+            for start, batch in batches
+        ),
+        return_exceptions=True,
+    )
+
+    kept: list[Citation] = []
+    rejected = 0
+    for (start, batch), assessment in zip(batches, results):
         if isinstance(assessment, Exception):
             logger.warning(
-                f"[RELEVANCE] Assessment failed for "
-                f"'{citation.title}': {assessment}"
+                f"[RELEVANCE] Batch at index {start} failed "
+                f"({assessment}); keeping its {len(batch)} citations"
             )
-            # Keep citation if assessment fails
-            filtered.append(citation)
+            kept.extend(batch)
             continue
 
-        if assessment.is_relevant and assessment.confidence >= threshold:
-            logger.debug(
-                f"[RELEVANCE] ✓ RELEVANT: '{citation.title[:50]}...' "
-                f"(conf={assessment.confidence:.2f})"
-            )
-            filtered.append(citation)
-        else:
-            logger.info(
-                f"[RELEVANCE] ✗ FILTERED: '{citation.title[:50]}...' "
-                f"(conf={assessment.confidence:.2f}) - {assessment.reason}"
-            )
+        for offset, citation in enumerate(batch):
+            judged = assessment.get(start + offset)
+            if judged is None:
+                # The model skipped this source; keep it rather than lose it.
+                logger.debug(
+                    f"[RELEVANCE] No assessment for "
+                    f"'{citation.title[:50]}'; keeping it"
+                )
+                kept.append(citation)
+                continue
+            if judged.is_relevant and judged.confidence >= threshold:
+                logger.debug(
+                    f"[RELEVANCE] ✓ RELEVANT: '{citation.title[:50]}...' "
+                    f"(conf={judged.confidence:.2f})"
+                )
+                kept.append(citation)
+            else:
+                rejected += 1
+                logger.debug(
+                    f"[RELEVANCE] ✗ FILTERED: '{citation.title[:50]}...' "
+                    f"(conf={judged.confidence:.2f}) - {judged.reason}"
+                )
+
+    fallback_keep = max(0, int(settings.research_relevance_fallback_keep))
+    if not kept and citations and fallback_keep > 0:
+        ranked = sorted(
+            citations,
+            key=lambda c: c.relevance_score or 0.0,
+            reverse=True,
+        )[:fallback_keep]
+        logger.warning(
+            f"[RELEVANCE] Filtering rejected all {len(citations)} citation(s) "
+            f"for '{sub_query[:60]}...'; keeping the top {len(ranked)} by "
+            f"search relevance so the sub-question is not left empty"
+        )
+        return ranked
 
     logger.info(
-        f"[RELEVANCE] Kept {len(filtered)}/{len(citations)} citations "
-        f"after filtering"
+        f"[RELEVANCE] Kept {len(kept)}/{len(citations)} citations "
+        f"after filtering ({rejected} rejected)"
     )
-    return filtered
+    return kept
 
 
 async def search_for_subquery(
@@ -331,8 +430,13 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
     for i, sq in enumerate(state.sub_queries):
         logger.debug(f"[SEARCH] Sub-query {i+1}: {sq}")
 
-    # Check if we should include academic sources
-    include_academic = is_academic_query(state.query)
+    # Check if we should include academic sources. The planner's own decision
+    # (state.include_academic) is authoritative when it asked for academic
+    # sources; the keyword heuristic is the fallback for states that predate
+    # the flag or for callers that build a state by hand.
+    include_academic = bool(state.include_academic) or is_academic_query(
+        state.query
+    )
     logger.debug(f"[SEARCH] Include academic sources: {include_academic}")
 
     # Search all sub-queries in parallel

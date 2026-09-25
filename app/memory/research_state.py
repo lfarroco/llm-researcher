@@ -197,6 +197,13 @@ class ResearchState(BaseModel):
         default_factory=list,
         description="Sub-questions derived from the main query"
     )
+    include_academic: bool = Field(
+        default=False,
+        description=(
+            "Planner's decision on whether to query academic sources "
+            "(arXiv, Springer, ...). Consumed by the search phase."
+        )
+    )
 
     # Search phase outputs
     citations: Annotated[list[Citation], merge_lists] = Field(

@@ -9,6 +9,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Report citations now resolve to the source the sentence was written from.**
+  The document numbered citations with the pipeline's collection markers while
+  `GET /research/{id}/sources` returned knowledge-base row ids, so the two
+  disagreed as soon as a source was merged or left uncited — a live report
+  cited `[14]`–`[18]` for rows `12`–`16`, and `[12]`/`[13]` were gaps with no
+  source at all. Numbering is now assigned once, after collection finishes:
+  `app/services/citation_numbering.py` renumbers the cited sources `1..N` in
+  order of first appearance, rewrites the inline markers and rebuilds the
+  reference list, and the same marker is stored on each `ResearchSource`
+  (`citation_marker`, new column + migration) and returned by the API. Sources
+  that differ only by URL fragment or tracking parameter — which the knowledge
+  base merges into one row — now share a single marker instead of producing a
+  citation no row carries.
+- **Relevance filtering kept only a fraction of on-topic sources.** The filter
+  asked one LLM call per citation to "be strict — when in doubt, mark as
+  irrelevant" against the whole sub-question using a 500-character snippet that
+  was often navigation boilerplate; a live run kept `2/17` and `5/14`, leaving
+  two of five sub-questions with no sources. Assessment is now batched
+  (`research_relevance_batch_size`, 20 per call), the prompt asks whether a
+  source *could contribute evidence for any part of* the sub-question, sources
+  the model skips or that fail assessment are kept, and a sub-query that would
+  otherwise be emptied keeps its highest-scoring few
+  (`research_relevance_fallback_keep`).
+- **arXiv never returned a result.** Raw natural-language questions were sent
+  as the API query, every call burned four attempts because of the library's
+  internal retry, concurrent sub-query searches were never paced against
+  arXiv's one-request-per-three-seconds limit, and the resulting `HTTP 406`
+  surfaced as a full traceback and a pipeline error. Queries are now rewritten
+  into `all:` field syntax (`build_arxiv_query`), each call issues exactly one
+  request, requests are paced process-wide
+  (`ARXIV_MIN_INTERVAL_SECONDS`), and a rate-limit response trips a cooldown
+  (`ARXIV_RATE_LIMIT_COOLDOWN_SECONDS`) instead of being retried. The arXiv
+  plugin also runs on the first query variation only.
+- **The planner's academic-sources decision was discarded.**
+  `PlannerOutput.include_academic` was written to step metadata and never read;
+  the search phase re-derived it with a keyword list that treated *framework*,
+  *model*, *method* and *approach* as academic markers, enabling the academic
+  plugins for nearly every product question. `ResearchState.include_academic`
+  now carries the planner's decision into the search phase, and the keyword
+  heuristic is restricted to unambiguous markers (research, paper, study,
+  benchmark, …).
+
+### Added
+
+- `app/services/citation_numbering.py` — single source of truth for the
+  reader-facing citation numbers shared by the document and the knowledge base.
+- `scripts/verify_run.py` — checks a captured run for the invariants above
+  (contiguous, resolvable citation numbering; every sub-query with sources;
+  which source types contributed).
+- `research_sources.citation_marker` (Alembic `b3c91d4f7a20`), exposed as
+  `citation_marker` on the sources API.
+
 - **Resume no longer destroys the knowledge base.** `POST /research/{id}/resume`
   deleted every source, finding, and note before re-running — including
   user-authored notes (`agent="user"`), source `user_notes`, and `tags` — and

@@ -24,6 +24,7 @@ from app.memory.research_state import (
     Citation, ResearchNote, ResearchState, SubQueryResult,
 )
 from app.services.source_identity import source_identity
+from app.services.citation_numbering import renumber_document
 from app.services.fulltext import collect_fulltext_evidence
 from app.websocket_manager import manager as ws_manager
 
@@ -71,12 +72,21 @@ def save_citations_to_db(
     db: Session,
     research_id: int,
     citations: list[Citation],
+    markers_by_identity: Optional[Dict[str, int]] = None,
 ) -> Dict[str, models.ResearchSource]:
     """Merge citations into the knowledge base and return them by identity.
 
     Existing sources are **enriched**, not replaced: a later, better result for
     a source we already have can fill in a missing title/author or raise the
     relevance score, but it cannot clear fields or touch user notes and tags.
+
+    Args:
+        markers_by_identity: Optional ``source_identity -> citation marker``
+            map from :func:`app.services.citation_numbering.renumber_document`.
+            When given, each row's ``citation_marker`` is set to the number the
+            finished document uses for it (``None`` for sources the report does
+            not cite), which keeps the document and the API in agreement. When
+            omitted, existing markers are left untouched.
 
     Returns:
         Mapping of ``dedupe_key`` to the persisted source row, for callers
@@ -91,6 +101,12 @@ def save_citations_to_db(
 
         snippet = citation.snippet[:2000] if citation.snippet else None
 
+        marker = (
+            markers_by_identity.get(key)
+            if markers_by_identity is not None
+            else None
+        )
+
         if existing is None:
             source = models.ResearchSource(
                 research_id=research_id,
@@ -101,11 +117,17 @@ def save_citations_to_db(
                 content_snippet=snippet,
                 source_type=citation.source_type.value,
                 relevance_score=citation.relevance_score,
+                citation_marker=marker,
             )
             db.add(source)
             by_key[key] = source
             merged[key] = source
             continue
+
+        # The marker belongs to the document that was just finalized, so it is
+        # replaced rather than preserved (a re-run may cite a different set).
+        if markers_by_identity is not None:
+            existing.citation_marker = marker
 
         # Enrich only. Never blank out data we already hold, and never touch
         # user_notes / tags, which belong to the user.
@@ -406,6 +428,14 @@ async def process_research_async(
 
         logger.info(f"Research completed for id={research_id}")
 
+        # Number the citations once, now that every collection wave (search,
+        # reference chasing, hypothesis investigation) has finished. The
+        # returned map is what pins each source row to the marker the reader
+        # sees, so the document and the API cannot disagree.
+        final_state.final_document, markers_by_identity = renumber_document(
+            final_state.final_document or "", final_state.citations
+        )
+
         # Save results
         research.result = final_state.final_document or final_state.draft
         research.status = final_state.status
@@ -415,7 +445,8 @@ async def process_research_async(
         # the identity map, so findings link to the same rows that survive
         # re-runs instead of resolving URLs through an order-dependent dict.
         sources_by_identity = save_citations_to_db(
-            db, research_id, final_state.citations
+            db, research_id, final_state.citations,
+            markers_by_identity=markers_by_identity,
         )
 
         # Save sub-query results as findings

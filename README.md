@@ -35,6 +35,7 @@ Built with FastAPI, LangGraph/LangChain, React, and PostgreSQL.
 
 ## 📚 Documentation
 
+- **[HANDOFF.md](docs/HANDOFF.md)** — start here: current state, open bugs, environment, verification
 - **[ROADMAP.md](docs/ROADMAP.md)** — next tasks (milestone-based)
 - **[LLM_TESTING.md](docs/LLM_TESTING.md)** — end-to-end testing guide for humans and LLM agents
 - **[tasks.md](tasks.md)** — high-priority issue tracker
