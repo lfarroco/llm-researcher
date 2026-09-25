@@ -100,10 +100,18 @@ Status legend:
 > **Goal**: Make outputs verifiable and grounded so the tool is credible for
 > academic use.
 
-- [ ] Wire PDF full-text parsing (GROBID + `document_chunker`) into the
-      synthesis grounding path.
+### Citation & grounding
+- [x] Wire PDF full-text parsing (GROBID + `document_chunker`) into the
+      synthesis grounding path. Sources are now downloaded, parsed and chunked
+      after search, and the best passages per source are stored as
+      `research_evidence` and injected into the synthesis prompt with citation
+      markers (`app/services/fulltext.py`).
+- [x] Fix PDF configuration that never resolved: `PDF_CACHE_DIR`,
+      `MAX_PDF_SIZE_MB` and `GROBID_SERVER` are now real settings, and the
+      cache directory no longer collapses to a relative path.
 - [ ] Deepen claim-level verification (confidence scores, source credibility
-      signals) — builds on the `fact_check` operation from Milestone 2.
+      signals) — the `research_evidence` table records character offsets and
+      section labels, which is the substrate this needs.
 - [ ] Citation-existence guardrail before finalizing the reference list.
 - [ ] Source credibility scoring (venue/journal/peer-review signals).
 - [ ] Evaluation harness + sample evaluation set for research quality.

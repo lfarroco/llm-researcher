@@ -18,6 +18,8 @@ from app import models
 from app.config import settings
 from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 from app.services.research_service import process_research
+from app.services.source_identity import source_identity
+from app.services.fulltext import evidence_to_spans, load_evidence
 from app.tools.web_scraper import scrape_url
 from app.agents.synthesis_agent import (
     synthesize_findings, format_final_document,
@@ -276,6 +278,11 @@ async def handle_generate_intent(
             ),
         ))
 
+    # Load persisted full-text evidence so a regenerated report is grounded in
+    # the same passages as the original run rather than degrading to excerpts.
+    evidence_rows = load_evidence(db, research_id)
+    evidence = evidence_to_spans(evidence_rows, citations)
+
     # Build ResearchState for the synthesis pipeline
     state = ResearchState(
         research_id=research_id,
@@ -283,6 +290,7 @@ async def handle_generate_intent(
         citations=citations,
         sub_queries=[research.query],
         research_notes=research_notes,
+        evidence=evidence,
     )
 
     # Run synthesis → format pipeline
@@ -347,6 +355,7 @@ async def handle_add_intent(
                 source = models.ResearchSource(
                     research_id=research_id,
                     url=source_url,
+                    dedupe_key=source_identity(source_url),
                     title=(
                         scraped.title
                         or entities.get("title", "Untitled")
@@ -386,6 +395,7 @@ async def handle_add_intent(
                 source = models.ResearchSource(
                     research_id=research_id,
                     url=source_url,
+                    dedupe_key=source_identity(source_url),
                     title=entities.get("title", "Untitled"),
                     content_snippet=(
                         scraped.error

@@ -146,6 +146,27 @@ class ResearchNote(BaseModel):
     )
 
 
+class EvidenceSpan(BaseModel):
+    """A quotable passage of a source's full text.
+
+    Snippets are what search engines return; evidence is what the paper
+    actually says. Synthesis is grounded in these spans so claims can be
+    attributed to a passage rather than to an abstract-length blurb.
+    """
+
+    source_id: int = Field(description="Database ID of the owning source")
+    citation_id: str = Field(
+        default="", description="Citation marker, e.g. '[1]', when known"
+    )
+    title: str = Field(default="", description="Source title")
+    url: str = Field(default="", description="Source URL")
+    text: str = Field(description="The passage text")
+    chunk_index: int = Field(default=0, description="Position in the source")
+    section: Optional[str] = Field(
+        default=None, description="Section heading the passage came from"
+    )
+
+
 def merge_lists(left: list, right: list) -> list:
     """Reducer function to merge lists in state updates."""
     return left + right
@@ -160,8 +181,11 @@ class ResearchState(BaseModel):
     """
     Main state object that flows through the LangGraph research workflow.
 
-    This state is persisted to PostgreSQL via LangGraph checkpointing,
-    allowing research to be paused and resumed.
+    This state is **execution context**, not the durable record of truth. The
+    knowledge base (sources, findings, notes) lives in the database and is the
+    canonical store; this object is serialized to ``Research.state_json``
+    after each node purely so a run can be resumed. Nothing here is
+    authoritative, and losing it never loses research data.
     """
 
     # Core identifiers
@@ -182,6 +206,14 @@ class ResearchState(BaseModel):
     sub_query_results: Annotated[list[SubQueryResult], merge_lists] = Field(
         default_factory=list,
         description="Results for each sub-query"
+    )
+
+    # Full-text grounding: quotable passages retrieved from parsed PDFs.
+    # Populated after search and consumed by synthesis, which prefers these
+    # over search-result snippets when they are available.
+    evidence: Annotated[list[EvidenceSpan], merge_lists] = Field(
+        default_factory=list,
+        description="Full-text evidence passages supporting the citations"
     )
 
     # Synthesis phase outputs
@@ -258,12 +290,22 @@ class ResearchState(BaseModel):
     )
 
     def get_all_citations(self) -> list[Citation]:
-        """Get deduplicated list of all citations."""
-        seen_urls = set()
+        """Get deduplicated list of all citations.
+
+        Deduplicates by normalized source identity rather than raw URL
+        string, so ``http``/``https``, ``www.``, tracking parameters and
+        DOI-resolver variants of the same paper collapse to one citation.
+        """
+        # Imported lazily: app.services.source_identity is dependency-free,
+        # but this keeps app.memory importable without the services package.
+        from app.services.source_identity import source_identity
+
+        seen: set[str] = set()
         unique_citations = []
         for citation in self.citations:
-            if citation.url not in seen_urls:
-                seen_urls.add(citation.url)
+            key = source_identity(citation.url, title=citation.title)
+            if key not in seen:
+                seen.add(key)
                 unique_citations.append(citation)
         return unique_citations
 

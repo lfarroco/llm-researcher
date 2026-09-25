@@ -20,6 +20,12 @@ Built with FastAPI, LangGraph/LangChain, React, and PostgreSQL.
 - **10+ search sources**: web (Tavily/DuckDuckGo), ArXiv, Wikipedia, Crossref,
   OpenAlex, PubMed, Semantic Scholar, Springer Nature, Elsevier Scopus
 - **PDF pipeline**: download + cache, GROBID parsing, chunking, BibTeX parsing
+- **Full-text grounding**: open-access PDFs are parsed and chunked after search,
+  so the report quotes real paper passages (stored as evidence, with character
+  offsets and section labels) instead of only abstracts and search snippets
+- **Idempotent knowledge base**: sources are identified by normalized DOI /
+  arXiv id / URL, so re-running or resuming merges into the knowledge base
+  rather than duplicating sources or discarding your notes
 - **Persistent knowledge base**: sources/findings/notes CRUD with filtering,
   tags, and per-item notes
 - **Real-time UI**: WebSocket progress, 10-tab detail view, plan + AI-state
@@ -40,6 +46,7 @@ Built with FastAPI, LangGraph/LangChain, React, and PostgreSQL.
 - **[PHASE16_SUMMARY.md](docs/PHASE16_SUMMARY.md)** — real-time/WebSocket features
 - **[QUERY_EXPANSION.md](docs/QUERY_EXPANSION.md)** — query expansion feature
 - **[WORKFLOW.md](docs/WORKFLOW.md)** — open/operation-oriented workflow proposal
+- **[HARNESS_FEASIBILITY.md](docs/HARNESS_FEASIBILITY.md)** — review: using DeepSeek Harness as a dependency
 
 ## 🚦 Project Status
 
@@ -65,7 +72,7 @@ Configure your preferred provider in the `.env` file:
 | **OpenAI** | `LLM_PROVIDER=openai` · `LLM_MODEL=gpt-4o` · `OPENAI_API_KEY=...` |
 | **Ollama** (local) | `LLM_PROVIDER=ollama` · `LLM_MODEL=qwen3:4b` · `OLLAMA_BASE_URL=http://localhost:11434` |
 | **Groq** | `LLM_PROVIDER=groq` · `LLM_MODEL=llama-3.3-70b-versatile` · `GROQ_API_KEY=...` |
-| **DeepSeek** | `LLM_PROVIDER=deepseek` · `LLM_MODEL=deepseek-chat` · `DEEPSEEK_API_KEY=...` |
+| **DeepSeek** | `LLM_PROVIDER=deepseek` · `LLM_MODEL=deepseek-flash` · `DEEPSEEK_API_KEY=...` |
 
 Optional academic API keys enable additional search plugins:
 `SPRINGER_API_KEY` (Springer Nature) and `ELSEVIER_API_KEY` (Elsevier Scopus).

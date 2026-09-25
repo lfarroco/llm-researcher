@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Default GROBID settings
 DEFAULT_GROBID_SERVER = "http://grobid:8070"
+DEFAULT_GROBID_TIMEOUT_SECONDS = 30
 
 
 class PDFSection(BaseModel):
@@ -90,7 +91,21 @@ class ParsedPDF(BaseModel):
 
 def _get_grobid_server() -> str:
     """Get the GROBID server URL from settings or default."""
-    return get_setting("GROBID_SERVER", DEFAULT_GROBID_SERVER) or DEFAULT_GROBID_SERVER
+    return get_setting(None, "grobid_server") or DEFAULT_GROBID_SERVER
+
+
+def _get_grobid_timeout() -> int:
+    """Seconds to wait for a GROBID parse before falling back.
+
+    GROBID is the most likely component to hang a research run (a cold
+    container, a large PDF, a stalled model load), so this bound matters:
+    exceeding it falls back to the local parsers instead of stalling.
+    """
+    configured = get_setting(None, "grobid_timeout_seconds")
+    try:
+        return int(float(configured))
+    except (TypeError, ValueError):
+        return DEFAULT_GROBID_TIMEOUT_SECONDS
 
 
 def _parse_with_grobid(pdf_path: str) -> Optional[ParsedPDF]:
@@ -105,9 +120,15 @@ def _parse_with_grobid(pdf_path: str) -> Optional[ParsedPDF]:
     """
     try:
         grobid_server = _get_grobid_server()
-        logger.info(f"[PDF Parser] Using GROBID server: {grobid_server}")
+        grobid_timeout = _get_grobid_timeout()
+        logger.info(
+            f"[PDF Parser] Using GROBID server: {grobid_server} "
+            f"(timeout {grobid_timeout}s)"
+        )
 
-        client = GrobidClient(grobid_server=grobid_server)
+        client = GrobidClient(
+            grobid_server=grobid_server, timeout=grobid_timeout
+        )
 
         # Process the PDF using GROBID's processFulltextDocument endpoint
         # This returns TEI XML with structured content

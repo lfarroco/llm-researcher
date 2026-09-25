@@ -51,16 +51,20 @@ class PDFDownloadResult(BaseModel):
 
 
 def _get_cache_dir() -> Path:
-    """Get the PDF cache directory path from settings or default."""
-    cache_dir_str = get_setting("PDF_CACHE_DIR", DEFAULT_CACHE_DIR)
-    cache_dir = Path(cache_dir_str)
+    """Get the PDF cache directory path from settings or default.
+
+    An empty setting is treated as unset: ``Path("")`` resolves to the current
+    working directory, which would scatter cached PDFs through the project.
+    """
+    cache_dir_str = get_setting(None, "pdf_cache_dir") or ""
+    cache_dir = Path(cache_dir_str.strip() or DEFAULT_CACHE_DIR)
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
 
 def _get_max_size_mb() -> int:
     """Get the maximum PDF size from settings or default."""
-    max_size_str = get_setting("MAX_PDF_SIZE_MB", str(DEFAULT_MAX_SIZE_MB))
+    max_size_str = get_setting(None, "max_pdf_size_mb") or str(DEFAULT_MAX_SIZE_MB)
     try:
         return int(max_size_str)
     except ValueError:

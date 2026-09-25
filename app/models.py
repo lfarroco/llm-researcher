@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON
+    Column, Integer, String, Text, DateTime, ForeignKey, Float, JSON,
+    UniqueConstraint, Index,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -48,6 +49,11 @@ class Research(Base):
         cascade="all, delete-orphan",
         order_by="ResearchNote.created_at",
     )
+    evidence = relationship(
+        "ResearchEvidence",
+        back_populates="research",
+        cascade="all, delete-orphan",
+    )
 
 
 class ConversationMessage(Base):
@@ -69,11 +75,24 @@ class ConversationMessage(Base):
 
 class ResearchSource(Base):
     """Stores individual sources/citations collected during research."""
+
     __tablename__ = "research_sources"
+    __table_args__ = (
+        # A source is identified by its normalized URL/DOI within one
+        # research item. This makes collection idempotent: re-running or
+        # resuming a research merges into the existing knowledge base
+        # instead of inserting duplicates.
+        UniqueConstraint(
+            "research_id", "dedupe_key", name="uq_research_sources_identity"
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     research_id = Column(Integer, ForeignKey("research.id"), nullable=False)
     url = Column(String(2000), nullable=False)
+    # Normalized identity (lowercased URL or doi:<value>). Never user-facing;
+    # see app/services/source_identity.py for the normalization rules.
+    dedupe_key = Column(String(2000), nullable=True, index=True)
     title = Column(String(500), nullable=True)
     author = Column(String(200), nullable=True)
     content_snippet = Column(Text, nullable=True)
@@ -82,9 +101,57 @@ class ResearchSource(Base):
     accessed_at = Column(DateTime(timezone=True), default=utcnow)
     user_notes = Column(Text, nullable=True)  # User's notes on this source
     tags = Column(JSON, nullable=True)  # List of tags for categorization
+    # Full-text retrieval state for this source (see research_fulltext_* settings)
+    full_text_status = Column(
+        String(20), nullable=True
+    )  # None|fetched|unavailable|failed
+    full_text_parser = Column(String(50), nullable=True)  # grobid|pdfplumber|pypdf2
+    full_text_chars = Column(Integer, nullable=True)
+    full_text_fetched_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     research = relationship("Research", back_populates="sources")
+    evidence = relationship(
+        "ResearchEvidence",
+        back_populates="source",
+        cascade="all, delete-orphan",
+    )
+
+
+class ResearchEvidence(Base):
+    """A quotable span of a source's full text.
+
+    Evidence is what makes a report auditable: synthesis is grounded in these
+    spans rather than in search-result snippets, and each span keeps its
+    character offsets so a claim can later be bound back to the exact passage
+    that supports it (see docs/HARNESS_FEASIBILITY.md §8.4).
+    """
+
+    __tablename__ = "research_evidence"
+    __table_args__ = (
+        Index("ix_research_evidence_source_index", "source_id", "chunk_index"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    research_id = Column(Integer, ForeignKey("research.id"), nullable=False)
+    source_id = Column(
+        Integer, ForeignKey("research_sources.id"), nullable=False
+    )
+    chunk_index = Column(Integer, nullable=False, default=0)
+    text = Column(Text, nullable=False)
+    # Offsets into the parsed full text, so a span can be re-located.
+    start_char = Column(Integer, nullable=True)
+    end_char = Column(Integer, nullable=True)
+    token_count = Column(Integer, nullable=True)
+    # Which parsed section this span came from, when known.
+    section = Column(String(300), nullable=True)
+    # Sub-query this evidence was retrieved for, when known.
+    sub_query = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+    # Relationships
+    research = relationship("Research", back_populates="evidence")
+    source = relationship("ResearchSource", back_populates="evidence")
 
 
 class ResearchFinding(Base):

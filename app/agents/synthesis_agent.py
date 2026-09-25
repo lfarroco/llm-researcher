@@ -15,7 +15,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.config import settings
 from app.llm_provider import LLMProviderFactory, rate_limited_llm_call
 from app.memory.research_state import (
-    AgentStep, ResearchNote, ResearchState, Citation,
+    AgentStep, EvidenceSpan, ResearchNote, ResearchState, Citation,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,7 @@ Guidelines:
 9. Only cite sources that are directly relevant to the claims you are making. Prioritize sources with higher relevance scores; skip sources with low relevance scores or that are off-topic. It is fine not to cite every source.
 10. Write a report of approximately {word_target} words - aim for at least 80% of this target and do not finish early. Structure the report as follows: an Introduction (~150 words); one dedicated section per sub-question investigated (5 sections, each ~350-450 words); a cross-cutting analysis section (~200 words); and a Conclusion (~150 words). Inside each section, write several paragraphs that cover key findings with inline citations, supporting data points, concrete examples, and implications. Before finishing, estimate how many words you have written; if you are short of the target, keep expanding sections with additional analysis and detail until you reach it.
 11. Cite at least 12 distinct sources. For each source you cite, include at least one sentence describing what that source specifically contributes, so cited sources are meaningfully discussed rather than merely listed.
+12. When "Full-text passages" are supplied, they are verbatim excerpts from the published papers themselves and take precedence over the short search excerpts. Ground specific numbers, methods, and comparisons in those passages, and carry their citation markers through to your claims. Do not attribute a claim to a paper's full text unless the passages actually support it.
 
 IMPORTANT: Use ONLY the citation numbers provided in the sources. Do not invent citations. Do NOT include a "References" section in your response - the reference list is appended separately."""),
     ("human", """Research Query: {query}
@@ -45,6 +46,8 @@ Sub-questions investigated:
 
 Sources and findings:
 {sources}
+
+{evidence_context}
 
 {notes_context}
 
@@ -76,6 +79,74 @@ def format_sources_for_prompt(citations: list[Citation]) -> str:
         formatted.append(source_info)
 
     return "\n\n---\n\n".join(formatted)
+
+
+def format_evidence_for_prompt(
+    evidence: list[EvidenceSpan],
+    per_source_chars: int | None = None,
+) -> str:
+    """Format retrieved full-text passages for the synthesis prompt.
+
+    Evidence is grouped by source and labelled with the same citation marker
+    (``[1]``) used in the report, so the writer can attribute a specific
+    passage rather than crediting a whole document. When this is present the
+    prompt asks the model to prefer it over search-result excerpts.
+
+    Returns an empty string when there is no evidence, which keeps the
+    prompt unchanged for runs without full text.
+    """
+    if not evidence:
+        return ""
+
+    if per_source_chars is None:
+        per_source_chars = settings.research_synthesis_fulltext_chars
+
+    grouped: dict[str, list[EvidenceSpan]] = {}
+    for span in evidence:
+        marker = span.citation_id or f"source {span.source_id}"
+        grouped.setdefault(marker, []).append(span)
+
+    blocks = []
+    for marker, spans in grouped.items():
+        first = spans[0]
+        header = f"{marker} {first.title}".rstrip()
+        if first.url:
+            header += f"\nURL: {first.url}"
+
+        # Accumulate whole passages until the budget is reached. Slicing the
+        # concatenated text instead would routinely cut a passage off
+        # mid-sentence, and a half-sentence is worse than no sentence for
+        # grounding a claim. A single passage larger than the whole budget is
+        # the one case that must be truncated, or the prompt would be
+        # unbounded.
+        passages = []
+        used = 0
+        for span in spans:
+            location = f" (section: {span.section})" if span.section else ""
+            text = span.text.strip()
+            passage = f"[passage{location}]\n{text}"
+
+            if not passages:
+                if len(passage) > per_source_chars:
+                    # Truncate the text, not the label, so the citation
+                    # marker survives; the ellipsis is inside the budget.
+                    ellipsis = "..."
+                    keep = max(per_source_chars - len(ellipsis), 0)
+                    body_text = text[:keep] + ellipsis
+                    passage = f"[passage{location}]\n{body_text}"[:per_source_chars]
+                passages.append(passage)
+                used = len(passage)
+                continue
+
+            if used + len(passage) > per_source_chars:
+                break
+            passages.append(passage)
+            used += len(passage)
+
+        body = "\n\n".join(passages)
+        blocks.append(f"{header}\n\n{body}")
+
+    return "\n\n---\n\n".join(blocks)
 
 
 _REFERENCES_HEADING_RE = re.compile(
@@ -151,6 +222,29 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
     sub_queries_text = "\n".join(f"- {sq}" for sq in state.sub_queries)
     sources_text = format_sources_for_prompt(state.citations)
 
+    # Full-text passages retrieved from parsed PDFs, when available. These
+    # are what let the report make claim-level statements instead of
+    # paraphrasing abstracts.
+    evidence_context = format_evidence_for_prompt(state.evidence)
+    if evidence_context:
+        evidence_context = (
+            "Full-text passages from the source papers "
+            f"({len(state.evidence)} passage(s) across "
+            f"{len({s.source_id for s in state.evidence})} source(s)). "
+            "Prefer these over the short excerpts above, and cite the "
+            "marker shown for each:\n\n" + evidence_context
+        )
+        logger.info(
+            f"[SYNTHESIS] Grounding in {len(state.evidence)} full-text "
+            f"passage(s) from "
+            f"{len({s.source_id for s in state.evidence})} source(s)"
+        )
+    else:
+        logger.info(
+            "[SYNTHESIS] No full-text evidence available; "
+            "writing from search excerpts only"
+        )
+
     # Build notes context so synthesis can leverage agent observations
     notes_context = ""
     if state.research_notes:
@@ -177,6 +271,7 @@ async def synthesize_findings(state: ResearchState) -> dict[str, Any]:
         "query": state.query,
         "sub_queries": sub_queries_text,
         "sources": sources_text,
+        "evidence_context": evidence_context,
         "notes_context": notes_context,
         "word_target": settings.research_report_word_target,
     })

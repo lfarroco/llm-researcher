@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import models
+from app.services.source_identity import source_identity
 from app.schemas import (
     ResearchSourceResponse,
     ResearchSourceCreate,
@@ -113,12 +114,33 @@ def add_research_source(
     payload: ResearchSourceCreate,
     db: Session = Depends(get_db),
 ):
-    """Manually add a source to the research knowledge base."""
+    """Manually add a source to the research knowledge base.
+
+    Adding a source that is already present (same normalized URL/DOI) returns
+    the existing row instead of creating a duplicate, so the knowledge base
+    stays a set of distinct sources no matter how many times a URL is pasted.
+    """
     _get_research_or_404(research_id, db)
+
+    identity = source_identity(payload.url, title=payload.title)
+    existing = db.query(models.ResearchSource).filter(
+        models.ResearchSource.research_id == research_id,
+        models.ResearchSource.dedupe_key == identity,
+    ).first()
+    if existing is not None:
+        # Merge only user-owned fields the caller actually supplied.
+        if payload.user_notes is not None:
+            existing.user_notes = payload.user_notes
+        if payload.tags is not None:
+            existing.tags = payload.tags
+        db.commit()
+        db.refresh(existing)
+        return existing
 
     source = models.ResearchSource(
         research_id=research_id,
         url=payload.url,
+        dedupe_key=identity,
         title=payload.title,
         author=payload.author,
         content_snippet=payload.content_snippet,

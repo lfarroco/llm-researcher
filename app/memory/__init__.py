@@ -2,6 +2,7 @@
 
 from app.memory.research_state import (
     Citation,
+    EvidenceSpan,
     ResearchNote,
     ResearchState,
     SourceType,
@@ -9,6 +10,7 @@ from app.memory.research_state import (
 
 __all__ = [
     "Citation",
+    "EvidenceSpan",
     "ResearchNote",
     "ResearchState",
     "SourceType",

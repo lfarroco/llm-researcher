@@ -150,15 +150,25 @@ class TestOpenAIProvider:
 class TestDeepSeekProvider:
     """Tests for DeepSeek provider."""
 
+    def test_default_model_is_current_flash_route(self):
+        """The default must be DeepSeek's canonical id, not a retired one.
+
+        V4-Flash and V4-Pro are retired upstream; ``deepseek-v4-flash`` and
+        ``deepseek-v4-pro`` survive only as undocumented temporary aliases.
+        """
+        provider = DeepSeekProvider(api_key="sk-deepseek-test")
+
+        assert provider.model == "deepseek-flash"
+
     def test_create_deepseek_provider(self):
         """Test creating a DeepSeek provider."""
         provider = DeepSeekProvider(
-            model="deepseek-v4-flash",
+            model="deepseek-flash",
             api_key="sk-deepseek-test",
             temperature=0.3,
         )
 
-        assert provider.model == "deepseek-v4-flash"
+        assert provider.model == "deepseek-flash"
         assert provider.api_key == "sk-deepseek-test"
         assert provider.base_url == "https://api.deepseek.com/v1"
         assert provider.temperature == 0.3
@@ -166,7 +176,7 @@ class TestDeepSeekProvider:
     def test_deepseek_get_llm_with_thinking(self):
         """Test DeepSeek get_llm passes thinking mode params."""
         provider = DeepSeekProvider(
-            model="deepseek-v4-flash",
+            model="deepseek-flash",
             api_key="sk-deepseek-test",
         )
 
@@ -182,7 +192,7 @@ class TestDeepSeekProvider:
                             llm = provider.get_llm()
 
                     mock_chat.assert_called_once_with(
-                        model="deepseek-v4-flash",
+                        model="deepseek-flash",
                         api_key="sk-deepseek-test",
                         base_url="https://api.deepseek.com/v1",
                         temperature=0.2,
@@ -197,7 +207,7 @@ class TestDeepSeekProvider:
     def test_deepseek_get_llm_thinking_disabled(self):
         """Test DeepSeek get_llm with thinking mode disabled."""
         provider = DeepSeekProvider(
-            model="deepseek-v4-flash",
+            model="deepseek-flash",
             api_key="sk-deepseek-test",
         )
 
@@ -313,13 +323,13 @@ class TestLLMProviderFactory:
         """Test factory creates DeepSeek provider."""
         provider = LLMProviderFactory.create_provider(
             provider_type="deepseek",
-            model="deepseek-chat",
+            model="deepseek-flash",
             api_key="sk-deepseek-test",
             temperature=0.2,
         )
 
         assert isinstance(provider, DeepSeekProvider)
-        assert provider.model == "deepseek-chat"
+        assert provider.model == "deepseek-flash"
         assert provider.api_key == "sk-deepseek-test"
         assert provider.base_url == "https://api.deepseek.com/v1"
         assert provider.temperature == 0.2

@@ -104,7 +104,10 @@ def determine_resume_point(state: ResearchState) -> str:
     return "plan"
 
 
-def create_research_graph(start_from: str = "plan") -> StateGraph:
+def create_research_graph(
+    start_from: str = "plan",
+    interrupt_after: Optional[list[str]] = None,
+) -> StateGraph:
     """
     Create the research workflow graph.
 
@@ -112,6 +115,11 @@ def create_research_graph(start_from: str = "plan") -> StateGraph:
         start_from: Which node to use as the entry point.
             Defaults to "plan" for a fresh run. When resuming,
             pass a later node to skip already-completed steps.
+        interrupt_after: Node names after which execution should pause,
+            returning the accumulated state. The research service uses this
+            to run the graph in two segments with full-text retrieval in
+            between: ``plan -> search -> chase_references`` | evidence |
+            ``hypothesize -> synthesize -> format``.
 
     Workflow:
         plan -> search -> hypothesize -> synthesize -> format -> END
@@ -169,6 +177,8 @@ def create_research_graph(start_from: str = "plan") -> StateGraph:
     workflow.add_edge("format", END)
     workflow.add_edge("fail", END)
 
+    if interrupt_after:
+        return workflow.compile(interrupt_after=list(interrupt_after))
     return workflow.compile()
 
 
@@ -178,6 +188,7 @@ async def run_research_workflow(
     config: Optional[dict] = None,
     on_state_update=None,
     resume_state: Optional[ResearchState] = None,
+    interrupt_after: Optional[list[str]] = None,
 ) -> ResearchState:
     """
     Execute the complete research workflow.
@@ -191,6 +202,9 @@ async def run_research_workflow(
         resume_state: Optional saved ResearchState to resume from.
             When provided, the workflow starts from the appropriate step
             based on what data the state already contains.
+        interrupt_after: Optional node names after which to pause and return
+            the accumulated state, so a caller can do work between phases
+            (the research service retrieves full-text evidence this way).
 
     Returns:
         Final ResearchState with results
@@ -233,7 +247,9 @@ async def run_research_workflow(
         "[ORCHESTRATOR] Creating research graph "
         f"(start_from='{start_from}')"
     )
-    graph = create_research_graph(start_from=start_from)
+    graph = create_research_graph(
+        start_from=start_from, interrupt_after=interrupt_after
+    )
     logger.debug("[ORCHESTRATOR] Graph compiled, starting execution")
 
     # Run the workflow, streaming state after each node

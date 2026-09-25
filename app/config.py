@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict, computed_field
-from typing import Any
+from typing import Any, Optional
 from threading import Lock
 import time
 
@@ -53,6 +53,31 @@ class Settings(BaseSettings):
     # synthesis model. Longer excerpts give the writer more material to
     # work with when producing a detailed report.
     research_synthesis_excerpt_chars: int = 1200
+
+    # Full-text grounding: when enabled, the search phase downloads each
+    # open-access PDF it can reach, parses it (GROBID, with local
+    # pdfplumber/PyPDF2 fallbacks) and chunks it so synthesis can quote
+    # real paper text instead of only search-result snippets.
+    research_fulltext_enabled: bool = True
+    # Candidate sources considered for full-text retrieval per research run.
+    # Downloads are network-bound and slow, so this is deliberately bounded.
+    research_fulltext_max_sources: int = 8
+    # Chunks stored per source (ranked by relevance to the sub-query).
+    research_fulltext_chunks_per_source: int = 3
+    # Character budget for full-text evidence handed to the synthesis model,
+    # per source. Sits alongside (not instead of) the snippet budget.
+    research_synthesis_fulltext_chars: int = 6000
+
+    # PDF retrieval and parsing
+    # Directory used to cache downloaded PDFs. Defaults to None, which
+    # resolves to the system temp directory at call time.
+    pdf_cache_dir: Optional[str] = None
+    # Refuse to download PDFs larger than this.
+    max_pdf_size_mb: int = 50
+    # GROBID server used for structured academic PDF parsing.
+    grobid_server: str = "http://grobid:8070"
+    # Seconds to wait for a GROBID parse before falling back to local parsers.
+    grobid_timeout_seconds: float = 30.0
 
     # LLM Rate Limiting & Backoff
     llm_max_retries: int = 10  # Max retry attempts for LLM API calls
