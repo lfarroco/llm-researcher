@@ -741,6 +741,14 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 								<div className="space-y-2">
 									{sources.slice(0, 3).map((source) => (
 										<div key={source.id} className="p-3 bg-gray-50 rounded">
+											{source.citation_marker != null && (
+												<span
+													className="inline-block mr-2 px-1.5 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded"
+													title={`Cited as [${source.citation_marker}] in the report`}
+												>
+													[{source.citation_marker}]
+												</span>
+											)}
 											<a
 												href={source.url}
 												target="_blank"
@@ -852,6 +860,14 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 															className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
 														/>
 														<div className="min-w-0">
+															{source.citation_marker != null && (
+																<span
+																	className="inline-block mr-2 px-1.5 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded align-middle"
+																	title={`Cited as [${source.citation_marker}] in the report`}
+																>
+																	[{source.citation_marker}]
+																</span>
+															)}
 															<a
 																href={source.url}
 																target="_blank"

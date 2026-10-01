@@ -2,12 +2,21 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
-# Using texlive-latex-base instead of -extra to reduce size
-# Most PDF features will work with just the base package
+# Install system dependencies.
+#
+# Pandoc's default LaTeX template needs more than texlive-latex-base: the base
+# package omits xcolor.sty and friends, so PDF export failed with
+# "! LaTeX Error: File `xcolor.sty' not found." once the pandoc outputfile bug
+# was fixed. -recommended plus -fonts-recommended covers the default template
+# (lmodern is a separate small package). texlive-latex-extra is still
+# deliberately excluded because it is very large; add it, or switch
+# --pdf-engine, if a template needs a package from it.
 RUN apt-get update && apt-get install -y \
 	pandoc \
 	texlive-latex-base \
+	texlive-latex-recommended \
+	texlive-fonts-recommended \
+	lmodern \
 	&& rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

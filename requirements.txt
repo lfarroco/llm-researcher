@@ -48,7 +48,11 @@ pypandoc>=1.12
 grobid-client-python>=0.0.7
 pdfplumber>=0.10.0
 PyPDF2>=3.0.0
-bibtexparser>=1.4.0
+# 1.x API only: bibtexparser 2.x removed bibtexparser.bparser /
+# bibdatabase / bwriter, which app/tools/bibtex_parser.py imports. Without
+# the upper bound a fresh image installs 2.x and the app fails to start with
+# ModuleNotFoundError: No module named 'bibtexparser.bparser'.
+bibtexparser>=1.4.0,<2.0.0
 
 # HTTP retries and resilience
 tenacity>=8.2.0

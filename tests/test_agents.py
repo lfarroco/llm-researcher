@@ -17,6 +17,7 @@ from app.agents.planner import (
 )
 from app.agents.search_agent import (
     RELEVANCE_PROMPT,
+    cap_sources_per_domain,
     filter_relevant_citations,
     search_for_subquery,
     execute_searches,
@@ -951,6 +952,113 @@ class TestHypothesisRanking:
         assert all("rank" in step.metadata for step in hypothesis_steps)
         assert all("score" in step.metadata for step in hypothesis_steps)
 
+    @pytest.mark.asyncio
+    async def test_hypothesis_sources_become_attributed_sub_query_results(self):
+        """Hypothesis sources must be linked to a sub-query, not just returned.
+
+        Regression (P1-5): they were returned as bare citations, so the sources
+        carrying the report's most specific claims were attributed to nothing —
+        they never became findings, never showed up in the knowledge base, and
+        were missing from /plan progress.
+        """
+        state = ResearchState(
+            research_id=7,
+            query="How effective are AI tutors?",
+            sub_queries=["What outcomes improve?"],
+            citations=[
+                Citation(
+                    id="[1]",
+                    url="https://seed.example",
+                    title="Seed source",
+                    snippet="Initial evidence",
+                    source_type=SourceType.WEB,
+                )
+            ],
+        )
+
+        hypothesis = Hypothesis(
+            statement="AI tutors improve exam performance in STEM.",
+            search_query="AI tutor exam performance randomized trial",
+            reasoning="A recurring claim that needs validation.",
+            aspect="STEM outcomes",
+        )
+        citations = [
+            Citation(
+                id="[0]",
+                url="https://example.com/a",
+                title="A",
+                snippet="A",
+                source_type=SourceType.WEB,
+            )
+        ]
+
+        with patch(
+            "app.agents.hypothesis_agent.rate_limited_llm_call",
+            new_callable=AsyncMock,
+        ) as mock_llm, patch(
+            "app.agents.hypothesis_agent.search_for_hypothesis",
+            new_callable=AsyncMock,
+        ) as mock_search:
+            mock_llm.return_value = {
+                "observations": "Needs stronger evidence.",
+                "hypotheses": [hypothesis.model_dump()],
+            }
+            mock_search.return_value = (hypothesis, citations)
+
+            result = await generate_hypotheses(state)
+
+        sub_results = result["sub_query_results"]
+        assert len(sub_results) == 1
+        attributed = sub_results[0]
+        # The sub-query is the hypothesis, so the finding links back to it.
+        assert attributed.sub_query == hypothesis.statement
+        assert attributed.status == "complete"
+        assert [c.url for c in attributed.citations] == [
+            "https://example.com/a"
+        ]
+        assert attributed.answer
+
+    @pytest.mark.asyncio
+    async def test_hypothesis_with_no_evidence_produces_no_sub_query_result(self):
+        """A hypothesis that found nothing must not fabricate a finding."""
+        state = ResearchState(
+            research_id=8,
+            query="q",
+            sub_queries=[],
+            citations=[
+                Citation(
+                    id="[1]",
+                    url="https://seed.example",
+                    title="Seed source",
+                    snippet="Initial evidence",
+                    source_type=SourceType.WEB,
+                )
+            ],
+        )
+        hypothesis = Hypothesis(
+            statement="Unsupported claim.",
+            search_query="nothing found query",
+            reasoning="worth a look",
+            aspect="aspect",
+        )
+
+        with patch(
+            "app.agents.hypothesis_agent.rate_limited_llm_call",
+            new_callable=AsyncMock,
+        ) as mock_llm, patch(
+            "app.agents.hypothesis_agent.search_for_hypothesis",
+            new_callable=AsyncMock,
+        ) as mock_search:
+            mock_llm.return_value = {
+                "observations": "obs",
+                "hypotheses": [hypothesis.model_dump()],
+            }
+            mock_search.return_value = (hypothesis, [])
+
+            result = await generate_hypotheses(state)
+
+        assert result["sub_query_results"] == []
+
 
 class TestHypothesisFeedbackLoop:
     """Tests for user feedback refinement in hypothesis generation."""
@@ -1219,3 +1327,74 @@ class TestRelevanceFiltering:
                 await execute_searches(state)
 
         assert captured["include_academic"] is True
+
+
+class TestPerDomainSourceCap:
+    """One site's near-duplicate pages must not dominate the report."""
+
+    @staticmethod
+    def make(url, score=0.5, source_type=SourceType.WEB):
+        return Citation(
+            id="[0]",
+            url=url,
+            title=url,
+            snippet="s",
+            source_type=source_type,
+            relevance_score=score,
+        )
+
+    def test_caps_repeated_domain(self):
+        citations = [
+            self.make(f"https://pkgpulse.com/page-{i}", score=0.5)
+            for i in range(6)
+        ]
+        kept = cap_sources_per_domain(citations, max_per_domain=2)
+        assert len(kept) == 2
+
+    def test_keeps_highest_scoring_per_domain(self):
+        citations = [
+            self.make("https://example.com/low", score=0.1),
+            self.make("https://example.com/high", score=0.9),
+            self.make("https://example.com/mid", score=0.5),
+        ]
+        kept = cap_sources_per_domain(citations, max_per_domain=1)
+        assert [c.url for c in kept] == ["https://example.com/high"]
+
+    def test_preserves_input_order_of_survivors(self):
+        citations = [
+            self.make("https://a.com/1", score=0.9),
+            self.make("https://b.com/1", score=0.2),
+            self.make("https://a.com/2", score=0.1),
+        ]
+        kept = cap_sources_per_domain(citations, max_per_domain=1)
+        assert [c.url for c in kept] == [
+            "https://a.com/1", "https://b.com/1"
+        ]
+
+    def test_www_and_bare_host_share_a_domain(self):
+        citations = [
+            self.make("https://www.example.com/a"),
+            self.make("https://example.com/b"),
+        ]
+        assert len(cap_sources_per_domain(citations, max_per_domain=1)) == 1
+
+    def test_academic_sources_are_exempt(self):
+        """Every arXiv row is a distinct paper sharing one host."""
+        citations = [
+            self.make(
+                f"https://arxiv.org/abs/2301.0000{i}",
+                source_type=SourceType.ARXIV,
+            )
+            for i in range(6)
+        ]
+        assert len(cap_sources_per_domain(citations, max_per_domain=1)) == 6
+
+    def test_zero_disables_the_cap(self):
+        citations = [
+            self.make(f"https://example.com/{i}") for i in range(6)
+        ]
+        assert len(cap_sources_per_domain(citations, max_per_domain=0)) == 6
+
+    def test_unparseable_urls_are_kept(self):
+        citations = [self.make(""), self.make("not a url")]
+        assert len(cap_sources_per_domain(citations, max_per_domain=1)) == 2

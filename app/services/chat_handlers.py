@@ -32,6 +32,12 @@ logger = logging.getLogger(__name__)
 
 URL_PATTERN = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+')
 
+# A run that has finished successfully. Re-queuing one of these would overwrite
+# the finished document (and renumber its citations), so a chat "research"
+# intent against it starts a new item instead. Statuses that are *not* in this
+# set (pending/error/cancelled/failed/researching) are re-queued in place.
+FINISHED_RESEARCH_STATUS = "complete"
+
 
 @dataclass
 class ChatResult:
@@ -49,13 +55,60 @@ async def handle_research_intent(
     background_tasks: BackgroundTasks,
     db: Session,
 ) -> ChatResult:
-    """Handle intent: user wants to start new research."""
+    """Handle intent: user wants to start new research.
+
+    Two cases, because the worker's atomic claim only accepts items in
+    ``pending``:
+
+    * The item already finished (``complete``) — start a **new** research item
+      so the finished document is not overwritten, and hand its id back in
+      ``state_changes``.
+    * Anything else — re-queue this item by resetting it to ``pending``. It
+      used to be set to ``researching``, which the claim does not accept, so
+      the queued run no-opped and the item was stranded in ``researching``
+      forever with no API path back to a terminal status. Resetting to
+      ``pending`` also recovers items already stranded that way.
+    """
     topic = entities.get("topic", message)
 
-    background_tasks.add_task(process_research, research.id, topic)
+    if research.status == FINISHED_RESEARCH_STATUS:
+        new_research = models.Research(
+            query=topic,
+            user_notes=research.user_notes,
+            tags=research.tags,
+            status="pending",
+        )
+        db.add(new_research)
+        db.commit()
+        db.refresh(new_research)
 
-    research.status = "researching"
+        background_tasks.add_task(process_research, new_research.id, topic)
+
+        return ChatResult(
+            response_text=(
+                f"I'll start a new research run for '{topic}'. "
+                f"Your existing report is untouched — this is research "
+                f"item #{new_research.id}, and I'll update your knowledge "
+                f"base as I find new sources."
+            ),
+            action_taken="research_initiated",
+            state_changes={
+                "status": "pending",
+                "new_query": topic,
+                "new_research_id": new_research.id,
+            },
+            suggestions=[
+                "Check research status",
+                "View collected sources",
+                "Ask me questions about the findings",
+            ],
+        )
+
+    # Re-queue in place. "pending" is what process_research_async claims.
+    research.status = "pending"
     db.commit()
+
+    background_tasks.add_task(process_research, research.id, topic)
 
     return ChatResult(
         response_text=(
@@ -65,7 +118,7 @@ async def handle_research_intent(
             f"I'll update your knowledge base as I find new sources."
         ),
         action_taken="research_initiated",
-        state_changes={"status": "researching", "new_query": topic},
+        state_changes={"status": "pending", "new_query": topic},
         suggestions=[
             "Check research status",
             "View collected sources",

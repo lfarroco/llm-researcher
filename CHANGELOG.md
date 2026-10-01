@@ -9,6 +9,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A fresh `docker compose build` produced an app that could not start.**
+  `requirements.txt` allowed `bibtexparser>=1.4.0`, and 2.x removed the
+  `bibtexparser.bparser` / `bibdatabase` / `bwriter` modules that
+  `app/tools/bibtex_parser.py` imports, so a rebuilt image died at import with
+  `ModuleNotFoundError: No module named 'bibtexparser.bparser'`. This only
+  appeared on a rebuild — an existing image kept a cached 1.x wheel. The
+  dependency is now pinned to `>=1.4.0,<2.0.0`. Verified by rebuilding the
+  image and serving `GET /` → 200.
+- **PDF and DOCX export returned HTTP 500 for every request.** Pandoc can write
+  text formats to stdout but refuses binary ones ("Output to docx only works by
+  using a outputfile"). `export_markdown_to_format` now converts PDF/DOCX into a
+  temporary file and reads the bytes back, removing the file on every path —
+  including failure. The DOCX branch also passed `--reference-doc=default`,
+  which is not a path pandoc accepts, and has been dropped. The Docker image
+  additionally installs `texlive-latex-recommended`, `texlive-fonts-recommended`
+  and `lmodern`, because pandoc's default template needs `xcolor.sty` and
+  friends, which `texlive-latex-base` alone does not ship. Verified in the
+  container: `pdf` → 200 with a `%PDF` header, `docx` → 200 with a valid OOXML
+  zip, `html`/`markdown` → 200.
+- **Full-text grounding never engaged (GROBID was dead code).** Citations were
+  persisted only after the whole workflow, but `collect_fulltext_evidence`
+  resolves candidates against the `ResearchSource` rows for the research — so
+  the identity map was empty, every candidate was skipped, and the log read
+  `Retrieved full text for 0/3 candidate sources` while synthesis fell back to
+  search snippets. Sources found by the search segment are now saved *before*
+  evidence collection. Passes with a new test asserting the rows exist when
+  evidence is collected; that test fails if the save is removed.
+- **A completed research item could be stranded in `researching` forever.** The
+  chat `research` intent set `status = "researching"`, but the worker's atomic
+  claim only accepts `pending`, so the queued run no-opped and nothing ever
+  restored a terminal status (`POST /resume` refuses `complete`). A chat
+  `research` intent against a finished item now starts a **new** item (carrying
+  over notes/tags and returning `state_changes["new_research_id"]`) so the
+  finished report is not overwritten; any other status is re-queued in place as
+  `pending`, which also recovers already-stranded items.
+- **`tags` and `user_notes` were silently dropped.** `POST /research` discarded
+  `tags`, `PATCH /research/{id}` only applied `query` despite documenting
+  otherwise, and batch creation could not express either field. All three now
+  persist them; `BatchResearchCreate` gained `user_notes`/`tags`.
+- **One bad Wikipedia search hit aborted the whole sub-query.** An unresolvable
+  title raised `PageError` and an ambiguous one `DisambiguationError`, either of
+  which discarded every other result. Each page is now fetched defensively, with
+  a fallback to an auto-suggesting summary lookup and finally to a summary of
+  the original query.
+- **`/plan` progress was always `pending` and `/state` always returned an empty
+  `completed_queries`.** Both read `state_json["findings"]`, which nothing ever
+  wrote. Progress is now derived from `sub_query_results` (the real serialized
+  search state), with the persisted `research_findings` rows as a fallback.
+  Verified against a real item: 5/5 sub-queries now report `complete`.
+- **Hypothesis-phase sources were attributed to no sub-query or finding.** They
+  were returned as bare citations, so the sources carrying the report's most
+  specific claims never became findings and were missing from the knowledge base
+  and `/plan`. They are now returned as `SubQueryResult`s.
+- **A single site's near-duplicate pages could dominate a report.** Search
+  assembly now caps generic-web sources per domain
+  (`research_max_sources_per_domain`, default 4), keeping the highest-scoring
+  ones and preserving order. Academic source types are exempt, because each row
+  is a distinct paper even though they share a host.
+- **`research_timeout` was dead configuration.** It is now enforced as a
+  whole-run budget around each workflow segment, so a hung provider cannot hold
+  a research in a non-terminal status forever. The default was raised from 300 s
+  to 1800 s: measured end-to-end runs take 261–306 s, so the old value would
+  have killed healthy runs the moment it was honoured.
+- **Partial search failures were reported as `0 errors`.** Errors from
+  individual sub-queries were discarded whenever any citations were found, so
+  the phase summary disagreed with the per-step statuses.
+- **Snippets and titles could be publisher chrome.** Search results carried
+  titles like `"Medium"` and abstracts that were pure sign-in chrome, which fed
+  the relevance filter and produced BibTeX keys like
+  `@misc{Unknown2026Medium}`. Leading navigation/sign-in/cookie text is now
+  stripped (conservatively — a chrome word followed by real content is left
+  alone) and a title that is only the site name is replaced by one derived from
+  the URL slug.
+- **The worker leaked a database session on every failed run**, because the
+  error path opened a second session to record the failure without closing the
+  first. `app.main` also configured the root logger at `DEBUG`, writing pipeline
+  detail to the container log; the level is now `INFO` by default and
+  configurable via `LOG_LEVEL`.
+- **CI tested a runtime the project does not ship.** Both jobs ran Python 3.11
+  while the Dockerfile and README are 3.12. CI now uses 3.12, and the test job
+  blanks the optional API-key variables so a stray `.env` cannot make it hit a
+  live API.
+- **`citation_marker` was not rendered anywhere in the UI**, so the marker
+  assigned to each source was invisible. The sources list and the report
+  overview now show the `[n]` badge (and `null`/absent means "not cited").
+
 - **Report citations now resolve to the source the sentence was written from.**
   The document numbered citations with the pipeline's collection markers while
   `GET /research/{id}/sources` returned knowledge-base row ids, so the two

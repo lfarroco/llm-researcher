@@ -29,6 +29,7 @@ from app.memory.research_state import (
     ResearchNote,
     ResearchState,
     SourceType,
+    SubQueryResult,
 )
 from app.tools.web_search import web_search
 from app.tools.arxiv_search import arxiv_search, is_academic_query
@@ -500,6 +501,9 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
     # Process results
     new_citations = []
     hypothesis_results: list[tuple[Hypothesis, list[Citation]]] = []
+    # Citations that survived dedup, grouped by the hypothesis that found them.
+    # These become SubQueryResults so the sources are attributable.
+    attributed_results: list[tuple[Hypothesis, list[Citation]]] = []
     for i, result in enumerate(results):
         step_idx = i + 1  # +1 because first step is the analysis step
         if user_feedback_notes:
@@ -529,10 +533,14 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
                 f"validated with {len(citations)} new sources"
             )
             # Update existing_urls to avoid duplicates across hypotheses
+            added: list[Citation] = []
             for c in citations:
                 if c.url not in existing_urls:
                     existing_urls.add(c.url)
                     new_citations.append(c)
+                    added.append(c)
+            if added:
+                attributed_results.append((hypothesis, added))
         else:
             logger.info(
                 f"[HYPOTHESIS] Hypothesis '{hypothesis.aspect}' "
@@ -631,8 +639,38 @@ async def generate_hypotheses(state: ResearchState) -> dict[str, Any]:
                 ),
             ))
 
+    # Attribute the hypothesis sources to the knowledge base.
+    #
+    # Without this, the sources found here carry the report's most specific
+    # claims but are linked to no sub-query or finding (findings < sub-questions),
+    # so they never show up in the knowledge-base views or in /plan progress.
+    # Returning them as SubQueryResults makes save_findings_to_db link them to
+    # the same source rows the rest of the report cites.
+    ranked_by_statement = {
+        ranked["hypothesis"].statement: ranked for ranked in ranked_hypotheses
+    }
+    hypothesis_sub_results = []
+    for hypothesis, citations in attributed_results:
+        ranked = ranked_by_statement.get(hypothesis.statement, {})
+        confidence = ranked.get("confidence")
+        answer = (
+            f"Investigated via search query '{hypothesis.search_query}'. "
+            f"{len(citations)} supporting source(s) found"
+        )
+        if confidence is not None:
+            answer += f" (confidence: {confidence})."
+        else:
+            answer += "."
+        hypothesis_sub_results.append(SubQueryResult(
+            sub_query=hypothesis.statement,
+            answer=answer,
+            citations=citations,
+            status="complete",
+        ))
+
     return {
         "citations": new_citations,
+        "sub_query_results": hypothesis_sub_results,
         "status": "synthesizing",
         "current_step": (
             f"Hypothesis investigation complete. "

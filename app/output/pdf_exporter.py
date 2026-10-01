@@ -6,6 +6,8 @@ in various formats (PDF, HTML, DOCX) using pypandoc.
 """
 
 import logging
+import os
+import tempfile
 from enum import Enum
 from typing import Optional
 
@@ -23,6 +25,12 @@ class ExportFormat(str, Enum):
     HTML = "html"
     DOCX = "docx"
     MARKDOWN = "md"
+
+
+# Pandoc can write text formats to stdout but refuses binary ones
+# ("Output to docx only works by using a outputfile"), so these must be
+# converted into a real file and read back.
+BINARY_EXPORT_FORMATS = frozenset({ExportFormat.PDF, ExportFormat.DOCX})
 
 
 def check_pandoc_installed() -> bool:
@@ -99,10 +107,13 @@ def export_markdown_to_format(
             ),
         ])
     elif output_format == ExportFormat.DOCX:
-        # DOCX-specific options
-        default_args.extend([
-            '--reference-doc=default',  # Use default template
-        ])
+        # DOCX-specific options.
+        #
+        # There used to be a `--reference-doc=default` here. Pandoc expects a
+        # path to a real .docx template, not the literal string "default", so
+        # it was invalid. Passing no reference doc uses pandoc's built-in
+        # styling; bundle a template and point at it if branding is wanted.
+        default_args.extend([])
 
     # Merge with custom args
     if extra_args:
@@ -114,7 +125,13 @@ def export_markdown_to_format(
             default_args.append(f'--metadata={key}:{value}')
 
     try:
-        # pypandoc.convert_text returns string for some formats, bytes for PDF
+        if output_format in BINARY_EXPORT_FORMATS:
+            return _convert_via_outputfile(
+                markdown_content, output_format, default_args
+            )
+
+        # Text formats can be written to stdout.
+        # pypandoc.convert_text returns str for text formats.
         output = pypandoc.convert_text(
             markdown_content,
             output_format.value,
@@ -131,6 +148,41 @@ def export_markdown_to_format(
         logger.error(
             f"Failed to convert markdown to {output_format.value}: {e}")
         raise ValueError(f"Pandoc conversion failed: {str(e)}")
+
+
+def _convert_via_outputfile(
+    markdown_content: str,
+    output_format: ExportFormat,
+    extra_args: list[str],
+) -> bytes:
+    """Convert to a binary format through a temporary output file.
+
+    Pandoc refuses binary targets on stdout, so the document is written to a
+    temp file with the right extension and read back as bytes. The temp file is
+    always removed, including when the conversion fails.
+    """
+    handle = tempfile.NamedTemporaryFile(
+        suffix=f".{output_format.value}", delete=False
+    )
+    handle.close()
+
+    try:
+        pypandoc.convert_text(
+            markdown_content,
+            output_format.value,
+            format='md',
+            extra_args=extra_args,
+            outputfile=handle.name,
+        )
+        with open(handle.name, "rb") as converted:
+            return converted.read()
+    finally:
+        try:
+            os.unlink(handle.name)
+        except OSError:
+            logger.warning(
+                "Could not remove temporary export file %s", handle.name
+            )
 
 
 def export_research_to_pdf(

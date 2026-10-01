@@ -8,6 +8,7 @@ dedicated router modules in app/routers/.
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -28,8 +29,10 @@ from app.routers import notes as notes_router
 from app.routers import settings as settings_router
 
 logger = logging.getLogger(__name__)
+# Default to INFO: DEBUG wrote every pipeline detail (including fetched page
+# content) to the container log. Set LOG_LEVEL=DEBUG when diagnosing locally.
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 

@@ -181,6 +181,108 @@ class TestWebSearch:
         assert results[0].score == 0.5  # DDG default score
 
 
+class TestSourceMetadataCleanup:
+    """Titles and snippets must not be publisher chrome (P1-2/P1-3).
+
+    A live run produced reference titles like "Medium" and abstracts that were
+    pure sign-in chrome, which then fed the relevance filter and BibTeX output.
+    """
+
+    def test_strips_sign_in_chrome(self):
+        from app.tools.web_search import strip_leading_boilerplate
+
+        assert strip_leading_boilerplate(
+            "Sign in | Example"
+        ) == "Example"
+        assert strip_leading_boilerplate(
+            "Sign in Sign up | The actual article text"
+        ) == "The actual article text"
+
+    def test_strips_cookie_and_nav_chrome(self):
+        from app.tools.web_search import strip_leading_boilerplate
+
+        assert strip_leading_boilerplate(
+            "Accept all cookies Real content here"
+        ) == "Real content here"
+        assert strip_leading_boilerplate(
+            "Home | Example Real content"
+        ) == "Example Real content"
+
+    def test_does_not_strip_content_starting_with_a_chrome_word(self):
+        """A weak chrome word followed by a space is real content."""
+        from app.tools.web_search import strip_leading_boilerplate
+
+        assert strip_leading_boilerplate(
+            "Home robots are changing manufacturing."
+        ) == "Home robots are changing manufacturing."
+        assert strip_leading_boilerplate(
+            "Share prices fell sharply today."
+        ) == "Share prices fell sharply today."
+
+    def test_collapses_whitespace_and_handles_empty(self):
+        from app.tools.web_search import strip_leading_boilerplate
+
+        assert strip_leading_boilerplate("  a \n\n  b  ") == "a b"
+        assert strip_leading_boilerplate("") == ""
+        assert strip_leading_boilerplate(None) == ""
+
+    def test_title_derived_from_url_slug(self):
+        from app.tools.web_search import improve_title
+
+        assert improve_title(
+            "", "https://example.com/how-to-do-x"
+        ) == "How To Do X"
+        assert improve_title(
+            "", "https://example.com/blog/my-post.html"
+        ) == "My Post"
+
+    def test_site_name_title_is_replaced_by_slug(self):
+        from app.tools.web_search import improve_title
+
+        # "Medium" tells the reader nothing; the slug does.
+        assert improve_title(
+            "Medium", "https://medium.com/why-rust-wins-abc123"
+        ) == "Why Rust Wins Abc123"
+
+    def test_real_title_is_left_alone(self):
+        from app.tools.web_search import improve_title
+
+        assert improve_title(
+            "Why Rust Wins", "https://medium.com/why-rust-wins-abc123"
+        ) == "Why Rust Wins"
+
+    def test_acronyms_in_slug_are_preserved(self):
+        from app.tools.web_search import improve_title
+
+        assert improve_title("", "https://example.com/NASA-mission") == (
+            "NASA Mission"
+        )
+
+    @pytest.mark.asyncio
+    async def test_tavily_results_are_cleaned(self):
+        """The cleanup must actually run on the Tavily path."""
+        mock_response = {
+            "results": [
+                {
+                    "title": "Medium",
+                    "url": "https://medium.com/great-article-1234",
+                    "content": "Sign in | The real abstract about the topic.",
+                    "score": 0.9,
+                }
+            ]
+        }
+        mock_tavily_module = MagicMock()
+        mock_client = MagicMock()
+        mock_client.search.return_value = mock_response
+        mock_tavily_module.TavilyClient.return_value = mock_client
+
+        with patch.dict("sys.modules", {"tavily": mock_tavily_module}):
+            results = await web_search("q", tavily_api_key="test-api-key")
+
+        assert results[0].title == "Great Article 1234"
+        assert results[0].snippet == "The real abstract about the topic."
+
+
 class TestArxivSearch:
     """Tests for arxiv_search tool."""
 
@@ -401,6 +503,85 @@ class TestWikipediaSearch:
             assert len(results) == 2
             assert results[0].title == "Machine Learning"
             assert "Machine learning" in results[0].summary
+
+    @pytest.mark.asyncio
+    async def test_one_unresolvable_page_does_not_discard_the_others(self):
+        """A single bad hit used to abort the whole search (PageError)."""
+        from wikipedia.exceptions import PageError
+
+        with patch("app.tools.wikipedia.wikipedia") as mock_wiki:
+            mock_wiki.search.return_value = ["Bad Title", "Good Title"]
+
+            good_page = MagicMock()
+            good_page.title = "Good Title"
+            good_page.url = "https://en.wikipedia.org/wiki/Good_Title"
+            good_page.content = "content"
+
+            def fake_page(title, **kwargs):
+                if title == "Bad Title":
+                    raise PageError(f'Page id "{title}" does not match any pages')
+                return good_page
+
+            mock_wiki.page.side_effect = fake_page
+            mock_wiki.summary.return_value = "a summary"
+
+            results = await wikipedia_search("some query", sentences=3)
+
+        # The good page still comes back; the bad one is skipped, not fatal.
+        assert [r.title for r in results] == ["Good Title"]
+
+    @pytest.mark.asyncio
+    async def test_disambiguation_falls_back_to_summary_lookup(self):
+        """Ambiguous titles ("Scale", "Complex") must not abort the search."""
+        from wikipedia.exceptions import DisambiguationError
+
+        with patch("app.tools.wikipedia.wikipedia") as mock_wiki:
+            mock_wiki.search.return_value = ["Scale"]
+
+            resolved_page = MagicMock()
+            resolved_page.title = "Scale (music)"
+            resolved_page.url = "https://en.wikipedia.org/wiki/Scale_(music)"
+            resolved_page.content = "content"
+
+            # Strict lookup is ambiguous; the auto-suggesting retry resolves.
+            mock_wiki.page.side_effect = [
+                DisambiguationError("Scale", ["Scale (music)", "Scale (map)"]),
+                resolved_page,
+            ]
+            mock_wiki.summary.return_value = "In music, a scale is..."
+
+            results = await wikipedia_search("scale", sentences=3)
+
+        assert len(results) == 1
+        assert results[0].title == "Scale (music)"
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_query_summary_when_every_hit_fails(self):
+        """Falling back to the query beats returning nothing."""
+        from wikipedia.exceptions import PageError
+
+        with patch("app.tools.wikipedia.wikipedia") as mock_wiki:
+            mock_wiki.search.return_value = ["Bad One", "Bad Two"]
+            mock_wiki.page.side_effect = PageError("does not match any pages")
+
+            fallback_page = MagicMock()
+            fallback_page.title = "Fallback"
+            fallback_page.url = "https://en.wikipedia.org/wiki/Fallback"
+            mock_wiki.summary.return_value = "fallback summary"
+
+            # The fallback path resolves via summary + auto-suggesting page,
+            # but only for the original query — the search hits stay dead.
+            def page_by_suggest(title=None, **kwargs):
+                if kwargs.get("auto_suggest") and title == "original query":
+                    return fallback_page
+                raise PageError("does not match any pages")
+
+            mock_wiki.page.side_effect = page_by_suggest
+
+            results = await wikipedia_search("original query", sentences=3)
+
+        assert len(results) == 1
+        assert results[0].summary == "fallback summary"
 
 
 class TestSpringerSearch:

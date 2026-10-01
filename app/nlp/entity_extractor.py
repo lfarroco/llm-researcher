@@ -19,7 +19,7 @@ class EntityExtractor:
         "reinforcement learning", "bayesian", "regression", "clustering",
     }
     _MATERIAL_KEYWORDS = {
-        "dataset", "corpus", "benchmark", "imagenet", "cifar", "mnist",
+        "dataset", "corpus", "imagenet", "cifar", "mnist",
         "wikipedia", "pubmed", "arxiv", "synthetic data", "knowledge graph",
     }
     _METRIC_KEYWORDS = {
@@ -30,6 +30,12 @@ class EntityExtractor:
         "improves", "improved", "outperforms", "outperformed", "reduces", "reduced", "increases", "increased", "decreases", "decreased", "correlates",
         "supports", "contradicts", "causes", "associated",
     }
+
+    # A finding entity should be a single claim, not a truncated fragment of
+    # multi-clause prose or a boilerplate sentence. Sentences outside these
+    # bounds are skipped rather than cut mid-word at an arbitrary offset.
+    _MAX_FINDING_CHARS = 240
+    _MAX_FINDING_WORDS = 40
 
     def __init__(self, model_name: str = "en_core_web_sm"):
         self._nlp = None
@@ -106,10 +112,17 @@ class EntityExtractor:
             # Rule-based findings from claim-like statements.
             for sentence in re.split(r"(?<=[.!?])\s+", text):
                 lowered = sentence.lower()
-                if any(cue in lowered for cue in self._FINDING_CUES):
-                    key = (self._normalize(sentence[:160]), "finding")
-                    if key[0]:
-                        buckets[key].add(mention)
+                if not any(cue in lowered for cue in self._FINDING_CUES):
+                    continue
+                claim = sentence.strip()
+                # Skip anything too long to be one claim: those are
+                # multi-clause prose or boilerplate, not an atomic finding.
+                if (len(claim) > self._MAX_FINDING_CHARS
+                        or len(claim.split()) > self._MAX_FINDING_WORDS):
+                    continue
+                key = (self._normalize(claim), "finding")
+                if key[0]:
+                    buckets[key].add(mention)
 
             if self._nlp is None:
                 self._fallback_keyword_extract(text, mention, buckets)

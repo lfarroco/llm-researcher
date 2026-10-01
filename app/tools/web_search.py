@@ -8,7 +8,9 @@ This module can be tested in isolation by passing api_key explicitly.
 """
 
 import logging
+import re
 from typing import Optional
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -16,6 +18,128 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from app.tools.base import get_setting
 
 logger = logging.getLogger(__name__)
+
+
+# Navigation / sign-in / cookie chrome that search APIs splice onto the front
+# of a page's real text. A live run produced BibTeX entries whose "abstract"
+# was entirely sign-in chrome, which then poisoned the relevance assessment.
+#
+# STRONG phrases are chrome wherever they appear; WEAK ones are ordinary words
+# that are only chrome when followed by a separator, so "Home robots are
+# changing manufacturing" is left alone while "Home | Example" is stripped.
+CHROME_PHRASES_STRONG = (
+    "skip to main content",
+    "skip to content",
+    "sign in",
+    "sign up",
+    "log in",
+    "create account",
+    "create an account",
+    "accept all cookies",
+    "accept cookies",
+    "we use cookies",
+    "enable javascript",
+    "you need to enable javascript",
+)
+
+CHROME_PHRASES_WEAK = (
+    "home",
+    "menu",
+    "navigation",
+    "share",
+    "subscribe",
+    "dismiss",
+    "advertisement",
+    "sponsored",
+    "cookie policy",
+)
+
+# Separators that may follow a chrome phrase. A bare space is allowed only for
+# the unambiguous multiword phrases.
+_SEPARATORS = "|·•›»-–—:,.\n\r\t"
+_TRAILING_CHROME_CHARS = " \t\n\r|·•›»-–—:,."
+
+
+def strip_leading_boilerplate(text: str) -> str:
+    """Remove leading navigation/sign-in/cookie chrome from a snippet.
+
+    Stripping is iterative because banners stack ("Sign in | Menu | Article").
+    Returns the text with whitespace collapsed.
+    """
+    if not text:
+        return ""
+
+    cleaned = text.strip()
+    changed = True
+    while changed and cleaned:
+        changed = False
+        lowered = cleaned.lower()
+
+        for phrase in CHROME_PHRASES_STRONG:
+            if lowered.startswith(phrase):
+                cleaned = cleaned[len(phrase):].lstrip(_TRAILING_CHROME_CHARS)
+                changed = True
+                break
+
+        if changed:
+            continue
+
+        for phrase in CHROME_PHRASES_WEAK:
+            if not lowered.startswith(phrase):
+                continue
+            remainder = cleaned[len(phrase):].lstrip(" \t\n\r")
+            # Require a punctuation separator or end of text. A following
+            # *word* means this is probably the first word of real content
+            # ("Home robots ...", "Share prices fell ...").
+            if remainder and remainder[0] not in _SEPARATORS:
+                continue
+            cleaned = remainder.lstrip(_TRAILING_CHROME_CHARS)
+            changed = True
+            break
+
+    return " ".join(cleaned.split())
+
+
+def site_label(url: str) -> str:
+    """The registrable-ish site name for a URL ("www.medium.com" -> "medium")."""
+    host = urlparse(url).netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host.split(".")[0] if host else ""
+
+
+def title_from_url(url: str) -> str:
+    """Derive a human-readable title from a URL's last path segment."""
+    path = urlparse(url).path.rstrip("/")
+    if not path:
+        return ""
+    slug = path.rsplit("/", 1)[-1]
+    slug = re.sub(r"\.(html?|php|aspx?|jsp)$", "", slug, flags=re.I)
+    slug = re.sub(r"[-_+]+", " ", slug)
+    slug = re.sub(r"\s+", " ", slug).strip()
+    if not slug or slug.isdigit():
+        return ""
+    # Preserve already-capitalised words (acronyms) but capitalise the rest.
+    return " ".join(
+        word if word[:1].isupper() else word.capitalize()
+        for word in slug.split()
+    )
+
+
+def improve_title(title: str, url: str) -> str:
+    """Replace a missing or site-name-only title with one derived from the URL.
+
+    Search results frequently carry the publisher's name as the title ("Medium")
+    which is useless as a reference title and produces BibTeX keys like
+    ``@misc{Unknown2026Medium}``.
+    """
+    cleaned = (title or "").strip()
+    normalized = re.sub(r"[^a-z0-9]", "", cleaned.lower())
+    if cleaned and normalized and normalized != site_label(url):
+        return cleaned
+
+    derived = title_from_url(url)
+    return derived or cleaned
 
 
 class WebSearchResult(BaseModel):
@@ -119,10 +243,13 @@ async def _tavily_search(
     for i, item in enumerate(raw_results):
         logger.debug(f"[TAVILY] Result {i+1}: title='{item.get('title', '')[:50]}', "
                      f"url='{item.get('url', '')[:60]}', score={item.get('score', 0.0)}")
+        url = item.get("url", "")
         results.append(WebSearchResult(
-            title=item.get("title", ""),
-            url=item.get("url", ""),
-            snippet=item.get("content", "")[:1000],  # Limit snippet size
+            title=improve_title(item.get("title", ""), url),
+            url=url,
+            snippet=strip_leading_boilerplate(
+                item.get("content", "")
+            )[:1000],  # Limit snippet size
             score=item.get("score", 0.0),
         ))
 
@@ -152,10 +279,11 @@ async def _duckduckgo_search(
         for i, item in enumerate(ddgs.text(query, max_results=max_results)):
             logger.debug(f"[DUCKDUCKGO] Result {i+1}: title='{item.get('title', '')[:50]}', "
                          f"url='{item.get('href', '')[:60]}'")
+            url = item.get("href", "")
             results.append(WebSearchResult(
-                title=item.get("title", ""),
-                url=item.get("href", ""),
-                snippet=item.get("body", "")[:1000],
+                title=improve_title(item.get("title", ""), url),
+                url=url,
+                snippet=strip_leading_boilerplate(item.get("body", ""))[:1000],
                 score=0.5,  # DuckDuckGo doesn't provide scores
             ))
 

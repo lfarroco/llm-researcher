@@ -32,7 +32,11 @@ class Settings(BaseSettings):
 
     # Research settings
     research_max_sources: int = 20  # Max citations per research
-    research_timeout: int = 300  # Max seconds per research
+    # Whole-run budget in seconds, enforced around each workflow segment. This
+    # is a runaway guard, not a target: measured end-to-end runs are 261-306 s,
+    # so the old 300 s default would have killed healthy runs the moment it was
+    # actually enforced. 0 disables the budget.
+    research_timeout: int = 1800
     # Min relevance score (0-1) for including sources
     research_relevance_threshold: float = 0.5
     # Enable/disable relevance filtering
@@ -48,6 +52,11 @@ class Settings(BaseSettings):
     # keep at least this many of the highest-scoring ones instead of leaving
     # the sub-question with no sources at all.
     research_relevance_fallback_keep: int = 3
+    # Max sources any single web domain may contribute. Without a cap, one
+    # site's near-duplicate pages became the most-cited sources in a report and
+    # crowded out independent evidence. Academic source types are exempt (each
+    # row is a distinct paper even though they share a host). 0 disables it.
+    research_max_sources_per_domain: int = 4
     # Enable/disable reference chasing (following citations from sources)
     research_reference_chase_enabled: bool = True
     # Max depth for reference chasing (1 = follow refs from initial sources,

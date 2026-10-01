@@ -39,6 +39,58 @@ def _get_research_or_404(
     return research
 
 
+def _build_sub_query_progress(
+    sub_queries: list[str],
+    state_data: dict,
+    findings: list[models.ResearchFinding] | None = None,
+) -> dict[str, dict]:
+    """Resolve each sub-query's progress from state that is actually written.
+
+    Both ``/state`` and ``/plan`` used to read ``state_data["findings"]``,
+    which **nothing ever writes**, so every sub-query reported ``pending``
+    forever and ``/state`` always returned an empty ``completed_queries``.
+
+    The real sources are:
+
+    * ``state_json["sub_query_results"]`` — the serialized search-phase
+      results, carrying ``status`` and the synthesized ``answer``.
+    * the persisted ``research_findings`` rows, whose content is
+      ``"<sub-query>\\n\\nSupported by ..."`` (see ``save_findings_to_db``).
+      They are the durable record, so they fill in when the serialized state
+      is missing or stale (e.g. a resumed run or a re-run).
+    """
+    progress: dict[str, dict] = {
+        query: {"status": "pending", "finding": None} for query in sub_queries
+    }
+
+    for result in state_data.get("sub_query_results") or []:
+        if isinstance(result, dict):
+            query = result.get("sub_query")
+            status = result.get("status") or "pending"
+            finding = result.get("answer") or None
+        else:
+            query = getattr(result, "sub_query", None)
+            status = getattr(result, "status", "pending") or "pending"
+            finding = getattr(result, "answer", None) or None
+        if not query:
+            continue
+        progress[query] = {"status": status, "finding": finding}
+
+    for finding in findings or []:
+        content = finding.content or ""
+        for query in sub_queries:
+            if content == query or content.startswith(f"{query}\n\n"):
+                entry = progress.setdefault(
+                    query, {"status": "pending", "finding": None}
+                )
+                if entry["finding"] is None:
+                    entry["finding"] = content
+                if entry["status"] != "complete":
+                    entry["status"] = "complete"
+
+    return progress
+
+
 @router.get(
     "/research/{research_id}/state",
     response_model=ResearchStateResponse,
@@ -60,15 +112,18 @@ def get_research_state(
         models.ResearchSource.research_id == research_id
     ).count()
 
-    finding_count = db.query(models.ResearchFinding).filter(
+    finding_rows = db.query(models.ResearchFinding).filter(
         models.ResearchFinding.research_id == research_id
-    ).count()
+    ).all()
 
     sub_queries = state_data.get("sub_queries", [])
-    findings = state_data.get("findings", {})
+    progress = _build_sub_query_progress(sub_queries, state_data, finding_rows)
 
-    completed_queries = [q for q in sub_queries if q in findings]
-    pending_queries = [q for q in sub_queries if q not in findings]
+    completed_queries = [
+        q for q in sub_queries
+        if progress.get(q, {}).get("status") == "complete"
+    ]
+    pending_queries = [q for q in sub_queries if q not in completed_queries]
 
     reasoning_log = state_data.get("ai_reasoning", [])
 
@@ -91,7 +146,7 @@ def get_research_state(
         reasoning_log=reasoning_log,
         last_activity=research.updated_at,
         source_count=source_count,
-        finding_count=finding_count,
+        finding_count=len(finding_rows),
     )
 
 
@@ -287,24 +342,25 @@ def get_research_plan(
     state_data = research.state_json or {}
 
     sub_queries = state_data.get("sub_queries", [])
-    findings = state_data.get("findings", {})
+    finding_rows = db.query(models.ResearchFinding).filter(
+        models.ResearchFinding.research_id == research_id
+    ).all()
+    resolved = _build_sub_query_progress(
+        sub_queries, state_data, finding_rows
+    )
 
     progress = {}
     for query in sub_queries:
-        if query in findings:
-            progress[query] = {
-                "status": "completed",
-                "finding": (
-                    findings[query][:200] + "..."
-                    if len(findings[query]) > 200
-                    else findings[query]
-                ),
-            }
-        else:
-            progress[query] = {
-                "status": "pending",
-                "finding": None,
-            }
+        entry = resolved.get(query, {"status": "pending", "finding": None})
+        finding = entry.get("finding")
+        progress[query] = {
+            "status": entry.get("status", "pending"),
+            "finding": (
+                finding[:200] + "..."
+                if finding and len(finding) > 200
+                else finding
+            ),
+        }
 
     return ResearchPlanResponse(
         query=state_data.get("query", research.query),

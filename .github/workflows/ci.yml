@@ -18,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install dependencies
@@ -36,7 +36,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install dependencies
@@ -48,4 +48,13 @@ jobs:
           LLM_PROVIDER: "openai"
           LLM_MODEL: "gpt-4o"
           OPENAI_API_KEY: "sk-test"
+          # Explicitly empty so a stray .env can never make CI hit a live API
+          # or spend tokens. Must stay in sync with docs/HANDOFF.md §1.
+          GROQ_API_KEY: ""
+          TAVILY_API_KEY: ""
+          DEEPSEEK_API_KEY: ""
+          SEMANTIC_SCHOLAR_API_KEY: ""
+          SPRINGER_API_KEY: ""
+          ELSEVIER_API_KEY: ""
+          NCBI_API_KEY: ""
         run: pytest tests/ -v

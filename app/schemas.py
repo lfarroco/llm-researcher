@@ -279,6 +279,14 @@ class BatchResearchCreate(BaseModel):
     queries: list[str] = Field(
         description="List of research queries to process"
     )
+    user_notes: Optional[str] = Field(
+        default=None,
+        description="Optional user notes applied to every created task"
+    )
+    tags: Optional[list[str]] = Field(
+        default=None,
+        description="Tags applied to every created task"
+    )
 
 
 class BatchResearchResponse(BaseModel):

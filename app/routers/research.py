@@ -55,6 +55,7 @@ def create_research(
     research = models.Research(
         query=payload.query,
         user_notes=payload.user_notes,
+        tags=payload.tags,
         status="pending"
     )
     db.add(research)
@@ -100,7 +101,12 @@ def create_batch_research(
     created_research = []
 
     for query in payload.queries:
-        research = models.Research(query=query, status="pending")
+        research = models.Research(
+            query=query,
+            user_notes=payload.user_notes,
+            tags=payload.tags,
+            status="pending",
+        )
         db.add(research)
         db.flush()
         created_research.append(research)
@@ -198,6 +204,12 @@ def update_research(
 
     if payload.query is not None:
         research.query = payload.query
+
+    if payload.user_notes is not None:
+        research.user_notes = payload.user_notes
+
+    if payload.tags is not None:
+        research.tags = payload.tags
 
     db.commit()
     db.refresh(research)

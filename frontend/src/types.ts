@@ -21,6 +21,9 @@ export interface Source {
 	user_notes?: string;
 	tags?: string[];
 	accessed_at: string;
+	// Reader-facing citation number used in the report's reference list.
+	// null/undefined means the report does not cite this source.
+	citation_marker?: number | null;
 }
 
 export interface Finding {

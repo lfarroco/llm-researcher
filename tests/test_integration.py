@@ -136,6 +136,59 @@ class TestResearchWorkflow:
         assert data["query"] == "What are the latest developments in transformers?"
         assert data["status"] == "pending"
 
+    def test_create_research_persists_tags(self, client):
+        """Tags submitted at creation must survive, not be silently dropped."""
+        response = client.post(
+            "/research",
+            json={
+                "query": "Tagged query",
+                "user_notes": "remember this",
+                "tags": ["alpha", "beta"],
+            },
+        )
+
+        assert response.status_code == 201
+        research_id = response.json()["id"]
+
+        detail = client.get(f"/research/{research_id}").json()
+        assert detail["tags"] == ["alpha", "beta"]
+        assert detail["user_notes"] == "remember this"
+
+    def test_update_research_persists_user_notes_and_tags(self, client):
+        """PATCH must apply every documented field, not just the query."""
+        research_id = client.post(
+            "/research", json={"query": "Original query"}
+        ).json()["id"]
+
+        response = client.patch(
+            f"/research/{research_id}",
+            json={"user_notes": "updated notes", "tags": ["gamma"]},
+        )
+        assert response.status_code == 200
+
+        detail = client.get(f"/research/{research_id}").json()
+        assert detail["user_notes"] == "updated notes"
+        assert detail["tags"] == ["gamma"]
+        # Fields that were not sent are untouched.
+        assert detail["query"] == "Original query"
+
+    def test_batch_create_persists_user_notes_and_tags(self, client):
+        """Batch-created items must carry the batch's notes and tags."""
+        response = client.post(
+            "/research/batch",
+            json={
+                "queries": ["batch one", "batch two"],
+                "user_notes": "batch note",
+                "tags": ["batch-tag"],
+            },
+        )
+
+        assert response.status_code == 201
+        for research_id in response.json()["research_ids"]:
+            detail = client.get(f"/research/{research_id}").json()
+            assert detail["user_notes"] == "batch note"
+            assert detail["tags"] == ["batch-tag"]
+
     def test_list_research_projects(self, client):
         """Test listing research projects."""
         # Create a project first
@@ -545,6 +598,92 @@ class TestStateAndPlanManagement:
         assert response.status_code == 200
         plan = response.json()
         assert "query" in plan
+
+    def test_plan_progress_reflects_sub_query_results(self, client, test_db):
+        """Sub-query status must come from state that is actually written.
+
+        Regression: both endpoints read ``state_json["findings"]``, which
+        nothing ever wrote, so every sub-query stayed "pending" and
+        ``/state`` always returned an empty ``completed_queries``.
+        """
+        from app import models
+
+        research_id = client.post(
+            "/research", json={"query": "Test query"}
+        ).json()["id"]
+
+        db = test_db()
+        try:
+            row = db.get(models.Research, research_id)
+            row.state_json = {
+                "query": "Test query",
+                "sub_queries": ["answered q", "still pending q"],
+                "sub_query_results": [
+                    {
+                        "sub_query": "answered q",
+                        "answer": "the synthesized answer",
+                        "status": "complete",
+                        "citations": [],
+                    },
+                    {
+                        "sub_query": "still pending q",
+                        "answer": "",
+                        "status": "pending",
+                        "citations": [],
+                    },
+                ],
+            }
+            db.commit()
+        finally:
+            db.close()
+
+        plan = client.get(f"/research/{research_id}/plan").json()
+        assert plan["progress"]["answered q"]["status"] == "complete"
+        assert plan["progress"]["answered q"]["finding"] == (
+            "the synthesized answer"
+        )
+        assert plan["progress"]["still pending q"]["status"] == "pending"
+
+        state = client.get(f"/research/{research_id}/state").json()
+        assert state["completed_queries"] == ["answered q"]
+        assert state["pending_queries"] == ["still pending q"]
+        assert state["current_plan"]["completed"] == 1
+        assert state["current_plan"]["pending"] == 1
+
+    def test_plan_progress_falls_back_to_persisted_findings(
+        self, client, test_db
+    ):
+        """The durable findings rows resolve progress when state is missing."""
+        from app import models
+
+        research_id = client.post(
+            "/research", json={"query": "Test query"}
+        ).json()["id"]
+
+        db = test_db()
+        try:
+            row = db.get(models.Research, research_id)
+            # sub_queries is known, but no sub_query_results were serialized.
+            row.state_json = {
+                "query": "Test query",
+                "sub_queries": ["answered q"],
+            }
+            # This is the exact shape save_findings_to_db writes.
+            db.add(models.ResearchFinding(
+                research_id=research_id,
+                content="answered q\n\nSupported by 2 source(s): A, B",
+                source_ids=[],
+                created_by="ai",
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        plan = client.get(f"/research/{research_id}/plan").json()
+        assert plan["progress"]["answered q"]["status"] == "complete"
+
+        state = client.get(f"/research/{research_id}/state").json()
+        assert state["completed_queries"] == ["answered q"]
 
     def test_update_research_plan(self, client):
         """Test updating research plan."""

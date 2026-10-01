@@ -13,13 +13,20 @@ Docker stack or the test suite.
 
 ## 0. TL;DR
 
-- The four P0 defects from `RESEARCH_RUN_ANALYSIS.md` are **fixed, tested, and
-  verified end-to-end**. Full suite: **404 passing**, `ruff check app/` clean.
-- **Nothing is committed.** All work is in the working tree (see §2).
-- **Three bugs remain open, all newly discovered and all with a known root
-  cause**: binary document exports (PDF/DOCX), missing LaTeX packages in the
-  Docker image, and full-text grounding being dead code. See §4.
-- Then there is a queue of P1/P2 work in §5.
+- The four P0 defects from `RESEARCH_RUN_ANALYSIS.md` are fixed and verified.
+  Full suite: **442 passing**, 1 skipped (a real-pandoc test that only runs where
+  a pandoc binary exists, i.e. Docker), `ruff check app/` clean.
+- **The three open bugs in §4 are now fixed and verified**, plus most of the §5
+  backlog. Evidence for each is recorded in §4.
+- **New, release-blocking finding:** `bibtexparser` was unpinned, so a *fresh*
+  `docker compose build` installed 2.x and the app would not start at all. See
+  §4.5. This only showed up on rebuild.
+- **Two security gaps are documented and deliberately deferred** while the app is
+  localhost-only: `GET /settings` returns live API keys in plaintext, and there
+  is no auth on any route. See `../tasks.md` → "Deferred: security hardening".
+  Treat any key that was readable while that endpoint was reachable as disclosed.
+- All of this session's work is **uncommitted in the working tree** (see §2).
+
 
 ---
 
@@ -71,7 +78,7 @@ docker compose ps
 DATABASE_URL=sqlite:///:memory: LLM_PROVIDER=openai LLM_MODEL=gpt-4o OPENAI_API_KEY=sk-test \
 GROQ_API_KEY= TAVILY_API_KEY= DEEPSEEK_API_KEY= SEMANTIC_SCHOLAR_API_KEY= \
 SPRINGER_API_KEY= ELSEVIER_API_KEY= NCBI_API_KEY= \
-.venv/bin/python -m pytest tests/ -q          # 404 passed, ~60 s
+.venv/bin/python -m pytest tests/ -q          # 453 passed, 1 skipped, ~75 s
 
 .venv/bin/python -m ruff check app/           # must stay clean (this is what CI lints)
 ```
@@ -85,28 +92,33 @@ etc.). Leave them alone unless you are already editing those files.
 
 ## 2. State of the working tree
 
-Uncommitted (all of it is intended work from the last session):
+Everything below is **uncommitted**. The previous session's work was committed
+as `c20bdd4 create handoff`, so the tree was clean before this session.
 
 ```
+ M .github/workflows/ci.yml              # Python 3.12, blank optional keys
  M CHANGELOG.md
- M app/agents/planner.py                 # returns include_academic
- M app/agents/search_agent.py            # batched, recall-oriented relevance filter
- M app/agents/synthesis_agent.py         # uses shared reference-line formatter
- M app/config.py                         # new settings (see §3)
- M app/memory/research_state.py          # ResearchState.include_academic
- M app/models.py                         # ResearchSource.citation_marker
- M app/schemas.py                        # ResearchSourceResponse.citation_marker
- M app/services/research_service.py      # renumber + persist markers
- M app/tools/arxiv_search.py             # query building, pacing, cooldown
- M app/tools/plugins.py                  # arXiv first-variation-only
- M tests/test_agents.py  M tests/test_tools.py
-?? alembic/versions/b3c91d4f7a20_add_citation_marker_to_sources.py
-?? app/services/citation_numbering.py
-?? tests/test_citation_numbering.py
-?? tests/test_citation_marker_migration.py
-?? docs/RESEARCH_RUN_ANALYSIS.md
-?? scripts/capture_fp2026.py
-?? scripts/verify_run.py
+ M Dockerfile                            # LaTeX packages for PDF export
+ M requirements.txt                      # bibtexparser <2.0.0 (see §4.5)
+ M app/agents/hypothesis_agent.py        # attribute sources to sub-queries
+ M app/agents/search_agent.py            # domain cap + honest error reporting
+ M app/config.py                         # per-domain cap, timeout default
+ M app/main.py                           # LOG_LEVEL instead of forced DEBUG
+ M app/nlp/entity_extractor.py           # drop "benchmark", bound findings
+ M app/output/pdf_exporter.py            # outputfile for PDF/DOCX
+ M app/routers/research.py               # persist tags/user_notes
+ M app/routers/state.py                  # real sub-query progress
+ M app/schemas.py                        # BatchResearchCreate notes/tags
+ M app/services/chat_handlers.py         # no more stranded "researching"
+ M app/services/research_service.py      # sources before grounding, timeout, session
+ M app/tools/web_search.py               # title/snippet cleanup
+ M app/tools/wikipedia.py                # per-page guard
+ M frontend/src/components/ResearchDetail.tsx, frontend/src/types.ts  # [n] badge
+ M tasks.md                              # security items + P0/P1 marked fixed
+ M tests/test_agents.py  M tests/test_integration.py
+ M tests/test_tools.py   M tests/test_workflow_segments.py
+?? tests/test_chat_handlers.py
+?? tests/test_exports.py
 ```
 
 `smoke_artifacts/` is **gitignored** — the run captures referenced below do not
@@ -181,134 +193,108 @@ Full rationale and evidence: [`RESEARCH_RUN_ANALYSIS.md`](RESEARCH_RUN_ANALYSIS.
 
 ---
 
-## 4. Open bugs (start here)
+## 4. Bugs found and fixed in this session (with evidence)
 
-### BUG-1 — PDF and DOCX export always fail (HTTP 500)
+Each item below was reproduced against the running stack and now has a
+regression test that fails without the fix.
 
-**Repro** (Docker):
+### 4.1 PDF and DOCX export (was BUG-1) — FIXED
 
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/research/10/export/docx   # 500
-curl -s localhost:8000/research/10/export/pdf
-# {"detail":"Failed to export PDF: Pandoc conversion failed: Output to pdf only works by using a outputfile."}
-```
+`app/output/pdf_exporter.py` called `pypandoc.convert_text` with no
+`outputfile`; pandoc can write text formats to stdout but refuses binary ones.
+PDF/DOCX now convert through a `NamedTemporaryFile` and are read back; the temp
+file is removed on every path, including failure. The DOCX branch also passed
+`--reference-doc=default`, which is not a path pandoc accepts, and that was
+dropped.
 
-**Root cause**: `app/output/pdf_exporter.py:116-128` calls
-`pypandoc.convert_text(md, output_format.value, format='md', extra_args=…)`
-with **no `outputfile`**. Pandoc can write text formats (html, markdown) to
-stdout, but refuses binary formats:
-
-```
-docx stdout -> RuntimeError: Output to docx only works by using a outputfile.
-docx file   -> OK (9706 bytes)          # verified inside the container
-```
-
-**Fix**: in `export_markdown_to_format`, for binary formats (`ExportFormat.PDF`,
-`ExportFormat.DOCX`) convert into a
-`tempfile.NamedTemporaryFile(suffix="." + fmt.value, delete=False)`, read the
-bytes back, delete the file, and return them. Keep the stdout path for
-HTML/MARKDOWN.
-
-**Also check**: the DOCX branch passes `--reference-doc=default` (line ~104).
-Pandoc expects a real `.docx` path there; validate whether it must be dropped
-or replaced with a bundled template.
-
-**Tests**: there are currently **no** pandoc/export tests in `tests/`. Add unit
-tests that patch `pypandoc.convert_text` and assert (a) `outputfile` is passed
-for docx/pdf, (b) the returned bytes equal the temp file's contents, and
-(c) text formats still use the stdout path. Guard any real-pandoc test with
-`pytest.mark.skipif(not check_pandoc_installed())`, because the host venv has
-no pandoc.
-
-### BUG-2 — PDF needs LaTeX packages the image does not install
-
-With BUG-1 fixed, PDF still fails inside the container:
+**Verified in the rebuilt container** against research item #10:
 
 ```
-! LaTeX Error: File `xcolor.sty' not found.
+pdf:      HTTP=200 bytes=214429 magic=25504446   # "%PDF"
+docx:     HTTP=200 bytes=20222  magic=504b0304   # OOXML zip
+html:     HTTP=200 bytes=66267  magic=3c21444f
+markdown: HTTP=200 bytes=25269  magic=23205265
 ```
 
-**Root cause**: `Dockerfile:6-11` installs `texlive-latex-base` only ("to
-reduce size"), but pandoc's default LaTeX template needs packages shipped in
-`texlive-latex-recommended` / `texlive-fonts-recommended` (`xcolor.sty` is one
-of them).
+Tests: `tests/test_exports.py` (8 tests, patching `pypandoc.convert_text`; the
+one real-pandoc test is skipped on the host).
 
-**Fix (pick one)**:
-1. Add `texlive-latex-recommended texlive-fonts-recommended` (and
-   `texlive-latex-extra` for full coverage) to the `apt-get install`; rebuild
-   with `docker compose build app && docker compose up -d app`. Costs image
-   size — the existing comment shows the tradeoff was deliberate.
-2. Keep the image small and document that PDF export requires extra packages.
-3. Switch `--pdf-engine` to something with a smaller dependency set.
+### 4.2 PDF LaTeX packages (was BUG-2) — FIXED
 
-**Acceptance**: `curl -s -o /tmp/o.pdf -w '%{http_code}\n'
-localhost:8000/research/10/export/pdf` → `200` and the file starts with `%PDF`.
+`Dockerfile` installed only `texlive-latex-base`, which lacks `xcolor.sty` from
+pandoc's default template. Added `texlive-latex-recommended`,
+`texlive-fonts-recommended` and `lmodern`. `texlive-latex-extra` is still
+deliberately excluded for size. Confirmed by the PDF export returning real
+`%PDF` bytes above.
 
-### BUG-3 — Full-text grounding never engages (dead code)
+### 4.3 Full-text grounding was dead code (was BUG-3) — FIXED
 
-**Evidence** (container log, item #10):
+`collect_fulltext_evidence` resolves candidates against the `ResearchSource`
+rows for the research, but citations were persisted only after the whole
+workflow — so the identity map was empty, every candidate was skipped, and the
+log read `Retrieved full text for 0/3 candidate sources`.
+
+Fixed by saving the search segment's citations *before* evidence collection
+(`app/services/research_service.py`). Markers are still assigned exactly once,
+by the later call, so citation numbering is unchanged.
+
+**Evidence:** `research_evidence` was empty (`count = 0`) for every run before
+the fix, which is the bug's signature. The guard test
+(`tests/test_workflow_segments.py::TestCitationsPersistedBeforeGrounding`)
+asserts the rows exist when evidence is collected and fails with
+`source_rows: 0` when the save is removed.
+
+### 4.4 Other defects fixed
+
+| Area | Defect | Where |
+|---|---|---|
+| Chat | `research` intent stranded a `complete` item in `researching` forever (the claim only accepts `pending`). Now starts a new item for a finished report and re-queues everything else as `pending`. | `app/services/chat_handlers.py` |
+| API | `tags` dropped on create; `user_notes`/`tags` ignored by `PATCH /research/{id}`; batch could not express either. | `app/routers/research.py`, `app/schemas.py` |
+| Wikipedia | One unresolvable/ambiguous hit aborted the whole sub-query. Per-page guard + summary fallback. | `app/tools/wikipedia.py` |
+| State | `/plan` progress always `pending` and `/state` `completed_queries` always `[]` — both read a `findings` key nothing writes. Verified live: 5/5 sub-queries now `complete`. | `app/routers/state.py` |
+| Hypothesis | Phase sources were attributed to no sub-query/finding. Returned as `SubQueryResult`s now. | `app/agents/hypothesis_agent.py` |
+| Search | Partial failures reported as `0 errors`; no per-domain cap. | `app/agents/search_agent.py` |
+| Sources | Titles like `"Medium"` and snippets that were pure sign-in chrome. | `app/tools/web_search.py` |
+| Config | `research_timeout` was dead; now an enforced whole-run budget, default raised 300 → 1800 s (measured runs are 261–306 s). | `app/services/research_service.py`, `app/config.py` |
+| Worker | Leaked a DB session on every failed run; root logger forced to `DEBUG`. | `app/services/research_service.py`, `app/main.py` |
+| CI | Both jobs ran Python 3.11 while the project ships 3.12; optional API keys not blanked. | `.github/workflows/ci.yml` |
+| Frontend | `citation_marker` was never rendered. `[n]` badge added to the sources list and overview. | `frontend/src/components/ResearchDetail.tsx` |
+
+### 4.5 Release-blocking: a fresh build produced a dead app
+
+`requirements.txt` had `bibtexparser>=1.4.0`. Version 2.x removed
+`bibtexparser.bparser` / `bibdatabase` / `bwriter`, which
+`app/tools/bibtex_parser.py` imports, so a rebuilt image failed at import:
 
 ```
-[FULLTEXT] Retrieved full text for 0/3 candidate sources
-[FULLTEXT] 0 evidence span(s) available for synthesis
-[SYNTHESIS] No full-text evidence available; writing from search excerpts only
+ModuleNotFoundError: No module named 'bibtexparser.bparser'
 ```
 
-Three arXiv candidates were correctly selected, then every one was skipped.
+An existing image hid this by holding a cached 1.x wheel — it only appears on a
+rebuild, which is exactly what a new contributor does. Now pinned to
+`>=1.4.0,<2.0.0`.
 
-**Root cause**: `collect_fulltext_evidence` resolves candidates against
-`ResearchSource` rows that already exist in the DB
-(`app/services/fulltext.py:329-343`), but in `process_research_async` it is
-called at `app/services/research_service.py:394` — *before* any row is written,
-because `save_citations_to_db` only runs at line 447, after the whole workflow.
-The identity map is therefore empty, `source` is `None`, and every candidate
-hits `continue`.
-
-**Fix**: persist the citations as soon as the search segment finishes and
-**before** evidence collection — i.e. right after
-`run_research_workflow(..., interrupt_after=["chase_references"])` (line 385)
-and before line 394:
-
-```python
-save_citations_to_db(db, research_id, search_state.citations)  # no markers yet
-db.commit()
-```
-
-Keep the existing call at line 447 **with** `markers_by_identity` — it is an
-idempotent identity merge, and it is what assigns the citation markers. Passing
-no markers in the early call is deliberate so markers are only written once.
-Side benefit: sources appear in the knowledge base while the run is still
-going.
-
-**Acceptance**:
-- Container log shows `[FULLTEXT] Retrieved full text for N/M candidate sources`
-  with `N > 0` on a topic that yields arXiv sources.
-- `docker compose exec db psql -U postgres -d researcher -c 'select count(*) from research_evidence;'` > 0.
-- The synthesis step logs `[SYNTHESIS] Grounding in … full-text passage(s)`.
-- `scripts/verify_run.py` still passes (numbering unchanged).
-
-**Test**: `tests/test_fulltext_grounding.py` already covers chunk ranking and
-selection. Add a test that `process_research_async` persists citations before
-calling `collect_fulltext_evidence` — patch both functions and assert call
-order (or assert the evidence function received a non-empty DB).
+**Watch for the same pattern in the other unpinned dependencies**
+(`langgraph>=0.2.0` already resolves to 1.x, `duckduckgo-search>=5.0` is a
+renamed package, `wikipedia`, `spacy`, …). They currently import cleanly, but
+nothing guarantees that on the next rebuild. Consider a lockfile.
 
 ---
 
-## 5. Backlog (from the run analysis and the issue tracker)
+## 5. Backlog — what is actually left
 
-Ordered by value; see `RESEARCH_RUN_ANALYSIS.md` and `tasks.md` for full repro
-steps and evidence.
+Most of the previous backlog is now fixed; see §4 for evidence. What remains:
 
 | # | Item | Where |
 |---|---|---|
-| P1-1 | Wikipedia aborts a whole search on one bad page title (`PageError: Page id "function programming" does not match any pages`, `DisambiguationError: "Scale"`, `"Complex"`). Wrap each page fetch; fall back to `wikipedia.summary(query, auto_suggest=True)`. | `app/tools/wikipedia.py:53-66` |
-| P1-4 | `/research/{id}/plan` progress is **always** `pending` **and** `/research/{id}/state` reports `completed_queries: []` — both read `state_json["findings"]`, which nothing ever writes. Populate them from `sub_query_results` or from the persisted findings. (Two call sites, one root cause.) Also `/state` returns an 8-key summary while the docs promise the LangGraph state. | `app/routers/state.py:68` and `:290-307`, `docs/LLM_TESTING.md` |
-| P1-5 | Sources found by the hypothesis phase carry the report's most specific claims but are linked to **no** sub-query or finding (findings < sub-questions). Return them as a `SubQueryResult`/finding. | `app/agents/hypothesis_agent.py:635` |
-| P1-2/P1-3 | Poor source metadata and boilerplate snippets: reference titles like `"Medium"` and `"2 Technology"`, no authors anywhere, BibTeX keys like `@misc{Unknown2026Medium}` whose abstract is sign-in chrome. Derive titles/authors from OpenGraph/URL slug and strip leading boilerplate before assessing relevance. | `app/tools/web_search.py`, `app/agents/search_agent.py` |
-| P2-1 | No domain cap: 4 near-duplicate `pkgpulse.com` pages were the most-cited sources in one report. Add a per-domain cap and content-similarity merge. | synthesis source assembly |
-| P2-2 | `research_timeout` is dead configuration; cancellation is only checked before/after the whole workflow. | `app/config.py:35`, `app/services/research_service.py` |
-| P2-3 | `tasks.md` P0 (chat intent flips a completed item to `researching` forever) and P1 (`tags`/`user_notes` silently dropped) — **both still reproduce**. | `app/services/chat_handlers.py`, `app/routers/research.py` |
-| P2-4 | Meaningless entities (`"benchmark"` typed `material`; a 160-char sentence typed `finding`), search summary reporting `0 errors` while two sub-query steps are `error`. | `app/nlp/entity_extractor.py`, `app/agents/search_agent.py` |
+| R-1 | **Rebuild the frontend image** for the `[n]` citation badge to appear. The Docker frontend is prebuilt, so `frontend/src` changes are invisible until `make frontend-build` + image rebuild. | `frontend/`, `docker-compose.yml` |
+| R-2 | **Authors are still not derived.** Title/snippet cleanup landed (§4), but nothing populates `Citation.author` for web sources, so references still lack authors and BibTeX keys fall back to `Unknown`. Doing this properly means fetching OpenGraph/`meta[author]` tags per result — a network cost that should be opt-in or cached. | `app/tools/web_search.py`, `app/tools/web_scraper.py` |
+| R-3 | **Content-similarity merge is not implemented.** The per-domain cap (§4) stops one site dominating, but two near-identical pages on *different* domains still both survive. A shingle/simhash pass over snippets would catch that. | synthesis source assembly |
+| R-4 | **`/state` returns an 8-key summary** while `docs/LLM_TESTING.md` promises the LangGraph state. Progress is now correct (§4); the shape mismatch is still open — either document the summary or expose the real state. | `app/routers/state.py`, `docs/LLM_TESTING.md` |
+| R-5 | **Deeper entity quality.** `"benchmark"` no longer types as `material` and findings are length-bounded, but whole sentences are still surfaced as `finding` entities, which is a category error. Also, `Summarizer`/`TopicModeler` remain scaffolding (ROADMAP Milestone 3). | `app/nlp/`, `docs/ROADMAP.md` |
+| R-6 | **No dependency lockfile.** §4.5 was caused by an unpinned dependency; `langgraph>=0.2.0` already resolves to 1.x and `duckduckgo-search` is a renamed package. A lockfile (pip-tools/uv) would make builds reproducible. | `requirements.txt` |
+| R-7 | **Playwright smoke test for create → monitor → export** is the only unchecked item in ROADMAP Milestone 1. | `frontend/` |
+| R-8 | **Security items are deferred, not fixed.** `GET /settings` returns live API keys in plaintext and no route is authenticated. Accepted while localhost-only; see `tasks.md` → "Deferred: security hardening". | `app/routers/settings.py`, `app/main.py` |
 
 ---
 

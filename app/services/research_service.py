@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app import models
+from app.config import settings
 from app.agents.orchestrator import run_research_workflow
 from app.memory.research_state import (
     Citation, ResearchNote, ResearchState, SubQueryResult,
@@ -29,6 +30,38 @@ from app.services.fulltext import collect_fulltext_evidence
 from app.websocket_manager import manager as ws_manager
 
 logger = logging.getLogger(__name__)
+
+
+class ResearchTimeoutError(TimeoutError):
+    """A run exceeded ``settings.research_timeout``.
+
+    The setting existed but was never read, so a hung provider could hold a
+    research in a non-terminal status forever.
+    """
+
+
+async def _run_within_budget(factory, deadline: Optional[float], description: str):
+    """Await ``factory()`` within the remaining research time budget.
+
+    ``deadline`` is a loop-clock timestamp, or ``None`` to disable the budget.
+    A factory (rather than a coroutine) is used so nothing is created when the
+    budget is already exhausted.
+    """
+    if deadline is None:
+        return await factory()
+
+    remaining = deadline - asyncio.get_running_loop().time()
+    if remaining <= 0:
+        raise ResearchTimeoutError(
+            f"Research exceeded research_timeout before {description}"
+        )
+
+    try:
+        return await asyncio.wait_for(factory(), timeout=remaining)
+    except asyncio.TimeoutError as exc:
+        raise ResearchTimeoutError(
+            f"Research exceeded research_timeout during {description}"
+        ) from exc
 
 # Track active research tasks for cancellation
 active_research_tasks: Dict[int, asyncio.Task] = {}
@@ -278,7 +311,17 @@ async def process_research_async(
     """
     logger.info(f"Starting research task: id={research_id} (resume={resume})")
 
+    db = None  # bound before try so the error path can close it safely
+
     try:
+        # Whole-run budget: a runaway or hung provider must not hold a research
+        # in a non-terminal status forever. 0 disables the budget.
+        deadline = (
+            asyncio.get_running_loop().time() + settings.research_timeout
+            if settings.research_timeout > 0
+            else None
+        )
+
         # Broadcast status change
         await ws_manager.broadcast_status_change(
             research_id, "planning",
@@ -382,25 +425,46 @@ async def process_research_async(
         # segment produced (LangGraph's interrupt_after makes this a
         # supported flow rather than a special case).
         logger.debug(f"Running research workflow for id={research_id}")
-        search_state = await run_research_workflow(
-            research_id, query,
-            on_state_update=save_intermediate_state,
-            resume_state=resume_state,
-            interrupt_after=["chase_references"],
+        search_state = await _run_within_budget(
+            lambda: run_research_workflow(
+                research_id, query,
+                on_state_update=save_intermediate_state,
+                resume_state=resume_state,
+                interrupt_after=["chase_references"],
+            ),
+            deadline,
+            "the search phase",
         )
+
+        # Persist the sources found by the search segment *before* full-text
+        # retrieval. collect_fulltext_evidence resolves its candidates against
+        # the ResearchSource rows belonging to this research, so if nothing has
+        # been written yet the identity map is empty, every candidate is
+        # skipped, and grounding silently no-ops ("Retrieved full text for
+        # 0/3"). Markers are deliberately not passed here: they are assigned
+        # exactly once, after the whole run, by the save below.
+        if search_state.citations:
+            save_citations_to_db(db, research_id, search_state.citations)
+            db.commit()
 
         if search_state.citations and not search_state.draft:
             try:
-                search_state.evidence = await collect_fulltext_evidence(
-                    db=db,
-                    research_id=research_id,
-                    query=query,
-                    citations=search_state.citations,
+                search_state.evidence = await _run_within_budget(
+                    lambda: collect_fulltext_evidence(
+                        db=db,
+                        research_id=research_id,
+                        query=query,
+                        citations=search_state.citations,
+                    ),
+                    deadline,
+                    "full-text retrieval",
                 )
                 logger.info(
                     f"[FULLTEXT] {len(search_state.evidence)} evidence "
                     f"span(s) available for synthesis"
                 )
+            except ResearchTimeoutError:
+                raise
             except Exception as exc:
                 # Grounding is an enhancement; never fail the research
                 # because a PDF could not be fetched or parsed.
@@ -408,10 +472,14 @@ async def process_research_async(
                     f"[FULLTEXT] Evidence retrieval skipped: {exc}"
                 )
 
-        final_state = await run_research_workflow(
-            research_id, query,
-            on_state_update=save_intermediate_state,
-            resume_state=search_state,
+        final_state = await _run_within_budget(
+            lambda: run_research_workflow(
+                research_id, query,
+                on_state_update=save_intermediate_state,
+                resume_state=search_state,
+            ),
+            deadline,
+            "synthesis",
         )
 
         # Check for cancellation after workflow
@@ -479,6 +547,10 @@ async def process_research_async(
     except Exception as e:
         logger.error(f"Error in research {research_id}: {e}")
         await ws_manager.broadcast_error(research_id, str(e))
+        # Return the workflow's connection to the pool before opening a second
+        # session to record the failure; otherwise every failed run leaked one.
+        if db is not None:
+            db.close()
         try:
             db = next(get_db())
             research = db.query(models.Research).filter(

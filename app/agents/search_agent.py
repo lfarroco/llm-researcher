@@ -7,8 +7,10 @@ multiple sources (web, arxiv, wikipedia) concurrently.
 
 import asyncio
 import logging
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -21,6 +23,7 @@ from app.memory.research_state import (
     Citation,
     ResearchNote,
     ResearchState,
+    SourceType,
     SubQueryResult,
 )
 from app.tools.arxiv_search import is_academic_query
@@ -28,6 +31,75 @@ from app.tools.registry import get_registry
 from app.agents.query_expander import expand_query
 
 logger = logging.getLogger(__name__)
+
+
+# Source types where many rows legitimately share one host: each row is a
+# distinct paper. Capping arxiv.org as a single "domain" would be meaningless.
+_SHARED_DOMAIN_SOURCE_TYPES = frozenset({
+    SourceType.ARXIV,
+    SourceType.PUBMED,
+    SourceType.SEMANTIC_SCHOLAR,
+    SourceType.SPRINGER,
+    SourceType.ELSEVIER,
+})
+
+
+def _domain_of(url: str) -> str:
+    """The host of a URL, ignoring ``www.``; empty when unparseable."""
+    host = urlparse(url or "").netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def cap_sources_per_domain(
+    citations: list[Citation], max_per_domain: int
+) -> list[Citation]:
+    """Limit how many generic-web sources one domain may contribute.
+
+    A live report's most-cited sources were four near-duplicate pages from a
+    single site, which crowded out independent evidence. Within a domain the
+    highest-scoring citations win; the overall input order is preserved so
+    citation numbering stays stable. ``max_per_domain <= 0`` disables the cap.
+    """
+    if max_per_domain <= 0:
+        return citations
+
+    indices_by_domain: dict[str, list[int]] = defaultdict(list)
+    for index, citation in enumerate(citations):
+        if citation.source_type in _SHARED_DOMAIN_SOURCE_TYPES:
+            continue
+        domain = _domain_of(citation.url)
+        if domain:
+            indices_by_domain[domain].append(index)
+
+    keep: set[int] = set()
+    dropped = 0
+    for indices in indices_by_domain.values():
+        if len(indices) <= max_per_domain:
+            keep.update(indices)
+            continue
+        best = sorted(
+            indices,
+            key=lambda i: (-float(citations[i].relevance_score or 0.0), i),
+        )[:max_per_domain]
+        keep.update(best)
+        dropped += len(indices) - max_per_domain
+
+    if not dropped:
+        return citations
+
+    logger.info(
+        f"[SEARCH] Per-domain cap ({max_per_domain}/domain) dropped "
+        f"{dropped} excess source(s)"
+    )
+    return [
+        citation
+        for index, citation in enumerate(citations)
+        if citation.source_type in _SHARED_DOMAIN_SOURCE_TYPES
+        or not _domain_of(citation.url)
+        or index in keep
+    ]
 
 
 class RelevanceScore(BaseModel):
@@ -408,7 +480,10 @@ async def search_for_subquery(
         sub_query=sub_query,
         citations=unique_citations,
         status="complete" if unique_citations else "failed",
-        error="; ".join(errors) if errors and not unique_citations else None,
+        # Keep the error even when some providers did return citations: a
+        # partial failure is still a failure and must show up in the phase
+        # summary, otherwise it reads "0 errors" while this step is an error.
+        error="; ".join(errors) if errors else None,
     )
 
 
@@ -455,17 +530,15 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
     # Collect all citations and results
     all_citations = []
     sub_query_results = []
-    errors = []
 
     for i, result in enumerate(results):
         if isinstance(result, Exception):
             logger.error(
                 f"[SEARCH] Sub-query {i+1} failed: {result}", exc_info=result)
-            errors.append(f"Search failed: {str(result)}")
             sub_query_results.append(SubQueryResult(
                 sub_query=state.sub_queries[i],
                 status="failed",
-                error=str(result),
+                error=f"Search failed: {str(result)}",
             ))
         else:
             logger.debug(
@@ -474,6 +547,12 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
             )
             sub_query_results.append(result)
             all_citations.extend(result.citations)
+
+    # Derive the phase-level error list from the per-sub-query results. A
+    # sub-query can fail partially (one provider down) without raising, and
+    # those errors only live on the SubQueryResult — without this the summary
+    # reported "0 errors" while individual steps were marked as errors.
+    errors = [sqr.error for sqr in sub_query_results if sqr.error]
 
     logger.info(f"[SEARCH] Total citations collected: {len(all_citations)}")
 
@@ -490,6 +569,12 @@ async def execute_searches(state: ResearchState) -> dict[str, Any]:
     logger.debug(
         f"[SEARCH] After deduplication: "
         f"{len(unique_citations)} unique citations"
+    )
+
+    # Stop one site's near-duplicate pages from dominating the report.
+    unique_citations = cap_sources_per_domain(
+        unique_citations,
+        settings.research_max_sources_per_domain,
     )
 
     # Limit to max sources
