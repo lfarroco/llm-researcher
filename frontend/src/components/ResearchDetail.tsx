@@ -113,7 +113,7 @@ export default function ResearchDetail({ researchId, onDelete, onUpdate }: Props
 				switch (filters.quick_filter) {
 					case 'academic':
 						filtered = filtered.filter(s =>
-							['arxiv', 'pubmed', 'semantic_scholar', 'openalex', 'crossref'].includes(s.source_type)
+							['arxiv', 'pubmed', 'semantic_scholar', 'openalex', 'crossref', 'springer', 'elsevier'].includes(s.source_type)
 						);
 						break;
 					case 'recent':

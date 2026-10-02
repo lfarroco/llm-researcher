@@ -56,6 +56,8 @@ class SourceType(str, Enum):
     WIKIPEDIA = "wikipedia"
     PUBMED = "pubmed"
     SEMANTIC_SCHOLAR = "semantic_scholar"
+    OPENALEX = "openalex"
+    CROSSREF = "crossref"
     SPRINGER = "springer"
     ELSEVIER = "elsevier"
 
@@ -77,6 +79,14 @@ class Citation(BaseModel):
         default=SourceType.WEB, description="Type of source")
     relevance_score: float = Field(
         default=0.0, description="Search relevance score")
+    # Several academic APIs expose the open-access PDF separately from the
+    # landing page they hand us as the citation URL. Carrying it here lets
+    # full-text retrieval download the paper instead of the HTML abstract
+    # page, without changing the URL a reader clicks.
+    pdf_url: Optional[str] = Field(
+        default=None,
+        description="Direct open-access PDF URL, when the source provides one"
+    )
 
 
 class SubQueryResult(BaseModel):

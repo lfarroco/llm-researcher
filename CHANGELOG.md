@@ -139,6 +139,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Four free-tier academic search sources are now actually wired in.** The
+  `pubmed`, `semantic_scholar`, `openalex` and `crossref` tool modules existed
+  with tests, but nothing registered them as search plugins, so they never ran
+  (the README advertised them anyway). `register_defaults` now registers all
+  four; none needs an API key. `SourceType` gained `OPENALEX` and `CROSSREF`,
+  and the new types flow through the per-domain cap exemption, CSL/BibTeX
+  "article" formatting, the sources API filters and the frontend.
+  - PubMed is consulted only for queries with a biomedical signal
+    (`is_biomedical_query`), so it does not spend the relevance budget on
+    off-topic hits. The other three run under the academic-context gate.
+  - OpenAlex citations use the DOI resolver as their URL (falling back to the
+    OpenAlex page), so the same paper collected from Crossref or a reference
+    list merges into one knowledge-base source instead of duplicating.
+  - Crossref abstracts are stripped of publisher JATS markup before they reach
+    the relevance filter or the synthesis prompt.
+  - The broad indexes run on the first query variation only, matching arXiv:
+    one well-formed query per sub-query already returns the canonical papers,
+    which keeps the added request and relevance-filter cost flat.
+- `Citation.pdf_url` — an optional direct open-access PDF link. OpenAlex and
+  Semantic Scholar expose the PDF separately from the landing page they hand
+  over as the citation URL; full-text retrieval now downloads `pdf_url` when
+  present, and treats it as a candidate on its own merits. The field is
+  optional, so `state_json` written before this change still loads.
 - `app/services/citation_numbering.py` — single source of truth for the
   reader-facing citation numbers shared by the document and the knowledge base.
 - `scripts/verify_run.py` — checks a captured run for the invariants above

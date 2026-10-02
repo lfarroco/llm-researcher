@@ -103,6 +103,12 @@ def rank_chunks(
 
 def is_fulltext_candidate(citation: Citation) -> bool:
     """Whether a citation is worth attempting a PDF download for."""
+    # An API-supplied open-access PDF link (OpenAlex, Semantic Scholar) beats
+    # any URL heuristic: it is already known to point at the file itself.
+    pdf_url = (citation.pdf_url or "").strip()
+    if pdf_url.lower().startswith(("http://", "https://")):
+        return True
+
     url = (citation.url or "").strip()
     if not url.lower().startswith(("http://", "https://")):
         return False
@@ -177,11 +183,15 @@ async def retrieve_source_evidence(
     rows to persist (possibly empty). Never raises: retrieval is best-effort.
     """
     started = time.monotonic()
+    # Prefer the open-access PDF link when the search source supplied one; the
+    # citation URL itself is usually an HTML landing page that fails PDF
+    # validation.
+    download_url = (citation.pdf_url or "").strip() or citation.url
     try:
-        response = await parse_pdf_from_url(citation.url)
+        response = await parse_pdf_from_url(download_url)
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning(
-            f"[FULLTEXT] Unexpected parse failure for {citation.url}: {exc}"
+            f"[FULLTEXT] Unexpected parse failure for {download_url}: {exc}"
         )
         source.full_text_status = "failed"
         return []
@@ -194,7 +204,7 @@ async def retrieve_source_evidence(
         source.full_text_status = "unavailable"
         source.full_text_fetched_at = models.utcnow()
         logger.info(
-            f"[FULLTEXT] No full text for {citation.url} ({error_type})"
+            f"[FULLTEXT] No full text for {download_url} ({error_type})"
         )
         return []
 

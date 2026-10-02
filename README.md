@@ -17,8 +17,11 @@ Built with FastAPI, LangGraph/LangChain, React, and PostgreSQL.
 - **Multi-agent research pipeline**: plan → search → chase references →
   hypothesize → synthesize → format, with checkpointing, cancellation, and
   resume
-- **10+ search sources**: web (Tavily/DuckDuckGo), ArXiv, Wikipedia, Crossref,
-  OpenAlex, PubMed, Semantic Scholar, Springer Nature, Elsevier Scopus
+- **9 search sources**: web (Tavily/DuckDuckGo), arXiv, Wikipedia, the free
+  academic indexes Crossref, OpenAlex, PubMed and Semantic Scholar, plus
+  key-gated Springer Nature and Elsevier Scopus. PubMed is consulted only for
+  biomedical queries; the other academic sources run when the planner (or the
+  query itself) marks the research as academic.
 - **PDF pipeline**: download + cache, GROBID parsing, chunking, BibTeX parsing
 - **Full-text grounding**: open-access PDFs are parsed and chunked after search,
   so the report quotes real paper passages (stored as evidence, with character
@@ -75,8 +78,17 @@ Configure your preferred provider in the `.env` file:
 | **Groq** | `LLM_PROVIDER=groq` · `LLM_MODEL=llama-3.3-70b-versatile` · `GROQ_API_KEY=...` |
 | **DeepSeek** | `LLM_PROVIDER=deepseek` · `LLM_MODEL=deepseek-flash` · `DEEPSEEK_API_KEY=...` |
 
-Optional academic API keys enable additional search plugins:
-`SPRINGER_API_KEY` (Springer Nature) and `ELSEVIER_API_KEY` (Elsevier Scopus).
+Academic search sources fall into two groups:
+
+- **No key required** (enabled by default): `arxiv`, `wikipedia`, `openalex`,
+  `crossref`, `pubmed`, `semantic_scholar`. These are free public APIs.
+- **Key required**: `SPRINGER_API_KEY` (Springer Nature) and
+  `ELSEVIER_API_KEY` (Elsevier Scopus). The plugins report themselves
+  unavailable — and are simply skipped — until a key is configured.
+
+`NCBI_API_KEY` (PubMed) and `SEMANTIC_SCHOLAR_API_KEY` are optional: both
+services work without them, and a key only raises the request rate limit.
+`NCBI_EMAIL` is sent with PubMed requests, as NCBI's usage policy asks.
 
 ## Getting Started
 

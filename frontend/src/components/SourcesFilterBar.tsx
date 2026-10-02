@@ -23,6 +23,8 @@ const SOURCE_TYPES = [
 	{ value: 'semantic_scholar', label: 'Semantic Scholar' },
 	{ value: 'openalex', label: 'OpenAlex' },
 	{ value: 'crossref', label: 'Crossref' },
+	{ value: 'springer', label: 'Springer Nature' },
+	{ value: 'elsevier', label: 'Elsevier Scopus' },
 ];
 
 const SORT_OPTIONS = [

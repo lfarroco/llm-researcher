@@ -26,6 +26,20 @@ from app.memory.research_state import Citation, SourceType
 logger = logging.getLogger(__name__)
 
 
+# Source types that are journal articles or preprints rather than web pages.
+# They share the CSL "article" item type; anything not listed here is
+# formatted as a webpage.
+ACADEMIC_SOURCE_TYPES = frozenset({
+    SourceType.ARXIV,
+    SourceType.PUBMED,
+    SourceType.SEMANTIC_SCHOLAR,
+    SourceType.OPENALEX,
+    SourceType.CROSSREF,
+    SourceType.SPRINGER,
+    SourceType.ELSEVIER,
+})
+
+
 class CitationStyle(str, Enum):
     """Supported citation styles."""
     APA = "apa"
@@ -176,7 +190,7 @@ class CitationFormatter:
 
         # Determine type based on source
         item_type = "webpage"
-        if citation.source_type == SourceType.ARXIV:
+        if citation.source_type in ACADEMIC_SOURCE_TYPES:
             item_type = "article"
         elif citation.source_type == SourceType.WIKIPEDIA:
             item_type = "entry-encyclopedia"

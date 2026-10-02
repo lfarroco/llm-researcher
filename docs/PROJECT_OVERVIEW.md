@@ -89,10 +89,14 @@ Search/plugin system:
   - web (Tavily, DuckDuckGo fallback)
   - arxiv
   - wikipedia
+  - pubmed (free; biomedical queries only)
+  - semantic_scholar (free; key optional for a higher rate limit)
+  - openalex (free, no key)
+  - crossref (free, no key)
   - springer (if key present)
   - elsevier (if key present)
-- Additional tools exist for Crossref, OpenAlex, PubMed, Semantic Scholar,
-  PDF download/parse (GROBID), document chunking, BibTeX parsing
+- Additional tools exist for PDF download/parse (GROBID), document chunking,
+  and BibTeX parsing
 
 ## 4. Data Model Snapshot
 

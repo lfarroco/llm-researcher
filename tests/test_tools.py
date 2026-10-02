@@ -1017,6 +1017,40 @@ class TestSemanticScholarSearch:
 class TestCrossrefSearch:
     """Tests for Crossref search tool."""
 
+    # The /works route rejects any select field it does not support with
+    # HTTP 400 validation-failure. Every name below was taken from that
+    # error's "Valid selects for this route are:" list. Shipping an invalid
+    # one makes the tool return zero results forever without raising, which
+    # is exactly what `reference-count` (instead of `references-count`) did.
+    VALID_CROSSREF_SELECTS = {
+        "abstract", "URL", "resource", "member", "posted", "score", "created",
+        "degree", "update-policy", "short-title", "license", "ISSN",
+        "container-title", "issued", "update-to", "issue", "prefix",
+        "approved", "indexed", "article-number", "clinical-trial-number",
+        "accepted", "author", "group-title", "DOI", "is-referenced-by-count",
+        "updated-by", "event", "chair", "standards-body", "original-title",
+        "funder", "translator", "published", "archive", "published-print",
+        "alternative-id", "subject", "subtitle", "published-online",
+        "publisher-location", "content-domain", "reference", "title", "link",
+        "type", "publisher", "volume", "references-count", "ISBN",
+        "issn-type", "assertion", "deposited", "page", "contributor",
+        "content-created", "short-container-title", "relation", "editor",
+    }
+
+    def test_search_select_uses_only_fields_crossref_accepts(self):
+        from app.tools.crossref_search import CROSSREF_SEARCH_SELECT
+
+        requested = {
+            name.strip()
+            for name in CROSSREF_SEARCH_SELECT.split(",")
+            if name.strip()
+        }
+        unknown = requested - self.VALID_CROSSREF_SELECTS
+        assert not unknown, (
+            f"Crossref would reject these select fields with HTTP 400: "
+            f"{sorted(unknown)}"
+        )
+
     @pytest.mark.asyncio
     async def test_crossref_search_returns_results(self):
         """Test Crossref search returns properly formatted results."""
@@ -1035,6 +1069,7 @@ class TestCrossrefSearch:
                         "container-title": ["Cell"],
                         "type": "journal-article",
                         "score": 95.5,
+                        "references-count": 42,
                     }
                 ]
             }
@@ -1057,9 +1092,15 @@ class TestCrossrefSearch:
 
             results = await crossref_search("CRISPR gene editing", max_results=5)
 
+            sent_params = mock_ctx.get.call_args.kwargs.get("params", {})
+
         assert len(results) == 1
         assert results[0].title == "CRISPR Gene Editing Advances"
         assert results[0].doi == "10.1016/j.cell.2024.01.001"
+        # Crossref names this field `references-count` in the response, so a
+        # parser looking for `reference-count` always reads 0.
+        assert results[0].reference_count == 42
+        assert "reference-count" not in sent_params.get("select", "")
 
 
 class TestOpenAlexSearch:

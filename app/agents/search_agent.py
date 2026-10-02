@@ -39,6 +39,8 @@ _SHARED_DOMAIN_SOURCE_TYPES = frozenset({
     SourceType.ARXIV,
     SourceType.PUBMED,
     SourceType.SEMANTIC_SCHOLAR,
+    SourceType.OPENALEX,
+    SourceType.CROSSREF,
     SourceType.SPRINGER,
     SourceType.ELSEVIER,
 })

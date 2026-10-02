@@ -62,6 +62,10 @@ export default function KnowledgeBase({ researchId }: Props) {
 			case 'wikipedia': return 'bg-green-100 text-green-700';
 			case 'pubmed': return 'bg-red-100 text-red-700';
 			case 'semantic_scholar': return 'bg-yellow-100 text-yellow-700';
+			case 'openalex': return 'bg-teal-100 text-teal-700';
+			case 'crossref': return 'bg-indigo-100 text-indigo-700';
+			case 'springer': return 'bg-orange-100 text-orange-700';
+			case 'elsevier': return 'bg-rose-100 text-rose-700';
 			default: return 'bg-gray-100 text-gray-700';
 		}
 	};
@@ -73,6 +77,10 @@ export default function KnowledgeBase({ researchId }: Props) {
 			case 'wikipedia': return '📖';
 			case 'pubmed': return '🏥';
 			case 'semantic_scholar': return '🎓';
+			case 'openalex': return '🔓';
+			case 'crossref': return '🔗';
+			case 'springer': return '📗';
+			case 'elsevier': return '📕';
 			default: return '📌';
 		}
 	};

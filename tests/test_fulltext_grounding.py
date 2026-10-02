@@ -8,13 +8,21 @@ Covers the two halves of the PDF-grounding feature:
    citation markers the report actually uses.
 """
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
 from app.memory.research_state import Citation, EvidenceSpan, SourceType
+from app.services import fulltext as fulltext_module
 from app.services.fulltext import (
     is_fulltext_candidate,
     rank_chunks,
+    retrieve_source_evidence,
     select_fulltext_candidates,
 )
 from app.agents.synthesis_agent import format_evidence_for_prompt
+from app.tools.base import ToolErrorType, ToolResponse
 from app.tools.document_chunker import DocumentChunk
 
 
@@ -71,6 +79,49 @@ class TestCandidateSelection:
         web_citation.source_type = SourceType.WEB
         # A generic web page is not a PDF, so it is not a candidate.
         assert not is_fulltext_candidate(web_citation)
+
+    def test_api_supplied_pdf_url_is_a_candidate(self):
+        """A landing-page URL is fine when the API gave us the PDF link."""
+        citation = make_citation(
+            "https://doi.org/10.5555/open",
+            source_type=SourceType.OPENALEX,
+            pdf_url="https://example.org/open.pdf",
+        )
+        assert is_fulltext_candidate(citation)
+
+    def test_non_http_pdf_url_is_not_a_candidate(self):
+        citation = make_citation(
+            "mailto:someone@example.com",
+            pdf_url="not-a-url",
+        )
+        assert not is_fulltext_candidate(citation)
+
+    @pytest.mark.asyncio
+    async def test_downloads_the_pdf_url_not_the_landing_page(self):
+        """The landing page is HTML; only the API's pdf_url can be parsed."""
+        citation = make_citation(
+            "https://doi.org/10.5555/open",
+            source_type=SourceType.OPENALEX,
+            pdf_url="https://example.org/open.pdf",
+        )
+        source = SimpleNamespace()
+        parse = AsyncMock(
+            return_value=ToolResponse.fail(
+                ToolErrorType.NETWORK_ERROR, "no network in tests")
+        )
+
+        with patch.object(fulltext_module, "parse_pdf_from_url", parse):
+            rows = await retrieve_source_evidence(
+                citation=citation,
+                source=source,
+                research_id=1,
+                query="q",
+                chunks_per_source=3,
+            )
+
+        assert rows == []
+        parse.assert_awaited_once_with("https://example.org/open.pdf")
+        assert source.full_text_status == "unavailable"
 
     def test_direct_pdf_url_is_candidate_for_any_source_type(self):
         web_citation = make_citation("https://example.com/paper.pdf")

@@ -285,7 +285,10 @@ def export_sources_as_bibtex(
                 if match:
                     extra_fields["eprint"] = match.group(1)
                     extra_fields["archiveprefix"] = "arXiv"
-        elif source.source_type in ["pubmed", "semantic_scholar"]:
+        elif source.source_type in [
+            "pubmed", "semantic_scholar", "openalex", "crossref",
+            "springer", "elsevier",
+        ]:
             entry_type = "article"
         elif source.source_type == "wikipedia":
             entry_type = "misc"

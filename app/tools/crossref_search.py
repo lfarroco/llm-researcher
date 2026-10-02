@@ -18,6 +18,18 @@ logger = logging.getLogger(__name__)
 
 CROSSREF_API_BASE = "https://api.crossref.org"
 
+# Fields requested from the /works search route. Crossref validates this list
+# against the fields the route actually supports and answers HTTP 400
+# ("select-not-available") for anything else — so a typo here does not degrade
+# the result, it silently returns nothing. Two names are easy to get wrong:
+# the select is ``references-count`` (not ``reference-count``), and the
+# response echoes that same ``references-count`` key.
+CROSSREF_SEARCH_SELECT = (
+    "DOI,title,author,abstract,published,publisher,"
+    "container-title,type,issue,volume,page,ISSN,ISBN,"
+    "references-count,is-referenced-by-count"
+)
+
 
 class CrossrefResult(BaseModel):
     """A single Crossref result."""
@@ -98,11 +110,7 @@ async def crossref_search(
     params = {
         "query": query,
         "rows": min(max_results, 100),  # API max is 100
-        "select": (
-            "DOI,title,author,abstract,published,publisher,"
-            "container-title,type,issue,volume,page,ISSN,ISBN,"
-            "reference-count,is-referenced-by-count"
-        ),
+        "select": CROSSREF_SEARCH_SELECT,
     }
 
     # Add filters
@@ -177,7 +185,9 @@ async def crossref_search(
                 page=item.get("page"),
                 issn=item.get("ISSN"),
                 isbn=item.get("ISBN"),
-                reference_count=item.get("reference-count", 0),
+                reference_count=item.get(
+                    "references-count", item.get("reference-count", 0)
+                ),
                 is_referenced_by_count=item.get(
                     "is-referenced-by-count", 0
                 ),
@@ -262,7 +272,9 @@ async def crossref_lookup_doi(doi: str) -> Optional[CrossrefResult]:
             page=item.get("page"),
             issn=item.get("ISSN"),
             isbn=item.get("ISBN"),
-            reference_count=item.get("reference-count", 0),
+            reference_count=item.get(
+                "references-count", item.get("reference-count", 0)
+            ),
             is_referenced_by_count=item.get("is-referenced-by-count", 0),
         )
 

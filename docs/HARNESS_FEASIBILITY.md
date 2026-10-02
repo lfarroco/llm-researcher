@@ -477,9 +477,11 @@ The critique above reorders the work. The agent runtime was never the bottleneck
    change.
 5. Add claim/evidence records with spans, confidence, and verification state, and
    surface those in the UI instead of raw pipeline state.
-6. Register the four orphaned academic plugins (PubMed, Crossref, OpenAlex,
+6. ~~Register the four orphaned academic plugins (PubMed, Crossref, OpenAlex,
    Semantic Scholar) or delete them — shipping unused tested code inflates
-   apparent capability.
+   apparent capability.~~ **Done** — all four are registered as of the
+   free-tier sources change (see `CHANGELOG.md`), so the README's source list is
+   now accurate.
 
 **Phase 2 — build the evaluation set before any runtime comparison.**
 
